@@ -1,0 +1,7 @@
+domain: spot.io
+repo: github.com/spotinst/wave-operator
+resources:
+- group: wave
+  kind: WaveComponent
+  version: v1alpha1
+version: "2"
