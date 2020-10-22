@@ -37,8 +37,8 @@ spec:
             name:
               description: Name is the name of a helm chart
               type: string
-            status:
-              description: Status determines whether the component should be installed
+            state:
+              description: State determines whether the component should be installed
                 or removed
               type: string
             type:
@@ -54,7 +54,7 @@ spec:
               type: string
           required:
           - name
-          - status
+          - state
           - type
           - url
           - version

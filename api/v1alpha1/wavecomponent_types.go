@@ -21,12 +21,12 @@ import (
 )
 
 type ComponentType string
-type ComponentStatus string
+type ComponentState string
 
 const (
 	HelmComponentType      ComponentType   = "helm"
-	PresentComponentStatus ComponentStatus = "present"
-	AbsentComponentStatus  ComponentStatus = "absent"
+	PresentComponentState ComponentState = "present"
+	AbsentComponentState  ComponentState = "absent"
 )
 
 // WaveComponentSpec defines the desired state of WaveComponent
@@ -38,8 +38,8 @@ type WaveComponentSpec struct {
 	//Name is the name of a helm chart
 	Name string `json:"name"`
 
-	//Status determines whether the component should be installed or removed
-	Status ComponentStatus `json:"status"`
+	//State determines whether the component should be installed or removed
+	State ComponentState `json:"state"`
 
 	//URL is the location of the helm repository
 	URL string `json:"url"`

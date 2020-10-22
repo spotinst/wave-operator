@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
 )
 
@@ -38,10 +38,18 @@ type WaveComponentReconciler struct {
 // +kubebuilder:rbac:groups=wave.spot.io,resources=wavecomponents/status,verbs=get;update;patch
 
 func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("wavecomponent", req.NamespacedName)
+	ctx := context.Background()
+	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
 
-	// your logic here
+	component := &v1alpha1.WaveComponent{}
+	var err error
+	err = r.Get(ctx, req.NamespacedName, component)
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			log.Error(err, "cannot retrieve")
+		}
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
