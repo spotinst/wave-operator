@@ -1,7 +1,0 @@
-apiVersion: wave.spot.io/v1alpha1
-kind: WaveComponent
-metadata:
-  name: wavecomponent-sample
-spec:
-  # Add fields here
-  foo: bar

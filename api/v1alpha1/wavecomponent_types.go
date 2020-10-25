@@ -17,16 +17,24 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type ComponentType string
 type ComponentState string
+type ChartName string
 
 const (
-	HelmComponentType      ComponentType   = "helm"
+	HelmComponentType ComponentType = "helm"
+
 	PresentComponentState ComponentState = "present"
 	AbsentComponentState  ComponentState = "absent"
+
+	SparkHistoryChartName      ChartName = "spark-history-server"
+	EnterpriseGatewayChartName ChartName = "enterprise-gateway"
+	SparkOperatorChartName     ChartName = "spark-operator"
+	WaveIngressChartName       ChartName = "ingress-nginx"
 )
 
 // WaveComponentSpec defines the desired state of WaveComponent
@@ -36,7 +44,7 @@ type WaveComponentSpec struct {
 	Type ComponentType `json:"type"`
 
 	//Name is the name of a helm chart
-	Name string `json:"name"`
+	Name ChartName `json:"name"`
 
 	//State determines whether the component should be installed or removed
 	State ComponentState `json:"state"`
@@ -47,13 +55,44 @@ type WaveComponentSpec struct {
 	//Version is the version of the helm chart
 	Version string `json:"version"`
 
-	ValuesConfiguration string `json:"valueConfig,omitempty"`
+	ValuesConfiguration string `json:"valuesConfiguration,omitempty"`
 }
 
 // WaveComponentStatus defines the observed state of WaveComponent
 type WaveComponentStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Conditions []WaveComponentCondition `json:"conditions,omitempty"`
+}
+
+type ConditionStatus string
+
+type WaveComponentConditionType string
+
+// These are valid conditions of a wave component.
+const (
+	// Available means the application is available
+	WaveComponentAvailable WaveComponentConditionType = "Available"
+	// Progressing means the component is progressing, including installation and upgrades
+	WaveComponentProgressing WaveComponentConditionType = "Progressing"
+	// Degraded indicates the component is in a temporary degraded state
+	WaveComponentDegraded WaveComponentConditionType = "Degraded"
+	// Failing indicates a significant error conditions
+	WaveComponentFailure WaveComponentConditionType = "Failing"
+)
+
+// WaveComponentCondition describes the state of a deployment at a certain point.
+type WaveComponentCondition struct {
+	// Type of deployment condition.
+	Type WaveComponentConditionType `json:"type" protobuf:"bytes,1,opt,name=type,casttype=WaveComponentConditionType"`
+	// Status of the condition, one of True, False, Unknown.
+	Status v1.ConditionStatus `json:"status" protobuf:"bytes,2,opt,name=status,casttype=k8s.io/api/core/v1.ConditionStatus"`
+	// The last time this condition was updated.
+	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty" protobuf:"bytes,6,opt,name=lastUpdateTime"`
+	// Last time the condition transitioned from one status to another.
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty" protobuf:"bytes,7,opt,name=lastTransitionTime"`
+	// The reason for the condition's last transition.
+	Reason string `json:"reason,omitempty" protobuf:"bytes,4,opt,name=reason"`
+	// A human readable message indicating details about the transition.
+	Message string `json:"message,omitempty" protobuf:"bytes,5,opt,name=message"`
 }
 
 // +kubebuilder:object:root=true

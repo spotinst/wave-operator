@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/spotinst/wave-operator/pkg/catalog"
-	"github.com/spotinst/wave-operator/pkg/install"
+	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/install"
 	"helm.sh/helm/v3/pkg/action"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	ctrl "sigs.k8s.io/controller-runtime"

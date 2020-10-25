@@ -20,11 +20,14 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/controllers/internal/components"
+	"github.com/spotinst/wave-operator/install"
+	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
 )
 
 // WaveComponentReconciler reconciles a WaveComponent object
@@ -41,16 +44,49 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	ctx := context.Background()
 	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
 
-	component := &v1alpha1.WaveComponent{}
+	comp := &v1alpha1.WaveComponent{}
 	var err error
-	err = r.Get(ctx, req.NamespacedName, component)
+	err = r.Get(ctx, req.NamespacedName, comp)
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
 			log.Error(err, "cannot retrieve")
 		}
-		return ctrl.Result{}, err
+		return ctrl.Result{}, nil
 	}
 
+	if comp.Spec.Type != v1alpha1.HelmComponentType {
+		new := comp.DeepCopy()
+		condition := NewWaveComponentCondition(
+			v1alpha1.WaveComponentFailure,
+			v1.ConditionTrue,
+			UnsupportedTypeReason,
+			"Only helm charts are supported",
+		)
+		changed := SetWaveComponentCondition(&(new.Status), *condition)
+		if changed {
+			err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+			if err != nil {
+				log.Error(err, "patch error")
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// get status of component
+	new := comp.DeepCopy()
+	condition, err := r.GetCurrentCondition(comp)
+	if condition != nil {
+		changed := SetWaveComponentCondition(&(new.Status), *condition)
+		if changed || condition.Status != v1.ConditionTrue {
+			installer := install.NewHelmInstaller(r.Log)
+			err = installer.Install(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
+			if err != nil {
+				log.Error(err, "cannot install")
+				return ctrl.Result{}, err
+			}
+		}
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -58,4 +94,27 @@ func (r *WaveComponentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.WaveComponent{}).
 		Complete(r)
+}
+
+// GetCurrentCondition examines the current environment and returns a condition for the component
+func (r *WaveComponentReconciler) GetCurrentCondition(comp *v1alpha1.WaveComponent) (*v1alpha1.WaveComponentCondition, error) {
+
+	switch comp.Spec.Name {
+	case v1alpha1.SparkHistoryChartName:
+		return components.GetSparkHistoryCondition()
+	case v1alpha1.EnterpriseGatewayChartName:
+	case v1alpha1.SparkOperatorChartName:
+	case v1alpha1.WaveIngressChartName:
+	default:
+		// (a) check helm
+		// (b) return not installed
+		return NewWaveComponentCondition(
+				v1alpha1.WaveComponentProgressing,
+				v1.ConditionFalse,
+				UninstalledReason,
+				"component not installed",
+			),
+			nil
+	}
+	return nil, nil
 }
