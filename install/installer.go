@@ -1,11 +1,15 @@
 package install
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 
 	"github.com/go-logr/logr"
+	"github.com/google/go-cmp/cmp"
+	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/catalog"
 	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/action"
@@ -19,6 +23,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+var (
+	// ErrReleaseNotFound duplicates the helm error from the driver pacakge
+	ErrReleaseNotFound = errors.New("release: not found")
+)
+
 type Installer interface {
 
 	// Install applies a helm chart to a cluster.  It's a lightweight wrapper around the helm 3 code
@@ -30,6 +39,8 @@ type Installer interface {
 	// Upgrade applies a helm chart to a cluster.  It's a lightweight wrapper around the helm 3 code
 	Upgrade(name string, repository string, version string, values string) error
 	//Upgrade(rlsName string, chart *chart.Chart, vals map[string]string, namespace string, opts ...bool) (*release.Release, error)
+
+	IsUpgrade(comp *v1alpha1.WaveComponent, rel *release.Release) bool
 }
 
 type HelmInstaller struct {
@@ -51,13 +62,11 @@ func (i *HelmInstaller) Get(name string) (*release.Release, error) {
 		return nil, fmt.Errorf("failed to get action config, %w", err)
 	}
 	act := action.NewGet(cfg)
-	return act.Run(name)
-	// if err != nil {
-	// 	if err != driver.ErrReleaseNotFound {
-	// 		return nil, fmt.Errorf("failed to get release, %w", err)
-	// 	}
-	// }
-	// return rel, err
+	rel, err := act.Run(name)
+	if err != nil && err == driver.ErrReleaseNotFound {
+		return nil, ErrReleaseNotFound
+	}
+	return rel, err
 }
 
 // https://stackoverflow.com/questions/59782217/run-helm3-client-from-in-cluster
@@ -82,7 +91,7 @@ func (i *HelmInstaller) getActionConfig(namespace string) (*action.Configuration
 	return actionConfig, nil
 }
 
-func (i *HelmInstaller) Upgrade(name string, repository string, version string, values string) error {
+func (i *HelmInstaller) Upgrade(chartName string, repository string, version string, values string) error {
 
 	var vals map[string]interface{}
 	err := yaml.Unmarshal([]byte(values), &vals)
@@ -99,11 +108,11 @@ func (i *HelmInstaller) Upgrade(name string, repository string, version string, 
 		return fmt.Errorf("failed to get action config, %w", err)
 	}
 
-	repo := fmt.Sprintf("%s/%s-%s.tgz", repository, name, version)
+	repo := fmt.Sprintf("%s/%s-%s.tgz", repository, chartName, version)
 
 	act := action.NewUpgrade(cfg)
 
-	releaseName := "wave-" + name
+	releaseName := GetReleaseName(chartName)
 	act.Namespace = catalog.SystemNamespace
 
 	settings := &cli.EnvSettings{}
@@ -142,7 +151,7 @@ func (i *HelmInstaller) Install(chartName string, repository string, version str
 		return fmt.Errorf("invalid values configuration, %w", err)
 	}
 
-	releaseName := "wave-" + chartName
+	releaseName := GetReleaseName(chartName)
 
 	cfg, err := i.getActionConfig(catalog.SystemNamespace)
 	if err != nil {
@@ -193,4 +202,27 @@ func (i *HelmInstaller) Install(chartName string, repository string, version str
 	}
 	i.Log.Info("installed", "release", rel.Name)
 	return nil
+}
+
+func GetReleaseName(name string) string {
+	return "wave-" + name
+}
+
+func (i *HelmInstaller) IsUpgrade(comp *v1alpha1.WaveComponent, rel *release.Release) bool {
+	if comp.Spec.Version != rel.Chart.Metadata.Version {
+		return true
+	}
+	var vals map[string]interface{}
+	err := yaml.Unmarshal([]byte(comp.Spec.ValuesConfiguration), &vals)
+	if err != nil {
+		return true // fail properly later
+	}
+	if vals == nil {
+		vals = map[string]interface{}{}
+	}
+	if !reflect.DeepEqual(vals, rel.Config) {
+		i.Log.Info("upgrade required", "diff", cmp.Diff(vals, rel.Config))
+		return true
+	}
+	return false
 }

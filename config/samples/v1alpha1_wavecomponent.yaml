@@ -16,5 +16,5 @@ spec:
     s3:
       enableS3: true
       enableIAM: true
-      logDirectory: s3a://spark-hs-wave
+      logDirectory: s3a://spark-hs-natef
 

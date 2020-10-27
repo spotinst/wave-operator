@@ -77,6 +77,10 @@ const (
 	WaveComponentDegraded WaveComponentConditionType = "Degraded"
 	// Failing indicates a significant error conditions
 	WaveComponentFailure WaveComponentConditionType = "Failing"
+
+	ConditionStatusTrue    ConditionStatus = "True"
+	ConditionStatusFalse   ConditionStatus = "False"
+	ConditionStatusUnknown ConditionStatus = "Unknown"
 )
 
 // WaveComponentCondition describes the state of a deployment at a certain point.
