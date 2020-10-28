@@ -17,13 +17,20 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/spotinst/wave-operator/catalog"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
@@ -70,6 +77,21 @@ var _ = BeforeSuite(func(done Done) {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).ToNot(BeNil())
+	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme: scheme.Scheme,
+	})
+	Expect(err).ToNot(HaveOccurred())
+
+	err = (&WaveComponentReconciler{
+		Client: k8sManager.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("WaveComponent"),
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	go func() {
+		err = k8sManager.Start(ctrl.SetupSignalHandler())
+		Expect(err).ToNot(HaveOccurred())
+	}()
 
 	close(done)
 }, 60)
@@ -78,4 +100,77 @@ var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
+})
+
+var _ = Describe("WaveComponent controller", func() {
+
+	// Define utility constants for object names and testing timeouts/durations and intervals.
+	const (
+		timeout  = time.Second * 10
+		interval = time.Second
+	)
+
+	Context("When reconciling initial WaveComponent", func() {
+		It("Should attempt a helm install", func() {
+			By("creating a new WaveComponent")
+			ctx := context.Background()
+			waveComponent := &v1alpha1.WaveComponent{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "wave.spot.io/v1alpha1",
+					Kind:       "WaveComponent",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      string(v1alpha1.SparkHistoryChartName),
+					Namespace: catalog.SystemNamespace,
+				},
+				Spec: v1alpha1.WaveComponentSpec{
+					Type:    "helm",
+					Name:    "spark-history-server",
+					State:   "present",
+					URL:     "https://kubernetes-charts.storage.googleapis.com",
+					Version: "1.4.0",
+					ValuesConfiguration: `
+nfs:
+  enableExampleNFS: false
+pvc:
+  enablePVC: false
+s3:
+  enableS3: true
+  enableIAM: true
+  logDirectory: s3a://spark-hs-natef,
+`,
+				},
+			}
+			systemNamespace := &v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: catalog.SystemNamespace},
+			}
+			Expect(k8sClient.Create(ctx, systemNamespace)).Should(Succeed())
+			Expect(k8sClient.Create(ctx, waveComponent)).Should(Succeed())
+
+			lookupKey := types.NamespacedName{Name: string(v1alpha1.SparkHistoryChartName), Namespace: catalog.SystemNamespace}
+			created := &v1alpha1.WaveComponent{}
+
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, lookupKey, created)
+				if err != nil {
+					return false
+				}
+				return true
+			}, timeout, interval).Should(BeTrue())
+
+			Expect(created.Spec.Name).Should(Equal(v1alpha1.SparkHistoryChartName))
+			Expect(created.Name).Should(Equal(string(v1alpha1.SparkHistoryChartName)))
+
+			By("By checking that WaveComponent has changed status")
+			Eventually(func() (int, error) {
+				err := k8sClient.Get(ctx, lookupKey, created)
+				if err != nil {
+					return 0, err
+				}
+
+				return len(created.Status.Conditions), nil
+			}, timeout, interval).Should(BeNumerically(">", 0))
+
+		})
+	})
 })
