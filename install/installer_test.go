@@ -83,7 +83,7 @@ func getValuesObjects(componentValues string, releasedValues map[string]interfac
 func TestIsUpgrade(t *testing.T) {
 
 	logger := zap.New(zap.UseDevMode(true)).WithValues("test", t.Name())
-	i := &HelmInstaller{logger}
+	i := &HelmInstaller{nil, logger} // fix ClientGetter for more complex tests
 	var u bool
 
 	u = i.IsUpgrade(getVersionedObjects("v1.1.0", "v0.9.8"))

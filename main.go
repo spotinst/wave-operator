@@ -55,7 +55,8 @@ func main() {
 	logger := zap.New(zap.UseDevMode(true))
 	ctrl.SetLogger(logger)
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	config := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,
@@ -67,11 +68,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.WaveComponentReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("WaveComponent"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	controller := controllers.NewWaveComponentReconciler(
+		mgr.GetClient(),
+		mgr.GetConfig(),
+		ctrl.Log.WithName("controllers").WithName("WaveComponent"),
+		mgr.GetScheme(),
+	)
+	if err = controller.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WaveComponent")
 		os.Exit(1)
 	}

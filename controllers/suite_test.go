@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/install"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -57,7 +58,8 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+	log := zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter))
+	logf.SetLogger(log)
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -82,11 +84,25 @@ var _ = BeforeSuite(func(done Done) {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	err = (&WaveComponentReconciler{
-		Client: k8sManager.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("WaveComponent"),
-	}).SetupWithManager(k8sManager)
+	componentList := &v1alpha1.WaveComponentList{}
+	err = k8sClient.List(context.Background(), componentList)
 	Expect(err).ToNot(HaveOccurred())
+	Expect(componentList.Items).To(BeEmpty())
+
+	controller := NewWaveComponentReconciler(
+		k8sManager.GetClient(),
+		k8sManager.GetConfig(),
+		ctrl.Log.WithName("controllers").WithName("WaveComponent"),
+		k8sManager.GetScheme(),
+	)
+	err = controller.SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	// there should be no preexisting helm release
+	helm := install.NewHelmInstaller(controller.ClientGetter, log)
+	rel, err := helm.Get(install.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
+	Expect(rel).To(BeNil())
+	Expect(err).ToNot(BeNil())
 
 	go func() {
 		err = k8sManager.Start(ctrl.SetupSignalHandler())
@@ -124,9 +140,9 @@ var _ = Describe("WaveComponent controller", func() {
 					Namespace: catalog.SystemNamespace,
 				},
 				Spec: v1alpha1.WaveComponentSpec{
-					Type:    "helm",
-					Name:    "spark-history-server",
-					State:   "present",
+					Type:    v1alpha1.HelmComponentType,
+					Name:    v1alpha1.SparkHistoryChartName,
+					State:   v1alpha1.PresentComponentState,
 					URL:     "https://kubernetes-charts.storage.googleapis.com",
 					Version: "1.4.0",
 					ValuesConfiguration: `
@@ -170,7 +186,8 @@ s3:
 
 				return len(created.Status.Conditions), nil
 			}, timeout, interval).Should(BeNumerically(">", 0))
-
+			Expect(created.Status.Conditions[0].Type).To(Equal(v1alpha1.WaveComponentProgressing))
+			Expect(created.Status.Conditions[0].Reason).To(Equal(InstallingReason))
 		})
 	})
 })

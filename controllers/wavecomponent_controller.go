@@ -22,21 +22,43 @@ import (
 
 	"github.com/go-logr/logr"
 	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/components"
 	"helm.sh/helm/v3/pkg/release"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // WaveComponentReconciler reconciles a WaveComponent object
 type WaveComponentReconciler struct {
-	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Client       client.Client
+	ClientGetter genericclioptions.RESTClientGetter
+	Log          logr.Logger
+	Scheme       *runtime.Scheme
+}
+
+func NewWaveComponentReconciler(client client.Client, config *rest.Config, log logr.Logger, scheme *runtime.Scheme) *WaveComponentReconciler {
+
+	var kubeConfig *genericclioptions.ConfigFlags
+	kubeConfig = genericclioptions.NewConfigFlags(false)
+	kubeConfig.APIServer = &config.Host
+	kubeConfig.BearerToken = &config.BearerToken
+	kubeConfig.CAFile = &config.CAFile
+	ns := catalog.SystemNamespace
+	kubeConfig.Namespace = &ns
+
+	return &WaveComponentReconciler{
+		Client:       client,
+		ClientGetter: kubeConfig,
+		Log:          log,
+		Scheme:       scheme,
+	}
 }
 
 // +kubebuilder:rbac:groups=wave.spot.io,resources=wavecomponents,verbs=get;list;watch;create;update;patch;delete
@@ -48,7 +70,7 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	comp := &v1alpha1.WaveComponent{}
 	var err error
-	err = r.Get(ctx, req.NamespacedName, comp)
+	err = r.Client.Get(ctx, req.NamespacedName, comp)
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
 			log.Error(err, "cannot retrieve")
@@ -75,9 +97,22 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, nil
 	}
 
+	// config, err := ctrl.GetConfig() //rest.InClusterConfig()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("can't load config, %w", err)
+	// }
+	//
+	// // Create the ConfigFlags struct instance with initialized values from ServiceAccount
+	// kubeConfig := genericclioptions.NewConfigFlags(false)
+	// kubeConfig.APIServer = &config.Host
+	// kubeConfig.BearerToken = &config.BearerToken
+	// kubeConfig.CAFile = &config.CAFile
+	// kubeConfig.Namespace = &namespace
+
 	// get helm status of component
 	// (a) if it's not there, then install is needed
-	helm := install.NewHelmInstaller(log)
+
+	helm := install.NewHelmInstaller(r.ClientGetter, log)
 	rel, err := helm.Get(install.GetReleaseName(req.Name))
 	if err != nil {
 		if err == install.ErrReleaseNotFound {

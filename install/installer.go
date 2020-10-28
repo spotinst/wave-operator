@@ -20,7 +20,6 @@ import (
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 var (
@@ -44,7 +43,8 @@ type Installer interface {
 }
 
 type HelmInstaller struct {
-	Log logr.Logger
+	ClientGetter genericclioptions.RESTClientGetter
+	Log          logr.Logger
 }
 
 // helm libraries require a logger function of particular form, different from zap's Info()
@@ -52,8 +52,8 @@ func (i *HelmInstaller) logForHelm(format string, v ...interface{}) {
 	i.Log.Info(fmt.Sprintf(format, v...))
 }
 
-func NewHelmInstaller(log logr.Logger) Installer {
-	return &HelmInstaller{log}
+func NewHelmInstaller(getter genericclioptions.RESTClientGetter, log logr.Logger) Installer {
+	return &HelmInstaller{getter, log}
 }
 
 func (i *HelmInstaller) Get(name string) (*release.Release, error) {
@@ -72,20 +72,8 @@ func (i *HelmInstaller) Get(name string) (*release.Release, error) {
 // https://stackoverflow.com/questions/59782217/run-helm3-client-from-in-cluster
 func (i *HelmInstaller) getActionConfig(namespace string) (*action.Configuration, error) {
 	actionConfig := new(action.Configuration)
-	var kubeConfig *genericclioptions.ConfigFlags
-	// Create the rest config instance with ServiceAccount values loaded in them
-	config, err := ctrl.GetConfig() //rest.InClusterConfig()
-	if err != nil {
-		return nil, fmt.Errorf("can't load config, %w", err)
-	}
 
-	// Create the ConfigFlags struct instance with initialized values from ServiceAccount
-	kubeConfig = genericclioptions.NewConfigFlags(false)
-	kubeConfig.APIServer = &config.Host
-	kubeConfig.BearerToken = &config.BearerToken
-	kubeConfig.CAFile = &config.CAFile
-	kubeConfig.Namespace = &namespace
-	if err := actionConfig.Init(kubeConfig, namespace, "secret", i.logForHelm); err != nil {
+	if err := actionConfig.Init(i.ClientGetter, namespace, "secret", i.logForHelm); err != nil {
 		return nil, err
 	}
 	return actionConfig, nil
