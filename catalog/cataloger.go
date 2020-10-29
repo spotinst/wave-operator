@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	SystemNamespace = "spot-system"
+	SystemNamespace    = "spot-system"
+	SparkJobsNamespace = "spark-jobs"
 )
 
 var (

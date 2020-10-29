@@ -9,7 +9,7 @@ todo: ## Show to-do items per file
 		--text \
 		--color \
 		-nRo \
-		-E 'TODO.*' \
+		-E '\S*[^\.]TODO.*' \
 		.
 
 .PHONY: help

@@ -118,6 +118,15 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				}
 			}
 
+			if err = r.EnsureNamespace(catalog.SystemNamespace); err != nil {
+				r.Log.Error(err, "unable to create namespace", "namespace", catalog.SystemNamespace)
+				return ctrl.Result{}, err
+			}
+			if err = r.EnsureNamespace(catalog.SparkJobsNamespace); err != nil {
+				r.Log.Error(err, "unable to create namespace", "namespace", catalog.SparkJobsNamespace)
+				return ctrl.Result{}, err
+			}
+
 			helmError := helm.Install(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
 			if helmError != nil {
 				return ctrl.Result{}, helmError
@@ -227,12 +236,14 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	return ctrl.Result{}, nil
 }
 
-func (r *WaveComponentReconciler) ensureNamespace(namespace string) error {
+func (r *WaveComponentReconciler) EnsureNamespace(namespace string) error {
 	ns := &v1.Namespace{}
 	ctx := context.TODO()
 	err := r.Client.Get(ctx, client.ObjectKey{Namespace: "", Name: namespace}, ns)
+	r.Log.Info("checking existence", "namespace", namespace)
 	if k8serrors.IsNotFound(err) {
 		ns.Name = namespace
+		r.Log.Info("creating", "namespace", namespace)
 		return r.Client.Create(ctx, ns)
 	}
 	return err
