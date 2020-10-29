@@ -33,7 +33,7 @@ const (
 
 	SparkHistoryChartName      ChartName = "spark-history-server"
 	EnterpriseGatewayChartName ChartName = "enterprise-gateway"
-	SparkOperatorChartName     ChartName = "spark-operator"
+	SparkOperatorChartName     ChartName = "sparkoperator"
 	WaveIngressChartName       ChartName = "ingress-nginx"
 )
 

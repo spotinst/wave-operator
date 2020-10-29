@@ -96,12 +96,12 @@ func (i *HelmInstaller) Upgrade(chartName string, repository string, version str
 		return fmt.Errorf("failed to get action config, %w", err)
 	}
 
-	repo := fmt.Sprintf("%s/%s-%s.tgz", repository, chartName, version)
-
-	act := action.NewUpgrade(cfg)
+	upgradeAction := action.NewUpgrade(cfg)
 
 	releaseName := GetReleaseName(chartName)
-	act.Namespace = catalog.SystemNamespace
+	upgradeAction.Namespace = catalog.SystemNamespace
+	upgradeAction.ChartPathOptions.RepoURL = repository
+	upgradeAction.ChartPathOptions.Version = version
 
 	settings := &cli.EnvSettings{}
 	cache, err := ioutil.TempDir(os.TempDir(), "wavecache-")
@@ -111,9 +111,9 @@ func (i *HelmInstaller) Upgrade(chartName string, repository string, version str
 	defer os.RemoveAll(cache)
 	settings.RepositoryCache = os.TempDir()
 
-	cp, err := act.ChartPathOptions.LocateChart(repo, settings)
+	cp, err := upgradeAction.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
-		return fmt.Errorf("failed to locate chart %s, %w", repo, err)
+		return fmt.Errorf("failed to locate chart %s, %w", chartName, err)
 	}
 
 	chrt, err := loader.Load(cp)
@@ -122,7 +122,7 @@ func (i *HelmInstaller) Upgrade(chartName string, repository string, version str
 
 	}
 
-	rel, err := act.Run(releaseName, chrt, vals)
+	rel, err := upgradeAction.Run(releaseName, chrt, vals)
 	if err != nil {
 		return fmt.Errorf("installation error, %w", err)
 
@@ -148,11 +148,7 @@ func (i *HelmInstaller) Install(chartName string, repository string, version str
 
 	getAction := action.NewGet(cfg)
 	rel, err := getAction.Run(releaseName)
-	// if err != nil {
-	// 	i.Log.Info("getting release", "error", err)
-	// } else if rel != nil {
-	// 	i.Log.Info("getting release", "release", rel.Name)
-	// }
+
 	if err != nil && err != driver.ErrReleaseNotFound {
 		return fmt.Errorf("existing release check failed, %w", err)
 	} else if rel != nil {
@@ -160,11 +156,13 @@ func (i *HelmInstaller) Install(chartName string, repository string, version str
 		return nil
 	}
 
-	repo := fmt.Sprintf("%s/%s-%s.tgz", repository, chartName, version)
+	//repo := fmt.Sprintf("%s/%s-%s.tgz", repository, chartName, version)
 	installAction := action.NewInstall(cfg)
 
 	installAction.ReleaseName = releaseName
 	installAction.Namespace = catalog.SystemNamespace
+	installAction.ChartPathOptions.RepoURL = repository
+	installAction.ChartPathOptions.Version = version
 
 	settings := &cli.EnvSettings{}
 	cache, err := ioutil.TempDir(os.TempDir(), "wavecache-")
@@ -174,9 +172,9 @@ func (i *HelmInstaller) Install(chartName string, repository string, version str
 	defer os.RemoveAll(cache)
 	settings.RepositoryCache = os.TempDir()
 
-	cp, err := installAction.ChartPathOptions.LocateChart(repo, settings)
+	cp, err := installAction.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
-		return fmt.Errorf("failed to locate chart %s, %w", repo, err)
+		return fmt.Errorf("failed to locate chart %s, %w", chartName, err)
 	}
 
 	chrt, err := loader.Load(cp)
@@ -200,16 +198,20 @@ func (i *HelmInstaller) IsUpgrade(comp *v1alpha1.WaveComponent, rel *release.Rel
 	if comp.Spec.Version != rel.Chart.Metadata.Version {
 		return true
 	}
-	var vals map[string]interface{}
-	err := yaml.Unmarshal([]byte(comp.Spec.ValuesConfiguration), &vals)
+	var newVals map[string]interface{}
+	err := yaml.Unmarshal([]byte(comp.Spec.ValuesConfiguration), &newVals)
 	if err != nil {
 		return true // fail properly later
 	}
-	if vals == nil {
-		vals = map[string]interface{}{}
+	if newVals == nil {
+		newVals = map[string]interface{}{}
 	}
-	if !reflect.DeepEqual(vals, rel.Config) {
-		i.Log.Info("upgrade required", "diff", cmp.Diff(vals, rel.Config))
+	currentVals := rel.Config
+	if currentVals == nil {
+		currentVals = map[string]interface{}{}
+	}
+	if !reflect.DeepEqual(newVals, currentVals) {
+		i.Log.Info("upgrade required", "diff", cmp.Diff(newVals, currentVals))
 		return true
 	}
 	return false

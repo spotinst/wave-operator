@@ -63,7 +63,6 @@ func NewWaveComponentReconciler(client client.Client, config *rest.Config, log l
 
 // +kubebuilder:rbac:groups=wave.spot.io,resources=wavecomponents,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=wave.spot.io,resources=wavecomponents/status,verbs=get;update;patch
-
 func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
@@ -97,22 +96,8 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, nil
 	}
 
-	// config, err := ctrl.GetConfig() //rest.InClusterConfig()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("can't load config, %w", err)
-	// }
-	//
-	// // Create the ConfigFlags struct instance with initialized values from ServiceAccount
-	// kubeConfig := genericclioptions.NewConfigFlags(false)
-	// kubeConfig.APIServer = &config.Host
-	// kubeConfig.BearerToken = &config.BearerToken
-	// kubeConfig.CAFile = &config.CAFile
-	// kubeConfig.Namespace = &namespace
-
-	// get helm status of component
-	// (a) if it's not there, then install is needed
-
 	helm := install.NewHelmInstaller(r.ClientGetter, log)
+
 	rel, err := helm.Get(install.GetReleaseName(req.Name))
 	if err != nil {
 		if err == install.ErrReleaseNotFound {
@@ -242,6 +227,17 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	return ctrl.Result{}, nil
 }
 
+func (r *WaveComponentReconciler) ensureNamespace(namespace string) error {
+	ns := &v1.Namespace{}
+	ctx := context.TODO()
+	err := r.Client.Get(ctx, client.ObjectKey{Namespace: "", Name: namespace}, ns)
+	if k8serrors.IsNotFound(err) {
+		ns.Name = namespace
+		return r.Client.Create(ctx, ns)
+	}
+	return err
+}
+
 func (r *WaveComponentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.WaveComponent{}).
@@ -251,12 +247,22 @@ func (r *WaveComponentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // GetCurrentCondition examines the current environment and returns a condition for the component
 func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveComponent) ([]*v1alpha1.WaveComponentCondition, error) {
 
+	var conditionOK = components.NewWaveComponentCondition(
+		v1alpha1.WaveComponentAvailable,
+		v1.ConditionTrue,
+		AvailableReason,
+		"component running",
+	)
+
 	switch comp.Spec.Name {
 	case v1alpha1.SparkHistoryChartName:
 		return components.GetSparkHistoryConditions(r.Client, r.Log)
 	case v1alpha1.EnterpriseGatewayChartName:
+		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
 	case v1alpha1.SparkOperatorChartName:
+		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
 	case v1alpha1.WaveIngressChartName:
+		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
 	default:
 		// (a) check helm
 		// (b) return not installed
@@ -269,5 +275,4 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 			),
 		}, nil
 	}
-	return nil, nil
 }

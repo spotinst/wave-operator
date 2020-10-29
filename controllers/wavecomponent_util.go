@@ -14,6 +14,7 @@ const (
 	InProgressReason         = "InProgress"
 	InstallationFailedReason = "HelmFailure"
 	// Available
+	AvailableReason = "Available"
 	// Degraded
 	// Failed
 	UnsupportedTypeReason = "UnsupportedComponentType"

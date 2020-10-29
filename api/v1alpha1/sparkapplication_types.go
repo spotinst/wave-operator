@@ -79,13 +79,13 @@ type SparkApplicationData struct {
 
 type MemoryMB int64
 
-func (m MemoryMB) MarshalText() (text []byte, err error) {
+func (m MemoryMB) MarshalText() (text []byte, err error) { // TODO remove, this is extra just to get the "m" into json
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "%dm", m)
 	return b.Bytes(), nil
 }
 
-type Properties struct {
+type Properties struct { // TODO replace with map[string]interface{} or map[string]string
 	//the count of executors
 	ExecutorInstances int `json:"spark.executor.instances"`
 
