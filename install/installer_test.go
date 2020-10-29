@@ -6,8 +6,6 @@ import (
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
-	"helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/release"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -32,7 +30,7 @@ serviceAccount:
 	assert.Equal(t, true, s["create"])
 }
 
-func getVersionedObjects(componentVersion, releasedVersion string) (*v1alpha1.WaveComponent, *release.Release) {
+func getVersionedObjects(componentVersion, releasedVersion string) (*v1alpha1.WaveComponent, *Installation) {
 	return &v1alpha1.WaveComponent{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "wave-foo",
@@ -43,20 +41,10 @@ func getVersionedObjects(componentVersion, releasedVersion string) (*v1alpha1.Wa
 				ValuesConfiguration: "",
 			},
 		},
-		&release.Release{
-			Name: "foo",
-			Chart: &chart.Chart{
-				Metadata: &chart.Metadata{
-					Name:       "foo",
-					Version:    releasedVersion,
-					AppVersion: "v99.12345.0",
-				},
-			},
-			Config: map[string]interface{}{},
-		}
+		NewInstallation("foo", releasedVersion, "", "", nil)
 }
 
-func getValuesObjects(componentValues string, releasedValues map[string]interface{}) (*v1alpha1.WaveComponent, *release.Release) {
+func getValuesObjects(componentValues string, releasedValues map[string]interface{}) (*v1alpha1.WaveComponent, *Installation) {
 	return &v1alpha1.WaveComponent{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "wave-foo",
@@ -67,23 +55,13 @@ func getValuesObjects(componentValues string, releasedValues map[string]interfac
 				ValuesConfiguration: componentValues,
 			},
 		},
-		&release.Release{
-			Name: "foo",
-			Chart: &chart.Chart{
-				Metadata: &chart.Metadata{
-					Name:       "foo",
-					Version:    "v1.2",
-					AppVersion: "v99.12345.0",
-				},
-			},
-			Config: releasedValues,
-		}
+		NewInstallation("foo", "v1.2", "", "", releasedValues)
 }
 
 func TestIsUpgrade(t *testing.T) {
 
 	logger := zap.New(zap.UseDevMode(true)).WithValues("test", t.Name())
-	i := &HelmInstaller{nil, logger} // fix ClientGetter for more complex tests
+	i := &HelmInstaller{nil, logger} // fix getClient for more complex tests
 	var u bool
 
 	u = i.IsUpgrade(getVersionedObjects("v1.1.0", "v0.9.8"))

@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/logr v0.1.0
+	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.4.2
 	github.com/google/go-cmp v0.4.0
 	github.com/onsi/ginkgo v1.12.1

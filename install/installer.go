@@ -23,8 +23,16 @@ import (
 )
 
 var (
-	// ErrReleaseNotFound duplicates the helm error from the driver pacakge
+	// ErrReleaseNotFound duplicates the helm error from the driver package
 	ErrReleaseNotFound = errors.New("release: not found")
+)
+
+const (
+	Failed      string = "failed"
+	Progressing string = "progressing"
+	Uninstalled string = "uninstalled"
+	Deployed    string = "deployed"
+	Unknown     string = "unknown"
 )
 
 type Installer interface {
@@ -32,14 +40,35 @@ type Installer interface {
 	// Install applies a helm chart to a cluster.  It's a lightweight wrapper around the helm 3 code
 	Install(name string, repository string, version string, values string) error
 
-	// Get a release TODO refactor to remove helm references
-	Get(name string) (*release.Release, error)
+	// Get a details of an installation
+	Get(name string) (*Installation, error)
 
 	// Upgrade applies a helm chart to a cluster.  It's a lightweight wrapper around the helm 3 code
 	Upgrade(name string, repository string, version string, values string) error
 	//Upgrade(rlsName string, chart *chart.Chart, vals map[string]string, namespace string, opts ...bool) (*release.Release, error)
 
-	IsUpgrade(comp *v1alpha1.WaveComponent, rel *release.Release) bool
+	IsUpgrade(comp *v1alpha1.WaveComponent, i *Installation) bool
+}
+
+type Installation struct {
+	Name        string
+	Version     string
+	Values      map[string]interface{}
+	Status      string
+	Description string
+}
+
+func NewInstallation(name, version, status, description string, vals map[string]interface{}) *Installation {
+	if vals == nil {
+		vals = map[string]interface{}{}
+	}
+	return &Installation{
+		Name:        name,
+		Version:     version,
+		Status:      status,
+		Values:      vals,
+		Description: description,
+	}
 }
 
 type HelmInstaller struct {
@@ -52,21 +81,47 @@ func (i *HelmInstaller) logForHelm(format string, v ...interface{}) {
 	i.Log.Info(fmt.Sprintf(format, v...))
 }
 
-func NewHelmInstaller(getter genericclioptions.RESTClientGetter, log logr.Logger) Installer {
+var GetHelm = func(getter genericclioptions.RESTClientGetter, log logr.Logger) Installer {
 	return &HelmInstaller{getter, log}
 }
 
-func (i *HelmInstaller) Get(name string) (*release.Release, error) {
+func (i *HelmInstaller) Get(name string) (*Installation, error) {
 	cfg, err := i.getActionConfig(catalog.SystemNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get action config, %w", err)
 	}
 	act := action.NewGet(cfg)
 	rel, err := act.Run(name)
-	if err != nil && err == driver.ErrReleaseNotFound {
-		return nil, ErrReleaseNotFound
+	if err != nil {
+		if err == driver.ErrReleaseNotFound {
+			return nil, ErrReleaseNotFound
+		}
+		return nil, err
 	}
-	return rel, err
+	return NewInstallation(
+		rel.Name,
+		rel.Chart.Metadata.Version,
+		translateStatus(rel.Info.Status),
+		rel.Info.Description,
+		rel.Config,
+	), nil
+}
+
+func translateStatus(status release.Status) string {
+	switch status {
+	case release.StatusFailed, release.StatusSuperseded:
+		return Failed
+	case release.StatusPendingInstall, release.StatusPendingRollback, release.StatusPendingUpgrade, release.StatusUninstalling:
+		return Progressing
+	case release.StatusUninstalled:
+		return Uninstalled
+	case release.StatusDeployed:
+		return Deployed
+	case release.StatusUnknown:
+		return Unknown
+	default:
+		return ""
+	}
 }
 
 // https://stackoverflow.com/questions/59782217/run-helm3-client-from-in-cluster
@@ -194,8 +249,8 @@ func GetReleaseName(name string) string {
 	return "wave-" + name
 }
 
-func (i *HelmInstaller) IsUpgrade(comp *v1alpha1.WaveComponent, rel *release.Release) bool {
-	if comp.Spec.Version != rel.Chart.Metadata.Version {
+func (i *HelmInstaller) IsUpgrade(comp *v1alpha1.WaveComponent, inst *Installation) bool {
+	if comp.Spec.Version != inst.Version {
 		return true
 	}
 	var newVals map[string]interface{}
@@ -206,12 +261,8 @@ func (i *HelmInstaller) IsUpgrade(comp *v1alpha1.WaveComponent, rel *release.Rel
 	if newVals == nil {
 		newVals = map[string]interface{}{}
 	}
-	currentVals := rel.Config
-	if currentVals == nil {
-		currentVals = map[string]interface{}{}
-	}
-	if !reflect.DeepEqual(newVals, currentVals) {
-		i.Log.Info("upgrade required", "diff", cmp.Diff(newVals, currentVals))
+	if !reflect.DeepEqual(newVals, inst.Values) {
+		i.Log.Info("upgrade required", "diff", cmp.Diff(newVals, inst.Values))
 		return true
 	}
 	return false

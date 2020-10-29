@@ -20,6 +20,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/spotinst/wave-operator/install"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -71,6 +72,7 @@ func main() {
 	controller := controllers.NewWaveComponentReconciler(
 		mgr.GetClient(),
 		mgr.GetConfig(),
+		install.GetHelm,
 		ctrl.Log.WithName("controllers").WithName("WaveComponent"),
 		mgr.GetScheme(),
 	)

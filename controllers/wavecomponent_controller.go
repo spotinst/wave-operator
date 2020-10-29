@@ -25,7 +25,6 @@ import (
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/components"
-	"helm.sh/helm/v3/pkg/release"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,12 +37,20 @@ import (
 // WaveComponentReconciler reconciles a WaveComponent object
 type WaveComponentReconciler struct {
 	Client       client.Client
-	ClientGetter genericclioptions.RESTClientGetter
 	Log          logr.Logger
-	Scheme       *runtime.Scheme
+	getClient    genericclioptions.RESTClientGetter
+	getInstaller InstallerGetter
+	scheme       *runtime.Scheme
 }
 
-func NewWaveComponentReconciler(client client.Client, config *rest.Config, log logr.Logger, scheme *runtime.Scheme) *WaveComponentReconciler {
+type InstallerGetter func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer
+
+func NewWaveComponentReconciler(
+	client client.Client,
+	config *rest.Config,
+	installerGetter InstallerGetter,
+	log logr.Logger,
+	scheme *runtime.Scheme) *WaveComponentReconciler {
 
 	var kubeConfig *genericclioptions.ConfigFlags
 	kubeConfig = genericclioptions.NewConfigFlags(false)
@@ -55,9 +62,10 @@ func NewWaveComponentReconciler(client client.Client, config *rest.Config, log l
 
 	return &WaveComponentReconciler{
 		Client:       client,
-		ClientGetter: kubeConfig,
+		getClient:    kubeConfig,
+		getInstaller: installerGetter,
 		Log:          log,
-		Scheme:       scheme,
+		scheme:       scheme,
 	}
 }
 
@@ -96,12 +104,12 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, nil
 	}
 
-	helm := install.NewHelmInstaller(r.ClientGetter, log)
+	i := r.getInstaller(r.getClient, log)
 
-	rel, err := helm.Get(install.GetReleaseName(req.Name))
+	inst, err := i.Get(install.GetReleaseName(req.Name))
 	if err != nil {
 		if err == install.ErrReleaseNotFound {
-			log.Info("helm install is required")
+			log.Info("install is required")
 			new := comp.DeepCopy()
 			condition := components.NewWaveComponentCondition(
 				v1alpha1.WaveComponentProgressing,
@@ -127,7 +135,7 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				return ctrl.Result{}, err
 			}
 
-			helmError := helm.Install(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
+			helmError := i.Install(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
 			if helmError != nil {
 				return ctrl.Result{}, helmError
 			}
@@ -139,8 +147,8 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	// (b) if version or values don't match, then it's an upgrade
-	if helm.IsUpgrade(comp, rel) {
-		log.Info("helm upgrade is required")
+	if i.IsUpgrade(comp, inst) {
+		log.Info("upgrade is required")
 		new := comp.DeepCopy()
 		condition := components.NewWaveComponentCondition(
 			v1alpha1.WaveComponentProgressing,
@@ -156,7 +164,7 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				return ctrl.Result{}, err
 			}
 		}
-		helmError := helm.Upgrade(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
+		helmError := i.Upgrade(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
 		if helmError != nil {
 			return ctrl.Result{}, helmError
 		}
@@ -166,10 +174,14 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	// (c) check status of the release object
-	switch rel.Info.Status {
-	case release.StatusFailed, release.StatusSuperseded:
+	switch inst.Status {
+	case install.Failed:
 		new := comp.DeepCopy()
-		condition := components.NewWaveComponentCondition(v1alpha1.WaveComponentFailure, v1.ConditionTrue, InstallationFailedReason, rel.Info.Description)
+		condition := components.NewWaveComponentCondition(
+			v1alpha1.WaveComponentFailure,
+			v1.ConditionTrue,
+			InstallationFailedReason,
+			inst.Description)
 		changed := SetWaveComponentCondition(&(new.Status), *condition)
 		if changed {
 			err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
@@ -179,13 +191,13 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			}
 		}
 		return ctrl.Result{}, err
-	case release.StatusPendingInstall, release.StatusPendingRollback, release.StatusPendingUpgrade, release.StatusUninstalling:
+	case install.Progressing:
 		new := comp.DeepCopy()
 		condition := components.NewWaveComponentCondition(
 			v1alpha1.WaveComponentProgressing,
 			v1.ConditionTrue,
 			InProgressReason,
-			rel.Info.Description)
+			inst.Description)
 		changed := SetWaveComponentCondition(&(new.Status), *condition)
 		if changed {
 			err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
@@ -195,13 +207,13 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			}
 		}
 		return ctrl.Result{}, err
-	case release.StatusUninstalled:
+	case install.Uninstalled:
 		new := comp.DeepCopy()
 		condition := components.NewWaveComponentCondition(
 			v1alpha1.WaveComponentAvailable,
 			v1.ConditionFalse,
 			UninstalledReason,
-			rel.Info.Description)
+			inst.Description)
 		changed := SetWaveComponentCondition(&(new.Status), *condition)
 		if changed {
 			err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
@@ -211,7 +223,6 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			}
 		}
 		return ctrl.Result{}, err
-
 		// remaining conditions are Deployed and Unknown, continue on to component-specific condition
 	}
 

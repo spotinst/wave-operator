@@ -92,6 +92,7 @@ var _ = BeforeSuite(func(done Done) {
 	controller := NewWaveComponentReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetConfig(),
+		install.GetHelm,
 		ctrl.Log.WithName("controllers").WithName("WaveComponent"),
 		k8sManager.GetScheme(),
 	)
@@ -99,7 +100,7 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 
 	// there should be no preexisting helm release
-	helm := install.NewHelmInstaller(controller.ClientGetter, log)
+	helm := controller.getInstaller(controller.getClient, log)
 	rel, err := helm.Get(install.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	Expect(rel).To(BeNil())
 	Expect(err).ToNot(BeNil())
