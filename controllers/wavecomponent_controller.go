@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -28,6 +29,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,6 +45,7 @@ type WaveComponentReconciler struct {
 	scheme       *runtime.Scheme
 }
 
+//InstallerGetter is an factory function that returns an implementation of Installer
 type InstallerGetter func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer
 
 func NewWaveComponentReconciler(
@@ -52,8 +55,7 @@ func NewWaveComponentReconciler(
 	log logr.Logger,
 	scheme *runtime.Scheme) *WaveComponentReconciler {
 
-	var kubeConfig *genericclioptions.ConfigFlags
-	kubeConfig = genericclioptions.NewConfigFlags(false)
+	kubeConfig := genericclioptions.NewConfigFlags(false)
 	kubeConfig.APIServer = &config.Host
 	kubeConfig.BearerToken = &config.BearerToken
 	kubeConfig.CAFile = &config.CAFile
@@ -76,8 +78,7 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
 
 	comp := &v1alpha1.WaveComponent{}
-	var err error
-	err = r.Client.Get(ctx, req.NamespacedName, comp)
+	err := r.Client.Get(ctx, req.NamespacedName, comp)
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
 			log.Error(err, "cannot retrieve")
@@ -86,96 +87,56 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	}
 
 	if comp.Spec.Type != v1alpha1.HelmComponentType {
-		new := comp.DeepCopy()
-		condition := components.NewWaveComponentCondition(
-			v1alpha1.WaveComponentFailure,
-			v1.ConditionTrue,
-			UnsupportedTypeReason,
-			"Only helm charts are supported",
-		)
-		changed := SetWaveComponentCondition(&(new.Status), *condition)
-		if changed {
-			err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
-			if err != nil {
-				log.Error(err, "patch error")
-				return ctrl.Result{}, err
-			}
-		}
-		return ctrl.Result{}, nil
+		return r.unsupportedType(ctx, req, comp)
 	}
+
+	if comp.Spec.State == v1alpha1.PresentComponentState {
+		return r.reconcilePresent(ctx, req, comp)
+	} else {
+		return r.reconcileAbsent(ctx, req, comp)
+	}
+}
+
+func (r *WaveComponentReconciler) unsupportedType(ctx context.Context, req ctrl.Request, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
+	new := comp.DeepCopy()
+	condition := components.NewWaveComponentCondition(
+		v1alpha1.WaveComponentFailure,
+		v1.ConditionTrue,
+		UnsupportedTypeReason,
+		"Only helm charts are supported",
+	)
+	changed := SetWaveComponentCondition(&(new.Status), *condition)
+	if changed {
+		err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+		if err != nil {
+			r.Log.Error(err, "patch error")
+			return ctrl.Result{}, err
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl.Request, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
+	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
 
 	i := r.getInstaller(r.getClient, log)
 
 	inst, err := i.Get(install.GetReleaseName(req.Name))
 	if err != nil {
-		if err == install.ErrReleaseNotFound {
-			log.Info("install is required")
-			new := comp.DeepCopy()
-			condition := components.NewWaveComponentCondition(
-				v1alpha1.WaveComponentProgressing,
-				v1.ConditionTrue,
-				InstallingReason,
-				"Helm installation started",
-			)
-			changed := SetWaveComponentCondition(&(new.Status), *condition)
-			if changed {
-				err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
-				if err != nil {
-					log.Error(err, "patch error")
-					return ctrl.Result{}, err
-				}
-			}
-
-			if err = r.EnsureNamespace(catalog.SystemNamespace); err != nil {
-				r.Log.Error(err, "unable to create namespace", "namespace", catalog.SystemNamespace)
-				return ctrl.Result{}, err
-			}
-			if err = r.EnsureNamespace(catalog.SparkJobsNamespace); err != nil {
-				r.Log.Error(err, "unable to create namespace", "namespace", catalog.SparkJobsNamespace)
-				return ctrl.Result{}, err
-			}
-
-			helmError := i.Install(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
-			if helmError != nil {
-				return ctrl.Result{}, helmError
-			}
-			return ctrl.Result{
-				RequeueAfter: 60 * time.Second,
-			}, nil
+		if err != install.ErrReleaseNotFound {
+			return ctrl.Result{}, err
+		} else {
+			return r.install(ctx, log, comp)
 		}
-		return ctrl.Result{}, err
 	}
-
-	// (b) if version or values don't match, then it's an upgrade
 	if i.IsUpgrade(comp, inst) {
-		log.Info("upgrade is required")
-		new := comp.DeepCopy()
-		condition := components.NewWaveComponentCondition(
-			v1alpha1.WaveComponentProgressing,
-			v1.ConditionTrue,
-			UpgradingReason,
-			"Helm upgrade started",
-		)
-		changed := SetWaveComponentCondition(&(new.Status), *condition)
-		if changed {
-			err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
-			if err != nil {
-				log.Error(err, "patch error")
-				return ctrl.Result{}, err
-			}
-		}
-		helmError := i.Upgrade(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
-		if helmError != nil {
-			return ctrl.Result{}, helmError
-		}
-		return ctrl.Result{
-			RequeueAfter: 60 * time.Second,
-		}, nil
+		return r.upgrade(ctx, log, comp)
 	}
 
-	// (c) check status of the release object
+	// release is present, and it's not an upgrade
 	switch inst.Status {
 	case install.Failed:
+		// mark as failed, and return (a change in values should trigger an upgrade)
 		new := comp.DeepCopy()
 		condition := components.NewWaveComponentCondition(
 			v1alpha1.WaveComponentFailure,
@@ -192,6 +153,7 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		}
 		return ctrl.Result{}, err
 	case install.Progressing:
+		// progressing, requeue
 		new := comp.DeepCopy()
 		condition := components.NewWaveComponentCondition(
 			v1alpha1.WaveComponentProgressing,
@@ -206,8 +168,11 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				return ctrl.Result{}, err
 			}
 		}
-		return ctrl.Result{}, err
+		return ctrl.Result{
+			RequeueAfter: 15 * time.Second,
+		}, err
 	case install.Uninstalled:
+		// well, reinstall it.
 		new := comp.DeepCopy()
 		condition := components.NewWaveComponentCondition(
 			v1alpha1.WaveComponentAvailable,
@@ -221,14 +186,33 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 				log.Error(err, "patch error")
 				return ctrl.Result{}, err
 			}
+			// update comp
+			err = r.Client.Get(
+				ctx,
+				types.NamespacedName{
+					Name:      comp.Name,
+					Namespace: comp.Namespace,
+				},
+				comp,
+			)
+			if err != nil {
+				log.Error(err, "retrieve error")
+				return ctrl.Result{}, err
+			}
+
 		}
-		return ctrl.Result{}, err
+		return r.install(ctx, log, comp)
+
 		// remaining conditions are Deployed and Unknown, continue on to component-specific condition
 	}
 
 	// check component-specific conditions
 	// note that underlying components may fail without triggering a reconciliation event. TODO figure out how to fix
 	conditions, err := r.GetCurrentConditions(comp)
+	if err != nil {
+		log.Error(err, "cannot get current conditions")
+		return ctrl.Result{}, err
+	}
 	if conditions != nil {
 		new := comp.DeepCopy()
 		changed := false
@@ -245,6 +229,104 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *WaveComponentReconciler) install(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
+	log.Info("install is required")
+	i := r.getInstaller(r.getClient, log)
+	new := comp.DeepCopy()
+	condition := components.NewWaveComponentCondition(
+		v1alpha1.WaveComponentProgressing,
+		v1.ConditionTrue,
+		InstallingReason,
+		"Helm installation started",
+	)
+	changed := SetWaveComponentCondition(&(new.Status), *condition)
+	if changed {
+		err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+		if err != nil {
+			log.Error(err, "patch error")
+			return ctrl.Result{}, err
+		}
+	}
+
+	if err := r.EnsureNamespace(catalog.SystemNamespace); err != nil {
+		r.Log.Error(err, "unable to create namespace", "namespace", catalog.SystemNamespace)
+		return ctrl.Result{}, err
+	}
+	if err := r.EnsureNamespace(catalog.SparkJobsNamespace); err != nil {
+		r.Log.Error(err, "unable to create namespace", "namespace", catalog.SparkJobsNamespace)
+		return ctrl.Result{}, err
+	}
+
+	helmError := i.Install(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
+	if helmError != nil {
+		return ctrl.Result{}, helmError
+	}
+	return ctrl.Result{
+		RequeueAfter: 60 * time.Second,
+	}, nil
+
+}
+
+func (r *WaveComponentReconciler) upgrade(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
+
+	i := r.getInstaller(r.getClient, log)
+
+	log.Info("upgrade is required")
+	new := comp.DeepCopy()
+	condition := components.NewWaveComponentCondition(
+		v1alpha1.WaveComponentProgressing,
+		v1.ConditionTrue,
+		UpgradingReason,
+		"Helm upgrade started",
+	)
+	changed := SetWaveComponentCondition(&(new.Status), *condition)
+	if changed {
+		err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+		if err != nil {
+			log.Error(err, "patch error")
+			return ctrl.Result{}, err
+		}
+	}
+	helmError := i.Upgrade(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
+	if helmError != nil {
+		return ctrl.Result{}, helmError
+	}
+	return ctrl.Result{
+		RequeueAfter: 60 * time.Second,
+	}, nil
+}
+
+func (r *WaveComponentReconciler) reconcileAbsent(ctx context.Context, req ctrl.Request, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
+	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
+
+	i := r.getInstaller(r.getClient, log)
+
+	inst, err := i.Get(install.GetReleaseName(req.Name))
+	if err != nil {
+		if err == install.ErrReleaseNotFound {
+			new := comp.DeepCopy()
+			condition := components.NewWaveComponentCondition(
+				v1alpha1.WaveComponentAvailable,
+				v1.ConditionFalse,
+				UninstalledReason,
+				"component not present",
+			)
+			changed := SetWaveComponentCondition(&(new.Status), *condition)
+			if changed {
+				err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+				if err != nil {
+					log.Error(err, "patch error")
+					return ctrl.Result{}, err
+				}
+			}
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, fmt.Errorf("delete not implemented (installation %s)", inst.Name)
+
 }
 
 func (r *WaveComponentReconciler) EnsureNamespace(namespace string) error {

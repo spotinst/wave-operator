@@ -169,10 +169,7 @@ s3:
 
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, lookupKey, created)
-				if err != nil {
-					return false
-				}
-				return true
+				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
 			Expect(created.Spec.Name).Should(Equal(v1alpha1.SparkHistoryChartName))

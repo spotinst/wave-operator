@@ -81,6 +81,7 @@ func (i *HelmInstaller) logForHelm(format string, v ...interface{}) {
 	i.Log.Info(fmt.Sprintf(format, v...))
 }
 
+// GetHelm matches type controller.InstallerGetter, returns a HelmInstaller
 var GetHelm = func(getter genericclioptions.RESTClientGetter, log logr.Logger) Installer {
 	return &HelmInstaller{getter, log}
 }
