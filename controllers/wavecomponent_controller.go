@@ -364,7 +364,7 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 	case v1alpha1.EnterpriseGatewayChartName:
 		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
 	case v1alpha1.SparkOperatorChartName:
-		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
+		return components.GetSparkOperatorConditions(r.Client, r.Log)
 	case v1alpha1.WaveIngressChartName:
 		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
 	default:

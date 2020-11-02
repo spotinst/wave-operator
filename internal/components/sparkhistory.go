@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	HistoryServerChartName = "wave-spark-history-server"
+	HistoryServerReleaseName = "wave-spark-history-server"
 )
 
 func GetSparkHistoryConditions(client client.Client, log logr.Logger) ([]*v1alpha1.WaveComponentCondition, error) {
@@ -23,7 +23,7 @@ func GetSparkHistoryConditions(client client.Client, log logr.Logger) ([]*v1alph
 	ctx := context.TODO()
 
 	deployment := &appsv1.Deployment{}
-	err := client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: HistoryServerChartName}, deployment)
+	err := client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: HistoryServerReleaseName}, deployment)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			conditions = append(conditions,
