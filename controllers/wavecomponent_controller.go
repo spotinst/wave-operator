@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -269,6 +268,35 @@ func (r *WaveComponentReconciler) install(ctx context.Context, log logr.Logger, 
 
 }
 
+func (r *WaveComponentReconciler) delete(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
+	log.Info("delete is required")
+	i := r.getInstaller(r.getClient, log)
+	new := comp.DeepCopy()
+	condition := components.NewWaveComponentCondition(
+		v1alpha1.WaveComponentProgressing,
+		v1.ConditionTrue,
+		DeletingReason,
+		"Helm deletion started",
+	)
+	changed := SetWaveComponentCondition(&(new.Status), *condition)
+	if changed {
+		err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+		if err != nil {
+			log.Error(err, "patch error")
+			return ctrl.Result{}, err
+		}
+	}
+
+	helmError := i.Delete(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
+	if helmError != nil {
+		return ctrl.Result{}, helmError
+	}
+	return ctrl.Result{
+		RequeueAfter: 60 * time.Second,
+	}, nil
+
+}
+
 func (r *WaveComponentReconciler) upgrade(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 
 	i := r.getInstaller(r.getClient, log)
@@ -303,7 +331,7 @@ func (r *WaveComponentReconciler) reconcileAbsent(ctx context.Context, req ctrl.
 
 	i := r.getInstaller(r.getClient, log)
 
-	inst, err := i.Get(install.GetReleaseName(req.Name))
+	_, err := i.Get(install.GetReleaseName(req.Name))
 	if err != nil {
 		if err == install.ErrReleaseNotFound {
 			new := comp.DeepCopy()
@@ -325,7 +353,7 @@ func (r *WaveComponentReconciler) reconcileAbsent(ctx context.Context, req ctrl.
 		}
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, fmt.Errorf("delete not implemented (installation %s)", inst.Name)
+	return r.delete(ctx, log, comp)
 
 }
 
@@ -357,6 +385,12 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 		AvailableReason,
 		"component running",
 	)
+	var conditionError = components.NewWaveComponentCondition(
+		v1alpha1.WaveComponentAvailable,
+		v1.ConditionFalse,
+		"",
+		"",
+	)
 
 	switch comp.Spec.Name {
 	case v1alpha1.SparkHistoryChartName:
@@ -364,7 +398,12 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 	case v1alpha1.EnterpriseGatewayChartName:
 		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
 	case v1alpha1.SparkOperatorChartName:
-		return components.GetSparkOperatorConditions(r.Client, r.Log)
+		config, err := r.getClient.ToRESTConfig()
+		if err != nil {
+			conditionError.Message = err.Error()
+			return []*v1alpha1.WaveComponentCondition{conditionError}, err
+		}
+		return components.GetSparkOperatorConditions(config, r.Client, r.Log)
 	case v1alpha1.WaveIngressChartName:
 		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
 	default:

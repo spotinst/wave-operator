@@ -15,9 +15,11 @@ endif
 all: manager
 
 
-test: generate fmt vet manifests  ## Run tests
+test: generate fmt vet manifests mocks  ## Run tests
 	go test ./... -coverprofile cover.out
 
+mocks:  ## Generate test mock code
+	mockgen -source=install/installer.go -destination controllers/internal/mock_install/installer_mock.go
 
 manager: generate fmt vet  ## Build manager binary
 	go build -o bin/manager main.go

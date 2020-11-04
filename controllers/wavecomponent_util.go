@@ -11,6 +11,7 @@ const (
 	UninstalledReason        = "Uninstalled"
 	InstallingReason         = "Installing"
 	UpgradingReason          = "Upgrading"
+	DeletingReason           = "Deleting"
 	InProgressReason         = "InProgress"
 	InstallationFailedReason = "HelmFailure"
 	// Available
