@@ -35,6 +35,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	FinalizerName = "operator.wave.spot.io"
+)
+
 // WaveComponentReconciler reconciles a WaveComponent object
 type WaveComponentReconciler struct {
 	Client       client.Client
@@ -85,6 +89,33 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, nil
 	}
 
+	// add finalizer
+	if comp.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !containsString(comp.ObjectMeta.Finalizers, FinalizerName) {
+			comp.ObjectMeta.Finalizers = append(comp.ObjectMeta.Finalizers, FinalizerName)
+			err := r.Client.Update(ctx, comp)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		resp, err := r.reconcileAbsent(ctx, req, comp)
+		if err != nil {
+			return resp, err
+		}
+		// remove finalizer, but fetch again since it's been patched
+		err = r.Client.Get(ctx, req.NamespacedName, comp)
+		if err != nil {
+			if !k8serrors.IsNotFound(err) {
+				log.Error(err, "cannot retrieve")
+			}
+			return ctrl.Result{}, nil
+		}
+		comp.ObjectMeta.Finalizers = removeString(comp.ObjectMeta.Finalizers, FinalizerName)
+		err = r.Client.Update(ctx, comp)
+		return resp, err
+	}
+
 	if comp.Spec.Type != v1alpha1.HelmComponentType {
 		return r.unsupportedType(ctx, req, comp)
 	}
@@ -94,6 +125,27 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	} else {
 		return r.reconcileAbsent(ctx, req, comp)
 	}
+}
+
+func removeString(names []string, name string) []string {
+	m := []string{}
+	k := 0
+	for i := 0; i < len(names); i++ {
+		if names[i] == name {
+			m = append(m, names[k:i]...)
+			k = i + 1
+		}
+	}
+	return append(m, names[k:]...)
+}
+
+func containsString(names []string, name string) bool {
+	for _, n := range names {
+		if n == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *WaveComponentReconciler) unsupportedType(ctx context.Context, req ctrl.Request, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
