@@ -15,9 +15,11 @@ endif
 
 all: manager
 
+.PHONY: version
+
 version:  ## set VERSION file
-	echo ${BUILD_DATE}
-	echo ${VERSION} > VERSION
+	$Q echo ${BUILD_DATE} ${VERSION}
+	$Q echo ${VERSION} > VERSION
 
 test: generate fmt vet manifests mocks  ## Run tests
 	go test ./... -coverprofile cover.out

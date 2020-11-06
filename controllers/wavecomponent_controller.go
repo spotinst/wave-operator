@@ -76,8 +76,10 @@ func NewWaveComponentReconciler(
 	}
 }
 
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
+// helm requires cluster-admin access, but here we'll explicitly mention
+// a few resources that the wave operator accesses directly
+
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;
 // +kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch;create;update;patch;delete
 
 // +kubebuilder:rbac:groups=wave.spot.io,resources=wavecomponents,verbs=get;list;watch;create;update;patch;delete
