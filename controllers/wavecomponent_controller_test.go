@@ -10,7 +10,9 @@ import (
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/controllers/internal/mock_install"
 	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/version"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
@@ -47,6 +49,9 @@ func init() {
 	_ = clientgoscheme.AddToScheme(testScheme)
 	_ = v1alpha1.AddToScheme(testScheme)
 	_ = apiextensions.AddToScheme(testScheme)
+
+	version.BuildVersion = "v0.0.0-test"
+	version.BuildDate = "1970-01-01T00:00:00Z"
 }
 
 func getMinimalTestComponent(chartName v1alpha1.ChartName) (*v1alpha1.WaveComponent, types.NamespacedName) {
@@ -210,11 +215,16 @@ func TestInitialInstall(t *testing.T) {
 		updated := v1alpha1.WaveComponent{}
 		err = controller.Client.Get(context.TODO(), objectKey, &updated)
 		assert.NoError(t, err)
+		assert.NotEmpty(t, updated.Finalizers)
+		assert.True(t, containsString(updated.Finalizers, FinalizerName))
 		assert.NotEmpty(t, updated.Status)
 		c := getConditionForType(v1alpha1.WaveComponentAvailable, updated.Status)
 		assert.NotNil(t, c)
 		assert.Equal(t, v1.ConditionFalse, c.Status)
 		assert.Equal(t, UninstalledReason, c.Reason)
+		require.NotNil(t, updated.Status.ManagedBy)
+		assert.Equal(t, updated.Status.ManagedBy.Version, version.BuildVersion)
+		assert.Equal(t, updated.Status.ManagedBy.Name, ControllerName)
 	}
 
 	component.Spec.State = v1alpha1.PresentComponentState

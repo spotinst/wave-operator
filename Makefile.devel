@@ -1,4 +1,5 @@
 
+
 # Image URL to use all building/pushing image targets
 IMG ?= ntfrnzn/waveoperator:latest
 
@@ -14,6 +15,9 @@ endif
 
 all: manager
 
+version:  ## set VERSION file
+	echo ${BUILD_DATE}
+	echo ${VERSION} > VERSION
 
 test: generate fmt vet manifests mocks  ## Run tests
 	go test ./... -coverprofile cover.out
@@ -22,11 +26,15 @@ mocks:  ## Generate test mock code
 	mockgen -source=install/installer.go -destination controllers/internal/mock_install/installer_mock.go
 
 manager: generate fmt vet  ## Build manager binary
-	go build -o bin/manager main.go
+	go build \
+ 	 -ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=${VERSION} -X github.com/spotinst/wave-operator/internal/version.BuildDate=${BUILD_DATE}" \
+     -o bin/manager main.go
 
 
 run: generate fmt vet manifests  ## Run against the configured Kubernetes cluster in ~/.kube/config
-	go run ./main.go
+	go run \
+	  -ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=${VERSION} -X github.com/spotinst/wave-operator/internal/version.BuildDate=${BUILD_DATE}" \
+	  ./main.go
 
 
 install: manifests  ## Install CRDs into a cluster

@@ -48,6 +48,7 @@ spec:
               description: URL is the location of the helm repository
               type: string
             valuesConfiguration:
+              description: ValuesConfiguration is a set of helm values, in yaml form
               type: string
             version:
               description: Version is the version of the helm chart
@@ -94,6 +95,18 @@ spec:
                 - type
                 type: object
               type: array
+            managedBy:
+              properties:
+                name:
+                  type: string
+                version:
+                  type: string
+              type: object
+            properties:
+              additionalProperties:
+                type: string
+              description: A set of installation values specific to the component
+              type: object
           type: object
       type: object
   version: v1alpha1

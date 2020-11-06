@@ -55,17 +55,28 @@ type WaveComponentSpec struct {
 	//Version is the version of the helm chart
 	Version string `json:"version"`
 
+	//ValuesConfiguration is a set of helm values, in yaml form
 	ValuesConfiguration string `json:"valuesConfiguration,omitempty"`
 }
 
 // WaveComponentStatus defines the observed state of WaveComponent
 type WaveComponentStatus struct {
+	ManagedBy *WaveComponentOwner `json:"managedBy,omitempty"`
+
+	//A set of installation values specific to the component
+	Properties map[string]string `json:"properties,omitempty"`
+
 	Conditions []WaveComponentCondition `json:"conditions,omitempty"`
 }
 
 type ConditionStatus string
 
 type WaveComponentConditionType string
+
+type WaveComponentOwner struct {
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
+}
 
 // These are valid conditions of a wave component.
 const (

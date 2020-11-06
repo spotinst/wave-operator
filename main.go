@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/version"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -84,7 +85,7 @@ func main() {
 
 	// +kubebuilder:scaffold:builder
 
-	setupLog.Info("starting manager")
+	setupLog.Info("starting manager", "buildVersion", version.BuildVersion, "buildDate", version.BuildDate)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)

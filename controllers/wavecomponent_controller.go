@@ -25,6 +25,7 @@ import (
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/components"
+	"github.com/spotinst/wave-operator/internal/version"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,7 +37,8 @@ import (
 )
 
 const (
-	FinalizerName = "operator.wave.spot.io"
+	FinalizerName  = "operator.wave.spot.io"
+	ControllerName = "WaveOperator"
 )
 
 // WaveComponentReconciler reconciles a WaveComponent object
@@ -75,6 +77,7 @@ func NewWaveComponentReconciler(
 }
 
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch;create;update;patch;delete
 
 // +kubebuilder:rbac:groups=wave.spot.io,resources=wavecomponents,verbs=get;list;watch;create;update;patch;delete
@@ -93,16 +96,16 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 		return ctrl.Result{}, nil
 	}
 
-	// add finalizer
-	if comp.ObjectMeta.DeletionTimestamp.IsZero() {
-		if !containsString(comp.ObjectMeta.Finalizers, FinalizerName) {
-			comp.ObjectMeta.Finalizers = append(comp.ObjectMeta.Finalizers, FinalizerName)
-			err := r.Client.Update(ctx, comp)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
+	changed := r.setInitialValues(comp)
+
+	if changed {
+		err := r.Client.Update(ctx, comp)
+		if err != nil {
+			return ctrl.Result{}, err
 		}
-	} else {
+
+	}
+	if !comp.ObjectMeta.DeletionTimestamp.IsZero() {
 		resp, err := r.reconcileAbsent(ctx, req, comp)
 		if err != nil {
 			return resp, err
@@ -129,6 +132,23 @@ func (r *WaveComponentReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 	} else {
 		return r.reconcileAbsent(ctx, req, comp)
 	}
+}
+
+func (r *WaveComponentReconciler) setInitialValues(comp *v1alpha1.WaveComponent) bool {
+	changed := false
+	if comp.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !containsString(comp.ObjectMeta.Finalizers, FinalizerName) {
+			comp.ObjectMeta.Finalizers = append(comp.ObjectMeta.Finalizers, FinalizerName)
+			changed = true
+		}
+	}
+	if comp.Status.ManagedBy == nil {
+		comp.Status.ManagedBy = &v1alpha1.WaveComponentOwner{
+			Name:    ControllerName,
+			Version: version.BuildVersion,
+		}
+	}
+	return changed
 }
 
 func removeString(names []string, name string) []string {
