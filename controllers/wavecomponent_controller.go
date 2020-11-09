@@ -37,8 +37,9 @@ import (
 )
 
 const (
-	FinalizerName  = "operator.wave.spot.io"
-	ControllerName = "WaveOperator"
+	FinalizerName          = "operator.wave.spot.io"
+	AnnotationWaveVersion  = "operator.wave.spot.io/version"
+	AnnotationSparkVersion = "spark.wave.spot.io/version"
 )
 
 // WaveComponentReconciler reconciles a WaveComponent object
@@ -144,12 +145,14 @@ func (r *WaveComponentReconciler) setInitialValues(comp *v1alpha1.WaveComponent)
 			changed = true
 		}
 	}
-	if comp.Status.ManagedBy == nil {
-		comp.Status.ManagedBy = &v1alpha1.WaveComponentOwner{
-			Name:    ControllerName,
-			Version: version.BuildVersion,
-		}
+	if comp.Annotations == nil {
+		comp.Annotations = make(map[string]string, 1)
 	}
+	if comp.Annotations[AnnotationWaveVersion] == "" {
+		comp.Annotations[AnnotationWaveVersion] = version.BuildVersion
+		changed = true
+	}
+
 	return changed
 }
 

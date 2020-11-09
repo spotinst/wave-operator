@@ -12,7 +12,6 @@ import (
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/version"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
@@ -222,9 +221,8 @@ func TestInitialInstall(t *testing.T) {
 		assert.NotNil(t, c)
 		assert.Equal(t, v1.ConditionFalse, c.Status)
 		assert.Equal(t, UninstalledReason, c.Reason)
-		require.NotNil(t, updated.Status.ManagedBy)
-		assert.Equal(t, updated.Status.ManagedBy.Version, version.BuildVersion)
-		assert.Equal(t, updated.Status.ManagedBy.Name, ControllerName)
+		assert.NotEmpty(t, updated.Annotations)
+		assert.Equal(t, updated.Annotations[AnnotationWaveVersion], version.BuildVersion)
 	}
 
 	component.Spec.State = v1alpha1.PresentComponentState

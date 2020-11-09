@@ -61,7 +61,6 @@ type WaveComponentSpec struct {
 
 // WaveComponentStatus defines the observed state of WaveComponent
 type WaveComponentStatus struct {
-	ManagedBy *WaveComponentOwner `json:"managedBy,omitempty"`
 
 	//A set of installation values specific to the component
 	Properties map[string]string `json:"properties,omitempty"`
@@ -72,11 +71,6 @@ type WaveComponentStatus struct {
 type ConditionStatus string
 
 type WaveComponentConditionType string
-
-type WaveComponentOwner struct {
-	Name    string `json:"name,omitempty"`
-	Version string `json:"version,omitempty"`
-}
 
 // These are valid conditions of a wave component.
 const (

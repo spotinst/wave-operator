@@ -95,13 +95,6 @@ spec:
                 - type
                 type: object
               type: array
-            managedBy:
-              properties:
-                name:
-                  type: string
-                version:
-                  type: string
-              type: object
             properties:
               additionalProperties:
                 type: string
