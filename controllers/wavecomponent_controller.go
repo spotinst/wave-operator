@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/components"
@@ -51,7 +51,7 @@ type WaveComponentReconciler struct {
 	scheme       *runtime.Scheme
 }
 
-//InstallerGetter is an factory function that returns an implementation of Installer
+// InstallerGetter is an factory function that returns an implementation of Installer
 type InstallerGetter func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer
 
 func NewWaveComponentReconciler(
@@ -178,16 +178,16 @@ func containsString(names []string, name string) bool {
 }
 
 func (r *WaveComponentReconciler) unsupportedType(ctx context.Context, req ctrl.Request, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
-	new := comp.DeepCopy()
+	deepCopy := comp.DeepCopy()
 	condition := components.NewWaveComponentCondition(
 		v1alpha1.WaveComponentFailure,
 		v1.ConditionTrue,
 		UnsupportedTypeReason,
 		"Only helm charts are supported",
 	)
-	changed := SetWaveComponentCondition(&(new.Status), *condition)
+	changed := SetWaveComponentCondition(&(deepCopy.Status), *condition)
 	if changed {
-		err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+		err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
 		if err != nil {
 			r.Log.Error(err, "patch error")
 			return ctrl.Result{}, err
@@ -217,15 +217,15 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 	switch inst.Status {
 	case install.Failed:
 		// mark as failed, and return (a change in values should trigger an upgrade)
-		new := comp.DeepCopy()
+		deepCopy := comp.DeepCopy()
 		condition := components.NewWaveComponentCondition(
 			v1alpha1.WaveComponentFailure,
 			v1.ConditionTrue,
 			InstallationFailedReason,
 			inst.Description)
-		changed := SetWaveComponentCondition(&(new.Status), *condition)
+		changed := SetWaveComponentCondition(&(deepCopy.Status), *condition)
 		if changed {
-			err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+			err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
 			if err != nil {
 				log.Error(err, "patch error")
 				return ctrl.Result{}, err
@@ -234,15 +234,15 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 		return ctrl.Result{}, err
 	case install.Progressing:
 		// progressing, requeue
-		new := comp.DeepCopy()
+		deepCopy := comp.DeepCopy()
 		condition := components.NewWaveComponentCondition(
 			v1alpha1.WaveComponentProgressing,
 			v1.ConditionTrue,
 			InProgressReason,
 			inst.Description)
-		changed := SetWaveComponentCondition(&(new.Status), *condition)
+		changed := SetWaveComponentCondition(&(deepCopy.Status), *condition)
 		if changed {
-			err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+			err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
 			if err != nil {
 				log.Error(err, "patch error")
 				return ctrl.Result{}, err
@@ -253,15 +253,15 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 		}, err
 	case install.Uninstalled:
 		// well, reinstall it.
-		new := comp.DeepCopy()
+		deepCopy := comp.DeepCopy()
 		condition := components.NewWaveComponentCondition(
 			v1alpha1.WaveComponentAvailable,
 			v1.ConditionFalse,
 			UninstalledReason,
 			inst.Description)
-		changed := SetWaveComponentCondition(&(new.Status), *condition)
+		changed := SetWaveComponentCondition(&(deepCopy.Status), *condition)
 		if changed {
-			err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+			err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
 			if err != nil {
 				log.Error(err, "patch error")
 				return ctrl.Result{}, err
@@ -294,13 +294,15 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 		return ctrl.Result{}, err
 	}
 	if conditions != nil {
-		new := comp.DeepCopy()
+		deepCopy := comp.DeepCopy()
 		changed := false
 		for _, c := range conditions {
-			changed = changed || SetWaveComponentCondition(&(new.Status), *c)
+			changed = changed || SetWaveComponentCondition(&(deepCopy.Status), *c)
 		}
+		propertiesChanged := r.updateStatusProperties(deepCopy)
+		changed = changed || propertiesChanged
 		if changed {
-			err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+			err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
 			if err != nil {
 				log.Error(err, "patch error")
 				return ctrl.Result{}, err
@@ -314,16 +316,16 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 func (r *WaveComponentReconciler) install(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log.Info("install is required")
 	i := r.getInstaller(r.getClient, log)
-	new := comp.DeepCopy()
+	deepCopy := comp.DeepCopy()
 	condition := components.NewWaveComponentCondition(
 		v1alpha1.WaveComponentProgressing,
 		v1.ConditionTrue,
 		InstallingReason,
 		"Helm installation started",
 	)
-	changed := SetWaveComponentCondition(&(new.Status), *condition)
+	changed := SetWaveComponentCondition(&(deepCopy.Status), *condition)
 	if changed {
-		err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+		err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
 		if err != nil {
 			log.Error(err, "patch error")
 			return ctrl.Result{}, err
@@ -352,16 +354,16 @@ func (r *WaveComponentReconciler) install(ctx context.Context, log logr.Logger, 
 func (r *WaveComponentReconciler) delete(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log.Info("delete is required")
 	i := r.getInstaller(r.getClient, log)
-	new := comp.DeepCopy()
+	deepCopy := comp.DeepCopy()
 	condition := components.NewWaveComponentCondition(
 		v1alpha1.WaveComponentProgressing,
 		v1.ConditionTrue,
 		DeletingReason,
 		"Helm deletion started",
 	)
-	changed := SetWaveComponentCondition(&(new.Status), *condition)
+	changed := SetWaveComponentCondition(&(deepCopy.Status), *condition)
 	if changed {
-		err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+		err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
 		if err != nil {
 			log.Error(err, "patch error")
 			return ctrl.Result{}, err
@@ -383,16 +385,16 @@ func (r *WaveComponentReconciler) upgrade(ctx context.Context, log logr.Logger, 
 	i := r.getInstaller(r.getClient, log)
 
 	log.Info("upgrade is required")
-	new := comp.DeepCopy()
+	deepCopy := comp.DeepCopy()
 	condition := components.NewWaveComponentCondition(
 		v1alpha1.WaveComponentProgressing,
 		v1.ConditionTrue,
 		UpgradingReason,
 		"Helm upgrade started",
 	)
-	changed := SetWaveComponentCondition(&(new.Status), *condition)
+	changed := SetWaveComponentCondition(&(deepCopy.Status), *condition)
 	if changed {
-		err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+		err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
 		if err != nil {
 			log.Error(err, "patch error")
 			return ctrl.Result{}, err
@@ -415,16 +417,16 @@ func (r *WaveComponentReconciler) reconcileAbsent(ctx context.Context, req ctrl.
 	_, err := i.Get(install.GetReleaseName(req.Name))
 	if err != nil {
 		if err == install.ErrReleaseNotFound {
-			new := comp.DeepCopy()
+			deepCopy := comp.DeepCopy()
 			condition := components.NewWaveComponentCondition(
 				v1alpha1.WaveComponentAvailable,
 				v1.ConditionFalse,
 				UninstalledReason,
 				"component not present",
 			)
-			changed := SetWaveComponentCondition(&(new.Status), *condition)
+			changed := SetWaveComponentCondition(&(deepCopy.Status), *condition)
 			if changed {
-				err := r.Client.Patch(ctx, new, client.MergeFrom(comp))
+				err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
 				if err != nil {
 					log.Error(err, "patch error")
 					return ctrl.Result{}, err
@@ -499,4 +501,24 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 			),
 		}, nil
 	}
+}
+
+func (r *WaveComponentReconciler) updateStatusProperties(c *v1alpha1.WaveComponent) bool {
+	updated := false
+	if c.Status.Properties == nil {
+		c.Status.Properties = map[string]string{}
+	}
+	switch c.Spec.Name {
+	case components.HistoryServerChartName:
+		if c.Spec.Version == "1.4.0" {
+			c.Status.Properties["SparkVersion"] = "2.4.0"
+			updated = true
+		}
+	case components.SparkOperatorChartName:
+		if c.Spec.Version == "v1beta2-1.2.0-3.0.0." {
+			c.Status.Properties["SparkVersion"] = "3.0.0"
+			updated = true
+		}
+	}
+	return updated
 }

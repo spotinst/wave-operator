@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	SparkOperatorChartName   = "sparkoperator"
 	SparkOperatorReleaseName = "wave-sparkoperator"
 )
 

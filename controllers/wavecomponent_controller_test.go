@@ -64,9 +64,10 @@ func getMinimalTestComponent(chartName v1alpha1.ChartName) (*v1alpha1.WaveCompon
 				Namespace: catalog.SystemNamespace,
 			},
 			Spec: v1alpha1.WaveComponentSpec{
-				Type:  v1alpha1.HelmComponentType,
-				Name:  chartName,
-				State: v1alpha1.PresentComponentState,
+				Type:    v1alpha1.HelmComponentType,
+				Name:    chartName,
+				State:   v1alpha1.PresentComponentState,
+				Version: "1.4.0",
 			},
 		},
 		types.NamespacedName{
@@ -114,7 +115,7 @@ func getSparkAppCRD() runtime.Object {
 				ListKind: "SparkApplicationList",
 			},
 			Versions: []apiextensions.CustomResourceDefinitionVersion{
-				apiextensions.CustomResourceDefinitionVersion{
+				{
 					Name: "v1beta2",
 				},
 			},
@@ -222,7 +223,7 @@ func TestInitialInstall(t *testing.T) {
 		assert.Equal(t, v1.ConditionFalse, c.Status)
 		assert.Equal(t, UninstalledReason, c.Reason)
 		assert.NotEmpty(t, updated.Annotations)
-		assert.Equal(t, updated.Annotations[AnnotationWaveVersion], version.BuildVersion)
+		assert.Equal(t, version.BuildVersion, updated.Annotations[AnnotationWaveVersion])
 	}
 
 	component.Spec.State = v1alpha1.PresentComponentState
@@ -324,6 +325,8 @@ func TestInstallSparkHistory(t *testing.T) {
 	assert.NotNil(t, c)
 	assert.Equal(t, v1.ConditionTrue, c.Status)
 	assert.Equal(t, "DeploymentAvailable", c.Reason)
+	assert.NotEmpty(t, updated.Status.Properties)
+	assert.Equal(t, "2.4.0", updated.Status.Properties["SparkVersion"])
 }
 
 // the runtime client only retrieves namespaces objects, so we can't use it to check the existence

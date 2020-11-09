@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	HistoryServerChartName   = "spark-history-server"
 	HistoryServerReleaseName = "wave-spark-history-server"
 )
 

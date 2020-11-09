@@ -40,29 +40,29 @@ const (
 // WaveComponentSpec defines the desired state of WaveComponent
 type WaveComponentSpec struct {
 
-	//Type is one of ["helm",]
+	// Type is one of ["helm",]
 	Type ComponentType `json:"type"`
 
-	//Name is the name of a helm chart
+	// Name is the name of a helm chart
 	Name ChartName `json:"name"`
 
-	//State determines whether the component should be installed or removed
+	// State determines whether the component should be installed or removed
 	State ComponentState `json:"state"`
 
-	//URL is the location of the helm repository
+	// URL is the location of the helm repository
 	URL string `json:"url"`
 
-	//Version is the version of the helm chart
+	// Version is the version of the helm chart
 	Version string `json:"version"`
 
-	//ValuesConfiguration is a set of helm values, in yaml form
+	// ValuesConfiguration is a set of helm values, in yaml form
 	ValuesConfiguration string `json:"valuesConfiguration,omitempty"`
 }
 
 // WaveComponentStatus defines the observed state of WaveComponent
 type WaveComponentStatus struct {
 
-	//A set of installation values specific to the component
+	// A set of installation values specific to the component
 	Properties map[string]string `json:"properties,omitempty"`
 
 	Conditions []WaveComponentCondition `json:"conditions,omitempty"`
