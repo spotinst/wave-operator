@@ -37,6 +37,7 @@ import (
 )
 
 const (
+	Wave                   = "wave"
 	FinalizerName          = "operator.wave.spot.io"
 	AnnotationWaveVersion  = "operator.wave.spot.io/version"
 	AnnotationSparkVersion = "spark.wave.spot.io/version"
@@ -52,7 +53,7 @@ type WaveComponentReconciler struct {
 }
 
 // InstallerGetter is an factory function that returns an implementation of Installer
-type InstallerGetter func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer
+type InstallerGetter func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer
 
 func NewWaveComponentReconciler(
 	client client.Client,
@@ -199,9 +200,9 @@ func (r *WaveComponentReconciler) unsupportedType(ctx context.Context, req ctrl.
 func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl.Request, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
 
-	i := r.getInstaller(r.getClient, log)
+	i := r.getInstaller(Wave, r.getClient, log)
 
-	inst, err := i.Get(install.GetReleaseName(req.Name))
+	inst, err := i.Get(i.GetReleaseName(req.Name))
 	if err != nil {
 		if err != install.ErrReleaseNotFound {
 			return ctrl.Result{}, err
@@ -315,7 +316,7 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 
 func (r *WaveComponentReconciler) install(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log.Info("install is required")
-	i := r.getInstaller(r.getClient, log)
+	i := r.getInstaller(Wave, r.getClient, log)
 	deepCopy := comp.DeepCopy()
 	condition := components.NewWaveComponentCondition(
 		v1alpha1.WaveComponentProgressing,
@@ -353,7 +354,7 @@ func (r *WaveComponentReconciler) install(ctx context.Context, log logr.Logger, 
 
 func (r *WaveComponentReconciler) delete(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log.Info("delete is required")
-	i := r.getInstaller(r.getClient, log)
+	i := r.getInstaller(Wave, r.getClient, log)
 	deepCopy := comp.DeepCopy()
 	condition := components.NewWaveComponentCondition(
 		v1alpha1.WaveComponentProgressing,
@@ -382,7 +383,7 @@ func (r *WaveComponentReconciler) delete(ctx context.Context, log logr.Logger, c
 
 func (r *WaveComponentReconciler) upgrade(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 
-	i := r.getInstaller(r.getClient, log)
+	i := r.getInstaller(Wave, r.getClient, log)
 
 	log.Info("upgrade is required")
 	deepCopy := comp.DeepCopy()
@@ -412,9 +413,9 @@ func (r *WaveComponentReconciler) upgrade(ctx context.Context, log logr.Logger, 
 func (r *WaveComponentReconciler) reconcileAbsent(ctx context.Context, req ctrl.Request, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
 
-	i := r.getInstaller(r.getClient, log)
+	i := r.getInstaller(Wave, r.getClient, log)
 
-	_, err := i.Get(install.GetReleaseName(req.Name))
+	_, err := i.Get(i.GetReleaseName(req.Name))
 	if err != nil {
 		if err == install.ErrReleaseNotFound {
 			deepCopy := comp.DeepCopy()
