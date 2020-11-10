@@ -48,6 +48,9 @@ type Installer interface {
 	//Upgrade(rlsName string, chart *chart.Chart, vals map[string]string, namespace string, opts ...bool) (*release.Release, error)
 
 	IsUpgrade(comp *v1alpha1.WaveComponent, i *Installation) bool
+
+	// Delete removes a helm release from a cluster.  It's a lightweight wrapper around the helm 3 code
+	Delete(name string, repository string, version string, values string) error
 }
 
 type Installation struct {
@@ -248,6 +251,35 @@ func (i *HelmInstaller) Install(chartName string, repository string, version str
 
 func GetReleaseName(name string) string {
 	return "wave-" + name
+}
+
+func (i *HelmInstaller) Delete(chartName string, repository string, version string, values string) error {
+
+	var vals map[string]interface{}
+	err := yaml.Unmarshal([]byte(values), &vals)
+	if err != nil {
+		return fmt.Errorf("invalid values configuration, %w", err)
+	}
+
+	releaseName := GetReleaseName(chartName)
+
+	cfg, err := i.getActionConfig(catalog.SystemNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to get action config, %w", err)
+	}
+
+	getAction := action.NewUninstall(cfg)
+	rel, err := getAction.Run(releaseName)
+	//
+	// if err != nil && err != driver.ErrReleaseNotFound {
+	// 	return fmt.Errorf("existing release check failed, %w", err)
+	// } else if rel != nil {
+	// 	i.Log.Info("release already exists")
+	// 	return nil
+	// }
+
+	i.Log.Info("removed", "release", rel.Release.Name)
+	return nil
 }
 
 func (i *HelmInstaller) IsUpgrade(comp *v1alpha1.WaveComponent, inst *Installation) bool {

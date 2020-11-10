@@ -10,9 +10,11 @@ import (
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/controllers/internal/mock_install"
 	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/version"
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -45,27 +47,32 @@ var (
 func init() {
 	_ = clientgoscheme.AddToScheme(testScheme)
 	_ = v1alpha1.AddToScheme(testScheme)
+	_ = apiextensions.AddToScheme(testScheme)
+
+	version.BuildVersion = "v0.0.0-test"
+	version.BuildDate = "1970-01-01T00:00:00Z"
 }
 
-func getMinimalTestComponent() (*v1alpha1.WaveComponent, types.NamespacedName) {
+func getMinimalTestComponent(chartName v1alpha1.ChartName) (*v1alpha1.WaveComponent, types.NamespacedName) {
 	return &v1alpha1.WaveComponent{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "WaveComponent",
 				APIVersion: "wave.spot.io/v1alpha1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      string(v1alpha1.SparkHistoryChartName),
+				Name:      string(chartName),
 				Namespace: catalog.SystemNamespace,
 			},
 			Spec: v1alpha1.WaveComponentSpec{
-				Type:  v1alpha1.HelmComponentType,
-				Name:  v1alpha1.SparkHistoryChartName,
-				State: v1alpha1.PresentComponentState,
+				Type:    v1alpha1.HelmComponentType,
+				Name:    chartName,
+				State:   v1alpha1.PresentComponentState,
+				Version: "1.4.0",
 			},
 		},
 		types.NamespacedName{
 			Namespace: catalog.SystemNamespace,
-			Name:      string(v1alpha1.SparkHistoryChartName),
+			Name:      string(chartName),
 		}
 }
 
@@ -73,10 +80,10 @@ func getMinimalTestComponent() (*v1alpha1.WaveComponent, types.NamespacedName) {
 // 	switch chartName {
 // 	case v1alpha1.SparkHistoryChartName:
 // 		return []runtime.Object{
-func getSparkDeployment() *appsv1.Deployment {
+func getDeployment(name string) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      install.GetReleaseName(string(v1alpha1.SparkHistoryChartName)),
+			Name:      name,
 			Namespace: catalog.SystemNamespace,
 		},
 		Status: appsv1.DeploymentStatus{
@@ -85,6 +92,33 @@ func getSparkDeployment() *appsv1.Deployment {
 			ReadyReplicas:       2,
 			AvailableReplicas:   2,
 			UnavailableReplicas: 0,
+		},
+	}
+}
+
+// abbreviated form of CRD installed by the  helm chart
+func getSparkAppCRD() runtime.Object {
+	return &apiextensions.CustomResourceDefinition{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "CustomResourceDefinition",
+			APIVersion: "apiextensions.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "sparkapplications.sparkoperator.k8s.io",
+		},
+		Spec: apiextensions.CustomResourceDefinitionSpec{
+			Group: "sparkoperator.k8s.io",
+			Names: apiextensions.CustomResourceDefinitionNames{
+				Plural:   "sparkapplications",
+				Singular: "sparkapplication",
+				Kind:     "SparkApplication",
+				ListKind: "SparkApplicationList",
+			},
+			Versions: []apiextensions.CustomResourceDefinitionVersion{
+				{
+					Name: "v1beta2",
+				},
+			},
 		},
 	}
 }
@@ -103,7 +137,7 @@ func TestBadComponentType(t *testing.T) {
 	log := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(log)
 
-	component, objectKey := getMinimalTestComponent()
+	component, objectKey := getMinimalTestComponent(v1alpha1.SparkHistoryChartName)
 	component.Spec.Type = "kustomize"
 
 	// mock the installer
@@ -146,7 +180,7 @@ func TestInitialInstall(t *testing.T) {
 	log := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(log)
 
-	component, objectKey := getMinimalTestComponent()
+	component, objectKey := getMinimalTestComponent(v1alpha1.SparkHistoryChartName)
 
 	// mock the installer
 	ctrl := gomock.NewController(t)
@@ -181,11 +215,15 @@ func TestInitialInstall(t *testing.T) {
 		updated := v1alpha1.WaveComponent{}
 		err = controller.Client.Get(context.TODO(), objectKey, &updated)
 		assert.NoError(t, err)
+		assert.NotEmpty(t, updated.Finalizers)
+		assert.True(t, containsString(updated.Finalizers, FinalizerName))
 		assert.NotEmpty(t, updated.Status)
 		c := getConditionForType(v1alpha1.WaveComponentAvailable, updated.Status)
 		assert.NotNil(t, c)
 		assert.Equal(t, v1.ConditionFalse, c.Status)
 		assert.Equal(t, UninstalledReason, c.Reason)
+		assert.NotEmpty(t, updated.Annotations)
+		assert.Equal(t, version.BuildVersion, updated.Annotations[AnnotationWaveVersion])
 	}
 
 	component.Spec.State = v1alpha1.PresentComponentState
@@ -211,7 +249,7 @@ func TestInstallSparkHistory(t *testing.T) {
 	log := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(log)
 
-	component, objectKey := getMinimalTestComponent()
+	component, objectKey := getMinimalTestComponent(v1alpha1.SparkHistoryChartName)
 	deployed := install.Installation{
 		Name:   component.Name,
 		Status: install.Deployed,
@@ -256,7 +294,7 @@ func TestInstallSparkHistory(t *testing.T) {
 	assert.Equal(t, "DeploymentAbsent", c.Reason)
 
 	// Deployment is not available
-	dep := getSparkDeployment()
+	dep := getDeployment(install.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	dep.Status.AvailableReplicas = 0
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep)
 	result, err = controller.Reconcile(request)
@@ -273,8 +311,113 @@ func TestInstallSparkHistory(t *testing.T) {
 	assert.Equal(t, "PodsUnavailable", c.Reason)
 
 	// Deployment is available
-	dep = getSparkDeployment()
+	dep = getDeployment(install.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep)
+	result, err = controller.Reconcile(request)
+	assert.NoError(t, err)
+	assert.False(t, result.Requeue)
+
+	updated = v1alpha1.WaveComponent{}
+	err = controller.Client.Get(context.TODO(), objectKey, &updated)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, updated.Status)
+	c = getConditionForType(v1alpha1.WaveComponentAvailable, updated.Status)
+	assert.NotNil(t, c)
+	assert.Equal(t, v1.ConditionTrue, c.Status)
+	assert.Equal(t, "DeploymentAvailable", c.Reason)
+	assert.NotEmpty(t, updated.Status.Properties)
+	assert.Equal(t, "2.4.0", updated.Status.Properties["SparkVersion"])
+}
+
+// the runtime client only retrieves namespaces objects, so we can't use it to check the existence
+// of the sparkoperator CRD, and the mock rest.Config is insufficient for mocking the CRD.
+// TODO move this test to the suite_test where it can be mocked/faked properly
+func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
+
+	log := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(log)
+
+	component, objectKey := getMinimalTestComponent(v1alpha1.SparkOperatorChartName)
+	deployed := install.Installation{
+		Name:   component.Name,
+		Status: install.Deployed,
+	}
+
+	subTestCount := 4
+
+	// mock the installer
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := mock_install.NewMockInstaller(ctrl)
+	// installation present
+	m.EXPECT().Get(gomock.Any()).Return(&deployed, nil).Times(subTestCount)
+	// Install is not called
+	m.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).Times(subTestCount)
+	var getMockInstaller InstallerGetter = func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
+		return m
+	}
+
+	fakeClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, component)
+	controller := NewWaveComponentReconciler(
+		fakeClient,
+		emptyConfig,
+		getMockInstaller,
+		log,
+		testScheme,
+	)
+
+	// CRD absent
+	request := ctrlrt.Request{NamespacedName: objectKey}
+	result, err := controller.Reconcile(request)
+	assert.NoError(t, err)
+	assert.False(t, result.Requeue)
+
+	updated := v1alpha1.WaveComponent{}
+	err = controller.Client.Get(context.TODO(), objectKey, &updated)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, updated.Status)
+	c := getConditionForType(v1alpha1.WaveComponentAvailable, updated.Status)
+	assert.NotNil(t, c)
+	assert.Equal(t, v1.ConditionFalse, c.Status)
+	assert.Equal(t, "CRDNotDefined", c.Reason)
+
+	// Deployment is absent
+	crd := getSparkAppCRD()
+	request = ctrlrt.Request{NamespacedName: objectKey}
+	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, crd)
+	result, err = controller.Reconcile(request)
+	assert.NoError(t, err)
+	assert.False(t, result.Requeue)
+
+	updated = v1alpha1.WaveComponent{}
+	err = controller.Client.Get(context.TODO(), objectKey, &updated)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, updated.Status)
+	c = getConditionForType(v1alpha1.WaveComponentAvailable, updated.Status)
+	assert.NotNil(t, c)
+	assert.Equal(t, v1.ConditionFalse, c.Status)
+	assert.Equal(t, "DeploymentAbsent", c.Reason)
+
+	// Deployment is not available
+	dep := getDeployment(install.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
+	dep.Status.AvailableReplicas = 0
+	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, crd)
+	result, err = controller.Reconcile(request)
+	assert.NoError(t, err)
+	assert.False(t, result.Requeue)
+
+	updated = v1alpha1.WaveComponent{}
+	err = controller.Client.Get(context.TODO(), objectKey, &updated)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, updated.Status)
+	c = getConditionForType(v1alpha1.WaveComponentAvailable, updated.Status)
+	assert.NotNil(t, c)
+	assert.Equal(t, v1.ConditionFalse, c.Status)
+	assert.Equal(t, "PodsUnavailable", c.Reason)
+
+	// Deployment is available
+	dep = getDeployment(install.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
+	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, crd)
 	result, err = controller.Reconcile(request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
@@ -294,7 +437,7 @@ func TestReinstall(t *testing.T) {
 	log := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(log)
 
-	component, objectKey := getMinimalTestComponent()
+	component, objectKey := getMinimalTestComponent(v1alpha1.SparkHistoryChartName)
 	uninstalled := install.Installation{
 		Name:   component.Name,
 		Status: install.Uninstalled,
@@ -332,6 +475,7 @@ func TestReinstall(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, result.Requeue)
 
+		// expect two conditions to be set
 		updated := v1alpha1.WaveComponent{}
 		err = controller.Client.Get(context.TODO(), objectKey, &updated)
 		assert.NoError(t, err)

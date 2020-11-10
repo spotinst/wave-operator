@@ -90,3 +90,17 @@ func (mr *MockInstallerMockRecorder) IsUpgrade(comp, i interface{}) *gomock.Call
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsUpgrade", reflect.TypeOf((*MockInstaller)(nil).IsUpgrade), comp, i)
 }
+
+// Delete mocks base method
+func (m *MockInstaller) Delete(name, repository, version, values string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", name, repository, version, values)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete
+func (mr *MockInstallerMockRecorder) Delete(name, repository, version, values interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInstaller)(nil).Delete), name, repository, version, values)
+}
