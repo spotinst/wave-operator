@@ -8,23 +8,29 @@ import (
 	"github.com/spotinst/wave-operator/catalog"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
+
+	// "k8s.io/kubernetes/pkg/apis/networking"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	HistoryServerChartName   = "spark-history-server"
-	HistoryServerReleaseName = "wave-spark-history-server"
+	EnterpriseGatewayChartName   = "enterprise-gateway"
+	EnterpriseGatewayIngressName = "enterprise-gateway-ingress"
+	EnterpriseGatewayReleaseName = "wave-enterprise-gateway"
 )
 
-func GetSparkHistoryConditions(client client.Client, log logr.Logger) ([]*v1alpha1.WaveComponentCondition, error) {
+func GetEnterpriseGatewayConditions(config *rest.Config, client client.Client, log logr.Logger) ([]*v1alpha1.WaveComponentCondition, error) {
 
 	conditions := []*v1alpha1.WaveComponentCondition{}
 	ctx := context.TODO()
+	var err error
 
 	deployment := &appsv1.Deployment{}
-	err := client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: HistoryServerReleaseName}, deployment)
+	err = client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: EnterpriseGatewayReleaseName}, deployment)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			conditions = append(conditions,
@@ -46,23 +52,18 @@ func GetSparkHistoryConditions(client client.Client, log logr.Logger) ([]*v1alph
 	return conditions, nil
 }
 
-func GetSparkHistoryProperties(c *v1alpha1.WaveComponent, client client.Client, log logr.Logger) (map[string]string, error) {
-	ctx := context.TODO()
+func GetEnterpriseGatewayProperties(c *v1alpha1.WaveComponent, client client.Client, log logr.Logger) (map[string]string, error) {
 	props := map[string]string{}
-	if c.Spec.Version == "1.4.0" {
-		props["SparkVersion"] = "2.4.0"
-	}
 
-	config := &v1.ConfigMap{}
-	key := types.NamespacedName{
-		Namespace: catalog.SystemNamespace,
-		Name:      HistoryServerReleaseName,
-	}
-	err := client.Get(ctx, key, config)
+	ctx := context.TODO()
+	ingress := &v1beta1.Ingress{}
+	err := client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: EnterpriseGatewayIngressName}, ingress)
 	if err != nil {
-		log.Error(err, "failed to read configmap", "name", HistoryServerReleaseName)
+		log.Error(err, "failed to read ingress", "name", EnterpriseGatewayIngressName)
 	} else {
-		props["LogDirectory"] = config.Data["logDirectory"]
+		if ingress.Status.LoadBalancer.Ingress != nil && len(ingress.Status.LoadBalancer.Ingress) > 0 {
+			props["Endpoint"] = ingress.Status.LoadBalancer.Ingress[0].Hostname + "/gateway"
+		}
 	}
 	return props, nil
 }

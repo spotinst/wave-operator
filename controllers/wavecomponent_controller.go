@@ -287,30 +287,39 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 		// remaining conditions are Deployed and Unknown, continue on to component-specific condition
 	}
 
-	// check component-specific conditions
+	// check updated conditions and properties
 	// note that underlying components may fail without triggering a reconciliation event. TODO figure out how to fix
+	deepCopy := comp.DeepCopy()
+	changed := false
+
 	conditions, err := r.GetCurrentConditions(comp)
 	if err != nil {
 		log.Error(err, "cannot get current conditions")
 		return ctrl.Result{}, err
 	}
 	if conditions != nil {
-		deepCopy := comp.DeepCopy()
-		changed := false
 		for _, c := range conditions {
-			changed = changed || SetWaveComponentCondition(&(deepCopy.Status), *c)
+			up := SetWaveComponentCondition(&(deepCopy.Status), *c)
+			changed = changed || up
 		}
-		propertiesChanged := r.updateStatusProperties(deepCopy)
-		changed = changed || propertiesChanged
-		if changed {
-			err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
-			if err != nil {
-				log.Error(err, "patch error")
-				return ctrl.Result{}, err
-			}
-		}
-
 	}
+
+	properties, err := r.GetCurrentProperties(deepCopy)
+	if err != nil {
+		log.Error(err, "cannot get current properties")
+		return ctrl.Result{}, err
+	}
+	up := r.updateStatusProperties(deepCopy, properties)
+	changed = changed || up
+
+	if changed {
+		err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
+		if err != nil {
+			log.Error(err, "patch error")
+			return ctrl.Result{}, err
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -504,22 +513,33 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 	}
 }
 
-func (r *WaveComponentReconciler) updateStatusProperties(c *v1alpha1.WaveComponent) bool {
+func (r *WaveComponentReconciler) GetCurrentProperties(comp *v1alpha1.WaveComponent) (map[string]string, error) {
+	switch comp.Spec.Name {
+	case v1alpha1.SparkHistoryChartName:
+		return components.GetSparkHistoryProperties(comp, r.Client, r.Log)
+	case v1alpha1.EnterpriseGatewayChartName:
+		return components.GetEnterpriseGatewayProperties(comp, r.Client, r.Log)
+	case v1alpha1.SparkOperatorChartName:
+		return components.GetSparkOperatorProperties(comp, r.Client, r.Log)
+	case v1alpha1.WaveIngressChartName:
+		return map[string]string{}, nil
+	default:
+		return map[string]string{}, nil
+	}
+}
+
+func (r *WaveComponentReconciler) updateStatusProperties(c *v1alpha1.WaveComponent, props map[string]string) bool {
 	updated := false
 	if c.Status.Properties == nil {
 		c.Status.Properties = map[string]string{}
 	}
-	switch c.Spec.Name {
-	case components.HistoryServerChartName:
-		if c.Spec.Version == "1.4.0" {
-			c.Status.Properties["SparkVersion"] = "2.4.0"
-			updated = true
-		}
-	case components.SparkOperatorChartName:
-		if c.Spec.Version == "v1beta2-1.2.0-3.0.0." {
-			c.Status.Properties["SparkVersion"] = "3.0.0"
+
+	for key, value := range props {
+		if c.Status.Properties[key] != value {
+			c.Status.Properties[key] = value
 			updated = true
 		}
 	}
+
 	return updated
 }
