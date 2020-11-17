@@ -149,7 +149,7 @@ func TestBadComponentType(t *testing.T) {
 	defer ctrl.Finish()
 	m := mock_install.NewMockInstaller(ctrl)
 
-	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mack
+	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mock
 	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
 		return m
 	}
@@ -196,7 +196,7 @@ func TestInitialInstall(t *testing.T) {
 	// Install returns no error
 	m.EXPECT().Install(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
-	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mack
+	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mock
 	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
 		return m
 	}
@@ -459,7 +459,7 @@ func TestReinstall(t *testing.T) {
 	m.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
 	m.EXPECT().Install(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
-	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mack
+	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mock
 	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
 		return m
 	}
