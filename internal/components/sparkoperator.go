@@ -72,3 +72,11 @@ func GetSparkOperatorConditions(config *rest.Config, client client.Client, log l
 	}
 	return conditions, nil
 }
+
+func GetSparkOperatorProperties(c *v1alpha1.WaveComponent, client client.Client, log logr.Logger) (map[string]string, error) {
+	props := map[string]string{}
+	if c.Spec.Version == "0.8.4" { // app version "v1beta2-1.2.0-3.0.0" {
+		props["SparkVersion"] = "3.0.0"
+	}
+	return props, nil
+}

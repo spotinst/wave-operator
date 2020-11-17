@@ -45,3 +45,24 @@ func GetSparkHistoryConditions(client client.Client, log logr.Logger) ([]*v1alph
 	}
 	return conditions, nil
 }
+
+func GetSparkHistoryProperties(c *v1alpha1.WaveComponent, client client.Client, log logr.Logger) (map[string]string, error) {
+	ctx := context.TODO()
+	props := map[string]string{}
+	if c.Spec.Version == "1.4.0" {
+		props["SparkVersion"] = "2.4.0"
+	}
+
+	config := &v1.ConfigMap{}
+	key := types.NamespacedName{
+		Namespace: catalog.SystemNamespace,
+		Name:      HistoryServerReleaseName,
+	}
+	err := client.Get(ctx, key, config)
+	if err != nil {
+		log.Error(err, "failed to read configmap", "name", HistoryServerReleaseName)
+	} else {
+		props["LogDirectory"] = config.Data["logDirectory"]
+	}
+	return props, nil
+}

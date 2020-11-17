@@ -37,6 +37,7 @@ import (
 )
 
 const (
+	Wave                   = "wave"
 	FinalizerName          = "operator.wave.spot.io"
 	AnnotationWaveVersion  = "operator.wave.spot.io/version"
 	AnnotationSparkVersion = "spark.wave.spot.io/version"
@@ -52,7 +53,7 @@ type WaveComponentReconciler struct {
 }
 
 // InstallerGetter is an factory function that returns an implementation of Installer
-type InstallerGetter func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer
+type InstallerGetter func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer
 
 func NewWaveComponentReconciler(
 	client client.Client,
@@ -199,9 +200,9 @@ func (r *WaveComponentReconciler) unsupportedType(ctx context.Context, req ctrl.
 func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl.Request, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
 
-	i := r.getInstaller(r.getClient, log)
+	i := r.getInstaller(Wave, r.getClient, log)
 
-	inst, err := i.Get(install.GetReleaseName(req.Name))
+	inst, err := i.Get(i.GetReleaseName(req.Name))
 	if err != nil {
 		if err != install.ErrReleaseNotFound {
 			return ctrl.Result{}, err
@@ -286,36 +287,53 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 		// remaining conditions are Deployed and Unknown, continue on to component-specific condition
 	}
 
-	// check component-specific conditions
+	// check updated conditions and properties
 	// note that underlying components may fail without triggering a reconciliation event. TODO figure out how to fix
+	deepCopy := comp.DeepCopy()
+	changed := false
+
 	conditions, err := r.GetCurrentConditions(comp)
 	if err != nil {
 		log.Error(err, "cannot get current conditions")
 		return ctrl.Result{}, err
 	}
 	if conditions != nil {
-		deepCopy := comp.DeepCopy()
-		changed := false
 		for _, c := range conditions {
-			changed = changed || SetWaveComponentCondition(&(deepCopy.Status), *c)
+			up := SetWaveComponentCondition(&(deepCopy.Status), *c)
+			changed = changed || up
 		}
-		propertiesChanged := r.updateStatusProperties(deepCopy)
-		changed = changed || propertiesChanged
-		if changed {
-			err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
-			if err != nil {
-				log.Error(err, "patch error")
-				return ctrl.Result{}, err
-			}
-		}
-
 	}
-	return ctrl.Result{}, nil
+
+	properties, err := r.GetCurrentProperties(deepCopy)
+	if err != nil {
+		log.Error(err, "cannot get current properties")
+		return ctrl.Result{}, err
+	}
+	up := r.updateStatusProperties(deepCopy, properties)
+	changed = changed || up
+
+	if changed {
+		err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(comp))
+		if err != nil {
+			log.Error(err, "patch error")
+			return ctrl.Result{}, err
+		}
+	}
+
+	condition := GetCurrentComponentCondition(deepCopy.Status)
+	requeue := true
+	if condition.Type == v1alpha1.WaveComponentAvailable && condition.Status == v1.ConditionTrue {
+		requeue = false
+	}
+	return ctrl.Result{
+		Requeue: requeue,
+	}, nil
+
 }
 
 func (r *WaveComponentReconciler) install(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log.Info("install is required")
-	i := r.getInstaller(r.getClient, log)
+	i := r.getInstaller(Wave, r.getClient, log)
 	deepCopy := comp.DeepCopy()
 	condition := components.NewWaveComponentCondition(
 		v1alpha1.WaveComponentProgressing,
@@ -353,7 +371,7 @@ func (r *WaveComponentReconciler) install(ctx context.Context, log logr.Logger, 
 
 func (r *WaveComponentReconciler) delete(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log.Info("delete is required")
-	i := r.getInstaller(r.getClient, log)
+	i := r.getInstaller(Wave, r.getClient, log)
 	deepCopy := comp.DeepCopy()
 	condition := components.NewWaveComponentCondition(
 		v1alpha1.WaveComponentProgressing,
@@ -382,7 +400,7 @@ func (r *WaveComponentReconciler) delete(ctx context.Context, log logr.Logger, c
 
 func (r *WaveComponentReconciler) upgrade(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 
-	i := r.getInstaller(r.getClient, log)
+	i := r.getInstaller(Wave, r.getClient, log)
 
 	log.Info("upgrade is required")
 	deepCopy := comp.DeepCopy()
@@ -412,9 +430,9 @@ func (r *WaveComponentReconciler) upgrade(ctx context.Context, log logr.Logger, 
 func (r *WaveComponentReconciler) reconcileAbsent(ctx context.Context, req ctrl.Request, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
 
-	i := r.getInstaller(r.getClient, log)
+	i := r.getInstaller(Wave, r.getClient, log)
 
-	_, err := i.Get(install.GetReleaseName(req.Name))
+	_, err := i.Get(i.GetReleaseName(req.Name))
 	if err != nil {
 		if err == install.ErrReleaseNotFound {
 			deepCopy := comp.DeepCopy()
@@ -479,7 +497,8 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 	case v1alpha1.SparkHistoryChartName:
 		return components.GetSparkHistoryConditions(r.Client, r.Log)
 	case v1alpha1.EnterpriseGatewayChartName:
-		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
+		restconfig, _ := r.getClient.ToRESTConfig()
+		return components.GetEnterpriseGatewayConditions(restconfig, r.Client, r.Log)
 	case v1alpha1.SparkOperatorChartName:
 		config, err := r.getClient.ToRESTConfig()
 		if err != nil {
@@ -503,22 +522,33 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 	}
 }
 
-func (r *WaveComponentReconciler) updateStatusProperties(c *v1alpha1.WaveComponent) bool {
+func (r *WaveComponentReconciler) GetCurrentProperties(comp *v1alpha1.WaveComponent) (map[string]string, error) {
+	switch comp.Spec.Name {
+	case v1alpha1.SparkHistoryChartName:
+		return components.GetSparkHistoryProperties(comp, r.Client, r.Log)
+	case v1alpha1.EnterpriseGatewayChartName:
+		return components.GetEnterpriseGatewayProperties(comp, r.Client, r.Log)
+	case v1alpha1.SparkOperatorChartName:
+		return components.GetSparkOperatorProperties(comp, r.Client, r.Log)
+	case v1alpha1.WaveIngressChartName:
+		return map[string]string{}, nil
+	default:
+		return map[string]string{}, nil
+	}
+}
+
+func (r *WaveComponentReconciler) updateStatusProperties(c *v1alpha1.WaveComponent, props map[string]string) bool {
 	updated := false
 	if c.Status.Properties == nil {
 		c.Status.Properties = map[string]string{}
 	}
-	switch c.Spec.Name {
-	case components.HistoryServerChartName:
-		if c.Spec.Version == "1.4.0" {
-			c.Status.Properties["SparkVersion"] = "2.4.0"
-			updated = true
-		}
-	case components.SparkOperatorChartName:
-		if c.Spec.Version == "v1beta2-1.2.0-3.0.0." {
-			c.Status.Properties["SparkVersion"] = "3.0.0"
+
+	for key, value := range props {
+		if c.Status.Properties[key] != value {
+			c.Status.Properties[key] = value
 			updated = true
 		}
 	}
+
 	return updated
 }

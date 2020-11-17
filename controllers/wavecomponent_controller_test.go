@@ -53,6 +53,10 @@ func init() {
 	version.BuildDate = "1970-01-01T00:00:00Z"
 }
 
+func withPrefix(name string) string {
+	return "wave-" + name
+}
+
 func getMinimalTestComponent(chartName v1alpha1.ChartName) (*v1alpha1.WaveComponent, types.NamespacedName) {
 	return &v1alpha1.WaveComponent{
 			TypeMeta: metav1.TypeMeta{
@@ -145,8 +149,8 @@ func TestBadComponentType(t *testing.T) {
 	defer ctrl.Finish()
 	m := mock_install.NewMockInstaller(ctrl)
 
-	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a HelmInstaller
-	var getMockInstaller InstallerGetter = func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
+	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mock
+	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
 		return m
 	}
 
@@ -186,13 +190,14 @@ func TestInitialInstall(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	m := mock_install.NewMockInstaller(ctrl)
+	m.EXPECT().GetReleaseName(string(v1alpha1.SparkHistoryChartName)).Return(withPrefix(string(v1alpha1.SparkHistoryChartName))).AnyTimes()
 	// installation not present
 	m.EXPECT().Get(gomock.Any()).Return(nil, install.ErrReleaseNotFound).Times(2)
 	// Install returns no error
 	m.EXPECT().Install(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
-	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a HelmInstaller
-	var getMockInstaller InstallerGetter = func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
+	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mock
+	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
 		return m
 	}
 
@@ -261,11 +266,12 @@ func TestInstallSparkHistory(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	m := mock_install.NewMockInstaller(ctrl)
+	m.EXPECT().GetReleaseName(string(v1alpha1.SparkHistoryChartName)).Return(withPrefix(string(v1alpha1.SparkHistoryChartName))).AnyTimes()
 	// installation present
 	m.EXPECT().Get(gomock.Any()).Return(&deployed, nil).Times(subTestCount)
 	// Install is not called
 	m.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).Times(subTestCount)
-	var getMockInstaller InstallerGetter = func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
+	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
 		return m
 	}
 
@@ -294,7 +300,7 @@ func TestInstallSparkHistory(t *testing.T) {
 	assert.Equal(t, "DeploymentAbsent", c.Reason)
 
 	// Deployment is not available
-	dep := getDeployment(install.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
+	dep := getDeployment(m.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	dep.Status.AvailableReplicas = 0
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep)
 	result, err = controller.Reconcile(request)
@@ -311,7 +317,7 @@ func TestInstallSparkHistory(t *testing.T) {
 	assert.Equal(t, "PodsUnavailable", c.Reason)
 
 	// Deployment is available
-	dep = getDeployment(install.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
+	dep = getDeployment(m.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep)
 	result, err = controller.Reconcile(request)
 	assert.NoError(t, err)
@@ -353,7 +359,7 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	m.EXPECT().Get(gomock.Any()).Return(&deployed, nil).Times(subTestCount)
 	// Install is not called
 	m.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).Times(subTestCount)
-	var getMockInstaller InstallerGetter = func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
+	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
 		return m
 	}
 
@@ -399,7 +405,7 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	assert.Equal(t, "DeploymentAbsent", c.Reason)
 
 	// Deployment is not available
-	dep := getDeployment(install.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
+	dep := getDeployment(m.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
 	dep.Status.AvailableReplicas = 0
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, crd)
 	result, err = controller.Reconcile(request)
@@ -416,7 +422,7 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	assert.Equal(t, "PodsUnavailable", c.Reason)
 
 	// Deployment is available
-	dep = getDeployment(install.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
+	dep = getDeployment(m.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, crd)
 	result, err = controller.Reconcile(request)
 	assert.NoError(t, err)
@@ -448,12 +454,13 @@ func TestReinstall(t *testing.T) {
 	defer ctrl.Finish()
 	m := mock_install.NewMockInstaller(ctrl)
 	// installation not present
+	m.EXPECT().GetReleaseName(string(v1alpha1.SparkHistoryChartName)).Return(withPrefix(string(v1alpha1.SparkHistoryChartName))).AnyTimes()
 	m.EXPECT().Get(gomock.Any()).Return(&uninstalled, nil).AnyTimes()
 	m.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
 	m.EXPECT().Install(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
-	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a HelmInstaller
-	var getMockInstaller InstallerGetter = func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
+	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mock
+	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
 		return m
 	}
 

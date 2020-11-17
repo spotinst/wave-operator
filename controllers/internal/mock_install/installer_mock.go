@@ -34,6 +34,20 @@ func (m *MockInstaller) EXPECT() *MockInstallerMockRecorder {
 	return m.recorder
 }
 
+// GetReleaseName mocks base method
+func (m *MockInstaller) GetReleaseName(chartName string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReleaseName", chartName)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetReleaseName indicates an expected call of GetReleaseName
+func (mr *MockInstallerMockRecorder) GetReleaseName(chartName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReleaseName", reflect.TypeOf((*MockInstaller)(nil).GetReleaseName), chartName)
+}
+
 // Install mocks base method
 func (m *MockInstaller) Install(name, repository, version, values string) error {
 	m.ctrl.T.Helper()
