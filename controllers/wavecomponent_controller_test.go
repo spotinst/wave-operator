@@ -23,6 +23,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrlrt "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlrt_fake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -101,7 +102,7 @@ func getDeployment(name string) *appsv1.Deployment {
 }
 
 // abbreviated form of CRD installed by the  helm chart
-func getSparkAppCRD() runtime.Object {
+func getSparkAppCRD() client.Object {
 	return &apiextensions.CustomResourceDefinition{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "CustomResourceDefinition",
@@ -165,7 +166,7 @@ func TestBadComponentType(t *testing.T) {
 
 	request := ctrlrt.Request{NamespacedName: objectKey}
 
-	result, err := controller.Reconcile(request)
+	result, err := controller.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
 
@@ -213,7 +214,7 @@ func TestInitialInstall(t *testing.T) {
 	request := ctrlrt.Request{NamespacedName: objectKey}
 
 	{ // with status = Absent
-		result, err := controller.Reconcile(request)
+		result, err := controller.Reconcile(context.TODO(), request)
 		assert.NoError(t, err)
 		assert.False(t, result.Requeue)
 
@@ -234,7 +235,7 @@ func TestInitialInstall(t *testing.T) {
 	component.Spec.State = v1alpha1.PresentComponentState
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component)
 	{ // with status = Present
-		result, err := controller.Reconcile(request)
+		result, err := controller.Reconcile(context.TODO(), request)
 		assert.NoError(t, err)
 		assert.False(t, result.Requeue)
 
@@ -286,7 +287,7 @@ func TestInstallSparkHistory(t *testing.T) {
 
 	// Deployment is absent
 	request := ctrlrt.Request{NamespacedName: objectKey}
-	result, err := controller.Reconcile(request)
+	result, err := controller.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
 
@@ -303,7 +304,7 @@ func TestInstallSparkHistory(t *testing.T) {
 	dep := getDeployment(m.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	dep.Status.AvailableReplicas = 0
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep)
-	result, err = controller.Reconcile(request)
+	result, err = controller.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
 
@@ -319,7 +320,7 @@ func TestInstallSparkHistory(t *testing.T) {
 	// Deployment is available
 	dep = getDeployment(m.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep)
-	result, err = controller.Reconcile(request)
+	result, err = controller.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
 
@@ -374,7 +375,7 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 
 	// CRD absent
 	request := ctrlrt.Request{NamespacedName: objectKey}
-	result, err := controller.Reconcile(request)
+	result, err := controller.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
 
@@ -391,7 +392,7 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	crd := getSparkAppCRD()
 	request = ctrlrt.Request{NamespacedName: objectKey}
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, crd)
-	result, err = controller.Reconcile(request)
+	result, err = controller.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
 
@@ -408,7 +409,7 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	dep := getDeployment(m.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
 	dep.Status.AvailableReplicas = 0
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, crd)
-	result, err = controller.Reconcile(request)
+	result, err = controller.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
 
@@ -424,7 +425,7 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	// Deployment is available
 	dep = getDeployment(m.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, crd)
-	result, err = controller.Reconcile(request)
+	result, err = controller.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
 
@@ -478,7 +479,7 @@ func TestReinstall(t *testing.T) {
 	component.Spec.State = v1alpha1.PresentComponentState
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component)
 	{ // with status = Present
-		result, err := controller.Reconcile(request)
+		result, err := controller.Reconcile(context.TODO(), request)
 		assert.NoError(t, err)
 		assert.False(t, result.Requeue)
 
