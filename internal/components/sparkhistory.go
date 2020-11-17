@@ -60,7 +60,7 @@ func GetSparkHistoryProperties(c *v1alpha1.WaveComponent, client client.Client, 
 	}
 	err := client.Get(ctx, key, config)
 	if err != nil {
-		log.Error(err, "failed to read configmap", "name", HistoryServerReleaseName)
+		log.Info("failed to read configmap", "name", HistoryServerReleaseName, "error", err.Error())
 	} else {
 		props["LogDirectory"] = config.Data["logDirectory"]
 	}
