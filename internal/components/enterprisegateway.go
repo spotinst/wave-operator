@@ -2,6 +2,7 @@ package components
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
@@ -25,12 +26,15 @@ const (
 
 func GetEnterpriseGatewayConditions(config *rest.Config, client client.Client, log logr.Logger) ([]*v1alpha1.WaveComponentCondition, error) {
 
+	// TODO this method should probably return only a single condition, success or failure
+
 	conditions := []*v1alpha1.WaveComponentCondition{}
 	ctx := context.TODO()
 	var err error
 
 	deployment := &appsv1.Deployment{}
-	err = client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: EnterpriseGatewayReleaseName}, deployment)
+	// in this chart, the deployment does not get the full releasename, just the chartname ¯\_(ツ)_/¯
+	err = client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: EnterpriseGatewayChartName}, deployment)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			conditions = append(conditions,
@@ -44,26 +48,41 @@ func GetEnterpriseGatewayConditions(config *rest.Config, client client.Client, l
 	if deployment.Status.AvailableReplicas == 0 {
 		conditions = append(conditions,
 			NewWaveComponentCondition(v1alpha1.WaveComponentAvailable, v1.ConditionFalse, "PodsUnavailable", "no pods are available"))
-	} else {
-		conditions = append(conditions,
-			NewWaveComponentCondition(v1alpha1.WaveComponentAvailable, v1.ConditionTrue, "DeploymentAvailable", "pods are available"))
-
+		return conditions, nil
 	}
+	_, err = getEnterpriseGatewayEndpoint(ctx, client, log)
+	if err != nil {
+		conditions = append(conditions,
+			NewWaveComponentCondition(v1alpha1.WaveComponentDegraded, v1.ConditionTrue,
+				"EndpointUnavailable",
+				fmt.Sprintf("Enterprise gateway endpoint not available, %s", err.Error())))
+		return conditions, nil
+	}
+
+	conditions = append(conditions,
+		NewWaveComponentCondition(v1alpha1.WaveComponentAvailable, v1.ConditionTrue, "DeploymentAvailable", "resources are available"))
 	return conditions, nil
 }
 
-func GetEnterpriseGatewayProperties(c *v1alpha1.WaveComponent, client client.Client, log logr.Logger) (map[string]string, error) {
-	props := map[string]string{}
-
-	ctx := context.TODO()
+func getEnterpriseGatewayEndpoint(ctx context.Context, client client.Client, log logr.Logger) (string, error) {
 	ingress := &v1beta1.Ingress{}
 	err := client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: EnterpriseGatewayIngressName}, ingress)
 	if err != nil {
-		log.Error(err, "failed to read ingress", "name", EnterpriseGatewayIngressName)
+		return "", err
 	} else {
 		if ingress.Status.LoadBalancer.Ingress != nil && len(ingress.Status.LoadBalancer.Ingress) > 0 {
-			props["Endpoint"] = ingress.Status.LoadBalancer.Ingress[0].Hostname + "/gateway"
+			return ingress.Status.LoadBalancer.Ingress[0].Hostname + "/gateway", nil
 		}
+	}
+	return "", fmt.Errorf("ingress hostname is not set")
+}
+
+func GetEnterpriseGatewayProperties(c *v1alpha1.WaveComponent, client client.Client, log logr.Logger) (map[string]string, error) {
+	ctx := context.TODO()
+	props := map[string]string{}
+	endpoint, err := getEnterpriseGatewayEndpoint(ctx, client, log)
+	if err == nil {
+		props["Endpoint"] = endpoint
 	}
 	return props, nil
 }

@@ -320,7 +320,15 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 		}
 	}
 
-	return ctrl.Result{}, nil
+	condition := GetCurrentComponentCondition(deepCopy.Status)
+	requeue := true
+	if condition.Type == v1alpha1.WaveComponentAvailable && condition.Status == v1.ConditionTrue {
+		requeue = false
+	}
+	return ctrl.Result{
+		Requeue: requeue,
+	}, nil
+
 }
 
 func (r *WaveComponentReconciler) install(ctx context.Context, log logr.Logger, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
@@ -489,7 +497,8 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 	case v1alpha1.SparkHistoryChartName:
 		return components.GetSparkHistoryConditions(r.Client, r.Log)
 	case v1alpha1.EnterpriseGatewayChartName:
-		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
+		restconfig, _ := r.getClient.ToRESTConfig()
+		return components.GetEnterpriseGatewayConditions(restconfig, r.Client, r.Log)
 	case v1alpha1.SparkOperatorChartName:
 		config, err := r.getClient.ToRESTConfig()
 		if err != nil {
