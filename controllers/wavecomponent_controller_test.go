@@ -84,20 +84,25 @@ func getMinimalTestComponent(chartName v1alpha1.ChartName) (*v1alpha1.WaveCompon
 // 	switch chartName {
 // 	case v1alpha1.SparkHistoryChartName:
 // 		return []runtime.Object{
-func getDeployment(name string) *appsv1.Deployment {
+func getSparkHistoryObjects(name string) (*appsv1.Deployment, *v1.ConfigMap) {
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: catalog.SystemNamespace,
-		},
-		Status: appsv1.DeploymentStatus{
-			Replicas:            2,
-			UpdatedReplicas:     2,
-			ReadyReplicas:       2,
-			AvailableReplicas:   2,
-			UnavailableReplicas: 0,
-		},
-	}
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: catalog.SystemNamespace,
+			},
+			Status: appsv1.DeploymentStatus{
+				Replicas:            2,
+				UpdatedReplicas:     2,
+				ReadyReplicas:       2,
+				AvailableReplicas:   2,
+				UnavailableReplicas: 0,
+			},
+		}, &v1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: catalog.SystemNamespace,
+			},
+		}
 }
 
 // abbreviated form of CRD installed by the  helm chart
@@ -288,7 +293,7 @@ func TestInstallSparkHistory(t *testing.T) {
 	request := ctrlrt.Request{NamespacedName: objectKey}
 	result, err := controller.Reconcile(request)
 	assert.NoError(t, err)
-	assert.False(t, result.Requeue)
+	assert.True(t, result.Requeue)
 
 	updated := v1alpha1.WaveComponent{}
 	err = controller.Client.Get(context.TODO(), objectKey, &updated)
@@ -300,12 +305,12 @@ func TestInstallSparkHistory(t *testing.T) {
 	assert.Equal(t, "DeploymentAbsent", c.Reason)
 
 	// Deployment is not available
-	dep := getDeployment(m.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
+	dep, cm := getSparkHistoryObjects(m.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	dep.Status.AvailableReplicas = 0
-	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep)
+	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, cm)
 	result, err = controller.Reconcile(request)
 	assert.NoError(t, err)
-	assert.False(t, result.Requeue)
+	assert.True(t, result.Requeue)
 
 	updated = v1alpha1.WaveComponent{}
 	err = controller.Client.Get(context.TODO(), objectKey, &updated)
@@ -317,8 +322,8 @@ func TestInstallSparkHistory(t *testing.T) {
 	assert.Equal(t, "PodsUnavailable", c.Reason)
 
 	// Deployment is available
-	dep = getDeployment(m.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
-	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep)
+	dep, cm = getSparkHistoryObjects(m.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
+	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, cm)
 	result, err = controller.Reconcile(request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
@@ -405,9 +410,9 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	assert.Equal(t, "DeploymentAbsent", c.Reason)
 
 	// Deployment is not available
-	dep := getDeployment(m.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
+	dep, cm := getSparkHistoryObjects(m.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
 	dep.Status.AvailableReplicas = 0
-	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, crd)
+	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, cm, crd)
 	result, err = controller.Reconcile(request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
@@ -422,8 +427,8 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	assert.Equal(t, "PodsUnavailable", c.Reason)
 
 	// Deployment is available
-	dep = getDeployment(m.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
-	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, crd)
+	dep, cm = getSparkHistoryObjects(m.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
+	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, cm, crd)
 	result, err = controller.Reconcile(request)
 	assert.NoError(t, err)
 	assert.False(t, result.Requeue)
