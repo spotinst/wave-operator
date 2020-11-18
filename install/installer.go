@@ -37,6 +37,9 @@ const (
 
 type Installer interface {
 
+	// returns the release name for a given chart
+	GetReleaseName(chartName string) string
+
 	// Install applies a helm chart to a cluster.  It's a lightweight wrapper around the helm 3 code
 	Install(name string, repository string, version string, values string) error
 
@@ -53,6 +56,7 @@ type Installer interface {
 	Delete(name string, repository string, version string, values string) error
 }
 
+// Installation represents a helm release, that is, a chart installed into a cluster
 type Installation struct {
 	Name        string
 	Version     string
@@ -75,6 +79,7 @@ func NewInstallation(name, version, status, description string, vals map[string]
 }
 
 type HelmInstaller struct {
+	prefix       string
 	ClientGetter genericclioptions.RESTClientGetter
 	Log          logr.Logger
 }
@@ -85,8 +90,12 @@ func (i *HelmInstaller) logForHelm(format string, v ...interface{}) {
 }
 
 // GetHelm matches type controller.InstallerGetter, returns a HelmInstaller
-var GetHelm = func(getter genericclioptions.RESTClientGetter, log logr.Logger) Installer {
-	return &HelmInstaller{getter, log}
+var GetHelm = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) Installer {
+	return &HelmInstaller{
+		prefix:       name,
+		ClientGetter: getter,
+		Log:          log,
+	}
 }
 
 func (i *HelmInstaller) Get(name string) (*Installation, error) {
@@ -157,7 +166,7 @@ func (i *HelmInstaller) Upgrade(chartName string, repository string, version str
 
 	upgradeAction := action.NewUpgrade(cfg)
 
-	releaseName := GetReleaseName(chartName)
+	releaseName := i.GetReleaseName(chartName)
 	upgradeAction.Namespace = catalog.SystemNamespace
 	upgradeAction.ChartPathOptions.RepoURL = repository
 	upgradeAction.ChartPathOptions.Version = version
@@ -198,7 +207,7 @@ func (i *HelmInstaller) Install(chartName string, repository string, version str
 		return fmt.Errorf("invalid values configuration, %w", err)
 	}
 
-	releaseName := GetReleaseName(chartName)
+	releaseName := i.GetReleaseName(chartName)
 
 	cfg, err := i.getActionConfig(catalog.SystemNamespace)
 	if err != nil {
@@ -249,8 +258,11 @@ func (i *HelmInstaller) Install(chartName string, repository string, version str
 	return nil
 }
 
-func GetReleaseName(name string) string {
-	return "wave-" + name
+func (i *HelmInstaller) GetReleaseName(name string) string {
+	if i.prefix != "" {
+		return i.prefix + "-" + name
+	}
+	return name
 }
 
 func (i *HelmInstaller) Delete(chartName string, repository string, version string, values string) error {
@@ -261,7 +273,7 @@ func (i *HelmInstaller) Delete(chartName string, repository string, version stri
 		return fmt.Errorf("invalid values configuration, %w", err)
 	}
 
-	releaseName := GetReleaseName(chartName)
+	releaseName := i.GetReleaseName(chartName)
 
 	cfg, err := i.getActionConfig(catalog.SystemNamespace)
 	if err != nil {

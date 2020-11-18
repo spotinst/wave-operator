@@ -100,8 +100,8 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 
 	// there should be no preexisting helm release
-	helm := controller.getInstaller(controller.getClient, log)
-	rel, err := helm.Get(install.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
+	helm := controller.getInstaller(Wave, controller.getClient, log)
+	rel, err := helm.Get(helm.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	Expect(rel).To(BeNil())
 	Expect(err).ToNot(BeNil())
 

@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"sort"
+
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 )
 
@@ -20,6 +22,23 @@ const (
 	// Failed
 	UnsupportedTypeReason = "UnsupportedComponentType"
 )
+
+// GetCurrentComponentCondition returns the condition with the most recent update
+func GetCurrentComponentCondition(status v1alpha1.WaveComponentStatus) *v1alpha1.WaveComponentCondition {
+	if len(status.Conditions) == 0 {
+		return nil
+	}
+	sortMostRecent(&status)
+	return &status.Conditions[0]
+}
+
+func sortMostRecent(status *v1alpha1.WaveComponentStatus) {
+	c := status.Conditions
+	sort.Slice(c, func(i int, j int) bool {
+		return c[i].LastUpdateTime.Time.After(c[j].LastUpdateTime.Time)
+	})
+	status.Conditions = c
+}
 
 // GetWaveComponentCondition returns the condition with the provided type.
 func GetWaveComponentCondition(status v1alpha1.WaveComponentStatus, condType v1alpha1.WaveComponentConditionType) *v1alpha1.WaveComponentCondition {
