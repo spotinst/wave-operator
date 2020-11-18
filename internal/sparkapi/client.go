@@ -101,7 +101,7 @@ func (c client) GetStages(applicationId string) ([]Stage, error) {
 		return nil, err
 	}
 
-	var stages []Stage
+	stages := make([]Stage, 0)
 	err = json.Unmarshal(resp, &stages)
 	if err != nil {
 		return nil, err
