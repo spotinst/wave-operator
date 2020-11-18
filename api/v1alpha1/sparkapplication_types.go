@@ -17,9 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"bytes"
-	"fmt"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -76,31 +73,6 @@ type SparkApplicationData struct {
 	//a list of references to the executor pods
 	Executors []Pod `json:"executors"`
 }
-
-type MemoryMB int64
-
-func (m MemoryMB) MarshalText() (text []byte, err error) { // TODO remove, this is extra just to get the "m" into json
-	var b bytes.Buffer
-	fmt.Fprintf(&b, "%dm", m)
-	return b.Bytes(), nil
-}
-
-/*type Properties struct { // TODO replace with map[string]interface{} or map[string]string
-	//the count of executors
-	ExecutorInstances int `json:"spark.executor.instances"`
-
-	//the number of cores in the executor pods
-	ExecutorCores int `json:"spark.executor.cores"`
-
-	//the executor memory in MB
-	ExecutorMemory MemoryMB `json:"spark.executor.memory"`
-
-	//the number of cores in the driver pod
-	DriverCores int `json:"spark.driver.cores"`
-
-	//the driver memory in MB
-	DriverMemory MemoryMB `json:"spark.driver.memory"`
-}*/
 
 type Statistics struct {
 
