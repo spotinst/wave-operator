@@ -15,6 +15,7 @@ const (
 type Client interface {
 	GetApplication(applicationId string) (*Application, error)
 	GetEnvironment(applicationId string) (*Environment, error)
+	GetStages(applicationId string) ([]Stage, error)
 }
 
 type client struct {
@@ -93,12 +94,32 @@ func (c client) GetEnvironment(applicationId string) (*Environment, error) {
 	return environment, nil
 }
 
+func (c client) GetStages(applicationId string) ([]Stage, error) {
+
+	resp, err := c.doGet(c.getStagesURL(applicationId))
+	if err != nil {
+		return nil, err
+	}
+
+	var stages []Stage
+	err = json.Unmarshal(resp, &stages)
+	if err != nil {
+		return nil, err
+	}
+
+	return stages, nil
+}
+
 func (c client) getEnvironmentURL(applicationId string) string {
 	return fmt.Sprintf("%s%s/applications/%s/environment", c.host, apiVersionUrl, applicationId)
 }
 
 func (c client) getApplicationURL(applicationId string) string {
 	return fmt.Sprintf("%s%s/applications/%s", c.host, apiVersionUrl, applicationId)
+}
+
+func (c client) getStagesURL(applicationId string) string {
+	return fmt.Sprintf("%s%s/applications/%s/stages", c.host, apiVersionUrl, applicationId)
 }
 
 func (c client) translateEnvironment(apiEnvironment *apiEnvironment) (*Environment, error) {

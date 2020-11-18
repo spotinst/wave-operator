@@ -17,6 +17,15 @@ func TestGetApplication(t *testing.T) {
 	fmt.Println(res)
 }
 
+func TestGetStages(t *testing.T) {
+
+	client := NewClient("http://localhost:9999", getTestLogger())
+	res, err := client.GetStages("spark-07be00fc282f45bf8f46bc7a32c82360")
+	assert.NoError(t, err)
+
+	fmt.Println(res)
+}
+
 func TestGetEnvironment(t *testing.T) {
 
 	client := NewClient("http://localhost:9999", getTestLogger())

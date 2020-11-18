@@ -23,3 +23,11 @@ type Attempt struct {
 	Completed        bool   `json:"completed"`
 	AppSparkVersion  string `json:"appSparkVersion"`
 }
+
+type Stage struct {
+	StageId         int   `json:"stageId"`
+	AttemptId       int   `json:"attemptId"`
+	InputBytes      int64 `json:"inputBytes"`
+	OutputBytes     int64 `json:"outputBytes"`
+	ExecutorCpuTime int64 `json:"executorCpuTime"`
+}
