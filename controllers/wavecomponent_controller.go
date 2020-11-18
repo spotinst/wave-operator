@@ -51,7 +51,7 @@ type WaveComponentReconciler struct {
 	scheme       *runtime.Scheme
 }
 
-// InstallerGetter is an factory function that returns an implementation of Installer
+// InstallerGetter is a factory function that returns an implementation of Installer
 type InstallerGetter func(getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer
 
 func NewWaveComponentReconciler(

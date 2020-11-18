@@ -83,6 +83,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	sparkPodController := controllers.NewSparkPodReconciler(
+		mgr.GetClient(),
+		ctrl.Log.WithName("controllers").WithName("SparkPod"),
+		mgr.GetScheme())
+
+	if err = sparkPodController.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SparkPod")
+		os.Exit(1)
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager", "buildVersion", version.BuildVersion, "buildDate", version.BuildDate)

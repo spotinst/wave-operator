@@ -64,13 +64,13 @@ type SparkApplicationStatus struct {
 //SparkApplicationData
 type SparkApplicationData struct {
 
-	//the runtime configuration of the driver and executors
-	SparkProperties Properties `json:"sparkProperties"`
+	//the runtime configuration of the spark application
+	SparkProperties map[string]string `json:"sparkProperties"`
 
-	//Rcollects statistics of the application runtoime
+	//collects statistics of the application run
 	RunStatistics Statistics `json:"runStatistics"`
 
-	// a reference to the driver pod
+	//a reference to the driver pod
 	Driver Pod `json:"driver"`
 
 	//a list of references to the executor pods
@@ -85,7 +85,7 @@ func (m MemoryMB) MarshalText() (text []byte, err error) { // TODO remove, this 
 	return b.Bytes(), nil
 }
 
-type Properties struct { // TODO replace with map[string]interface{} or map[string]string
+/*type Properties struct { // TODO replace with map[string]interface{} or map[string]string
 	//the count of executors
 	ExecutorInstances int `json:"spark.executor.instances"`
 
@@ -100,7 +100,7 @@ type Properties struct { // TODO replace with map[string]interface{} or map[stri
 
 	//the driver memory in MB
 	DriverMemory MemoryMB `json:"spark.driver.memory"`
-}
+}*/
 
 type Statistics struct {
 

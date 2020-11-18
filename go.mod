@@ -6,8 +6,8 @@ require (
 	//github.com/GoogleCloudPlatform/spark-on-k8s-operator v0.0.0-20201019034553-bd1b7ec1f20d // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/golang/mock v1.4.4
-	github.com/golang/protobuf v1.4.2
 	github.com/google/go-cmp v0.4.0
+	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/onsi/ginkgo v1.12.1
 	github.com/onsi/gomega v1.10.1
 	github.com/stretchr/testify v1.6.1
