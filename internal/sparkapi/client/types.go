@@ -1,11 +1,7 @@
-package sparkapi
-
-type apiEnvironment struct {
-	SparkProperties [][]string `json:"sparkProperties"`
-}
+package client
 
 type Environment struct {
-	SparkProperties map[string]string
+	SparkProperties [][]string `json:"sparkProperties"`
 }
 
 type Application struct {

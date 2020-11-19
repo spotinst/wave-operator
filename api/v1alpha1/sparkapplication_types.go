@@ -42,8 +42,8 @@ type SparkApplicationSpec struct {
 	//uniquely identifies the spark application, and is shared as a label on all driver and executor pods
 	ApplicationId string `json:"applicationId"`
 
-	//identity of the Ocean cluster in which the application is running
-	ClusterIdentifier string `json:"clusterIdentifier"`
+	//the name of the spark application
+	ApplicationName string `json:"applicationName"`
 
 	//specifies whether the application originates from spark-operator, from a jupyter notebook, or from spark-submit directly
 	Heritage SparkHeritage `json:"heritage"`

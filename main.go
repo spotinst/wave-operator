@@ -85,6 +85,7 @@ func main() {
 
 	sparkPodController := controllers.NewSparkPodReconciler(
 		mgr.GetClient(),
+		config,
 		ctrl.Log.WithName("controllers").WithName("SparkPod"),
 		mgr.GetScheme())
 

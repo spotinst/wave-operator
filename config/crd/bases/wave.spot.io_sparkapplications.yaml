@@ -33,15 +33,15 @@ spec:
             applicationId:
               description: uniquely identifies the spark application, and is shared as a label on all driver and executor pods
               type: string
-            clusterIdentifier:
-              description: identity of the Ocean cluster in which the application is running
+            applicationName:
+              description: the name of the spark application
               type: string
             heritage:
               description: specifies whether the application originates from spark-operator, from a jupyter notebook, or from spark-submit directly
               type: string
           required:
           - applicationId
-          - clusterIdentifier
+          - applicationName
           - heritage
           type: object
         status:
