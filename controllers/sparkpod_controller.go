@@ -257,6 +257,8 @@ func mapSparkApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *
 	}
 
 	deepCopy.Status.Data.RunStatistics.Attempts = attempts
+
+	deepCopy.Status.State = v1alpha1.SparkStateUnknown // TODO Where does this come from?
 }
 
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
