@@ -2,6 +2,7 @@ package transport
 
 import (
 	"fmt"
+	"k8s.io/client-go/kubernetes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,15 +23,17 @@ func Test_httpClient_Get(t *testing.T) {
 func Test_podProxyClient_Get(t *testing.T) {
 
 	config := ctrl.GetConfigOrDie()
+	clientset, err := kubernetes.NewForConfig(config)
+	assert.NoError(t, err)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "guest-9eef4e53-cfdc-45d5-8941-8e3d907e2eff-1605771311132-driver",
-			Namespace: "guest-9eef4e53-cfdc-45d5-8941-8e3d907e2eff",
+			Name:      "guest-83a4e90d-ba45-4d5d-a6d9-4e59d27d7118-1605786444879-driver",
+			Namespace: "guest-83a4e90d-ba45-4d5d-a6d9-4e59d27d7118",
 		},
 	}
 
-	client, err := NewPodProxyClient(pod, config, "4040")
+	client := NewPodProxyClient(pod, clientset, "4040")
 	assert.NoError(t, err)
 	res, err := client.Get("api/v1/applications")
 	assert.NoError(t, err)

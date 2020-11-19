@@ -8,7 +8,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 type TransportClient interface {
@@ -66,22 +65,16 @@ func (h httpClient) Get(path string) ([]byte, error) {
 type podProxyClient struct {
 	pod       *corev1.Pod
 	port      string
-	clientset *kubernetes.Clientset
+	clientset kubernetes.Interface
 }
 
-func NewPodProxyClient(pod *corev1.Pod, restConfig *rest.Config, port string) (TransportClient, error) {
-	clientset, err := kubernetes.NewForConfig(restConfig)
-	if err != nil {
-		return nil, fmt.Errorf("could not create clientset, %w", err)
-	}
-
+func NewPodProxyClient(pod *corev1.Pod, clientSet kubernetes.Interface, port string) TransportClient {
 	c := &podProxyClient{
 		pod:       pod,
 		port:      port,
-		clientset: clientset,
+		clientset: clientSet,
 	}
-
-	return c, nil
+	return c
 }
 
 func (p podProxyClient) Get(path string) ([]byte, error) {

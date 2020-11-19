@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"k8s.io/client-go/kubernetes"
 	"os"
 
 	"github.com/spotinst/wave-operator/install"
@@ -71,6 +72,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	clientSet, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		setupLog.Error(err, "unable to get client set")
+		os.Exit(1)
+	}
+
 	controller := controllers.NewWaveComponentReconciler(
 		mgr.GetClient(),
 		mgr.GetConfig(),
@@ -85,7 +92,7 @@ func main() {
 
 	sparkPodController := controllers.NewSparkPodReconciler(
 		mgr.GetClient(),
-		config,
+		clientSet,
 		ctrl.Log.WithName("controllers").WithName("SparkPod"),
 		mgr.GetScheme())
 

@@ -3,7 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/rest"
+	"k8s.io/client-go/kubernetes"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -35,22 +35,22 @@ const (
 // SparkPodReconciler reconciles Pod objects to discover Spark applications
 type SparkPodReconciler struct {
 	client.Client
-	RestConfig *rest.Config
-	Log        logr.Logger
-	Scheme     *runtime.Scheme
+	ClientSet kubernetes.Interface
+	Log       logr.Logger
+	Scheme    *runtime.Scheme
 }
 
 func NewSparkPodReconciler(
 	client client.Client,
-	restConfig *rest.Config,
+	clientSet kubernetes.Interface,
 	log logr.Logger,
 	scheme *runtime.Scheme) *SparkPodReconciler {
 
 	return &SparkPodReconciler{
-		Client:     client,
-		RestConfig: restConfig,
-		Log:        log,
-		Scheme:     scheme,
+		Client:    client,
+		ClientSet: clientSet,
+		Log:       log,
+		Scheme:    scheme,
 	}
 }
 
@@ -145,7 +145,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	driverPodCr := newPodCR(driverPod)
 	deepCopy.Status.Data.Driver = driverPodCr
 
-	sparkApiInfo, err := getSparkApiInfo(r.RestConfig, driverPod, applicationId, log)
+	sparkApiInfo, err := getSparkApiInfo(r.ClientSet, driverPod, applicationId, log)
 	if err != nil {
 		// Best effort, just log error
 		log.Error(err, "could not get spark api information")
@@ -307,7 +307,7 @@ func (r *SparkPodReconciler) createSparkApplicationCr(ctx context.Context, appli
 }
 
 // TODO Refactor - should be somewhere else? Async with locking on a CR access layer?
-func getSparkApiInfo(restConfig *rest.Config, driverPod *corev1.Pod, applicationId string, logger logr.Logger) (*sparkApiInfo, error) {
+func getSparkApiInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationId string, logger logr.Logger) (*sparkApiInfo, error) {
 
 	// TODO Communicate with history server if pod is not running anymore, or always talk to history server?
 	// TODO Or try pod first, and fall back on history server
@@ -316,14 +316,10 @@ func getSparkApiInfo(restConfig *rest.Config, driverPod *corev1.Pod, application
 		return nil, nil
 	}
 
-	logger.Info("Will call Spark API")
-
-	sparkApiClient, err := sparkapiclient.NewDriverPodClient(driverPod, restConfig)
-	if err != nil {
-		return nil, fmt.Errorf("could not create driver pod client, %w", err)
-	}
-
+	sparkApiClient := sparkapiclient.NewDriverPodClient(driverPod, clientSet)
 	sparkApiInfo := &sparkApiInfo{}
+
+	logger.Info("Will call Spark API")
 
 	application, err := sparkApiClient.GetApplication(applicationId)
 	if err != nil {

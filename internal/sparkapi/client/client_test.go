@@ -2,14 +2,16 @@ package client
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"testing"
 )
 
-const sparkApplicationId = "spark-838d85fbbdde435b9456f2d8af6e6ec4"
+const sparkApplicationId = "spark-1c795f6bd15a4c019a87cb8aac96a8b9"
 
 func TestGetApplication_historyServerClient(t *testing.T) {
 	client := getHistoryServerClient()
@@ -68,13 +70,17 @@ func getHistoryServerClient() Client {
 
 func getDriverPodClient() (Client, error) {
 	config := ctrl.GetConfigOrDie()
+	clientSet, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "guest-9eef4e53-cfdc-45d5-8941-8e3d907e2eff-1605771311132-driver",
-			Namespace: "guest-9eef4e53-cfdc-45d5-8941-8e3d907e2eff",
+			Name:      "guest-83a4e90d-ba45-4d5d-a6d9-4e59d27d7118-1605786444879-driver",
+			Namespace: "guest-83a4e90d-ba45-4d5d-a6d9-4e59d27d7118",
 		},
 	}
 
-	return NewDriverPodClient(pod, config)
+	return NewDriverPodClient(pod, clientSet), nil
 }

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/spotinst/wave-operator/internal/sparkapi/client/transport"
+	"k8s.io/client-go/kubernetes"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/rest"
 )
 
 const (
@@ -33,17 +33,12 @@ func NewHistoryServerClient(host string) Client {
 	return c
 }
 
-func NewDriverPodClient(pod *corev1.Pod, restConfig *rest.Config) (Client, error) {
-	tc, err := transport.NewPodProxyClient(pod, restConfig, driverPort)
-	if err != nil {
-		return nil, fmt.Errorf("could not create pod proxy client, %w", err)
-	}
-
+func NewDriverPodClient(pod *corev1.Pod, clientSet kubernetes.Interface) Client {
+	tc := transport.NewPodProxyClient(pod, clientSet, driverPort)
 	c := &client{
 		transportClient: tc,
 	}
-
-	return c, nil
+	return c
 }
 
 func (c client) GetApplication(applicationId string) (*Application, error) {
