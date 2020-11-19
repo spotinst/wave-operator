@@ -29,6 +29,8 @@ const (
 	AppLabelValueEnterpriseGateway = "enterprise-gateway"
 	SparkOperatorLaunchedByLabel   = "sparkoperator.k8s.io/launched-by-spark-operator"
 
+	sparkDriverContainerName = "spark-kubernetes-driver"
+
 	requeueAfterTimeout = 10 * time.Second
 )
 
@@ -311,8 +313,8 @@ func getSparkApiInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, appl
 
 	// TODO Communicate with history server if pod is not running anymore, or always talk to history server?
 	// TODO Or try pod first, and fall back on history server
-	if driverPod.Status.Phase != corev1.PodRunning {
-		logger.Info("driver pod not running, will not get spark api information")
+	if !isSparkDriverRunning(driverPod) {
+		logger.Info("driver pod/container not running or has been marked deleted, will not get spark api information")
 		return nil, nil
 	}
 
@@ -371,6 +373,37 @@ func getSparkApiInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, appl
 	logger.Info("Finished calling Spark API")
 
 	return sparkApiInfo, nil
+}
+
+func isSparkDriverRunning(driverPod *corev1.Pod) bool {
+
+	if driverPod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+
+	if driverPod.DeletionTimestamp != nil {
+		return false
+	}
+
+	if driverPod.Status.ContainerStatuses == nil {
+		return false
+	}
+
+	foundDriverContainer := false
+	for _, containerStatus := range driverPod.Status.ContainerStatuses {
+		if containerStatus.Name == sparkDriverContainerName {
+			foundDriverContainer = true
+			if !containerStatus.Ready {
+				return false
+			}
+		}
+	}
+
+	if !foundDriverContainer {
+		return false
+	}
+
+	return true
 }
 
 func parseSparkProperties(environment *sparkapiclient.Environment, logger logr.Logger) (map[string]string, error) {
