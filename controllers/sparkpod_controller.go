@@ -145,10 +145,10 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	driverPodCr := newPodCR(driverPod)
 	deepCopy.Status.Data.Driver = driverPodCr
 
-	sparkApiInfo, err := r.getSparkApiInfo(driverPod, applicationId)
+	sparkApiInfo, err := getSparkApiInfo(r.RestConfig, driverPod, applicationId, log)
 	if err != nil {
 		// Best effort, just log error
-		r.Log.Error(err, "could not get spark api information")
+		log.Error(err, "could not get spark api information")
 	} else if sparkApiInfo != nil {
 		mapSparkApplicationInfo(deepCopy, sparkApiInfo)
 	}
@@ -307,18 +307,18 @@ func (r *SparkPodReconciler) createSparkApplicationCr(ctx context.Context, appli
 }
 
 // TODO Refactor - should be somewhere else? Async with locking on a CR access layer?
-func (r *SparkPodReconciler) getSparkApiInfo(driverPod *corev1.Pod, applicationId string) (*sparkApiInfo, error) {
+func getSparkApiInfo(restConfig *rest.Config, driverPod *corev1.Pod, applicationId string, logger logr.Logger) (*sparkApiInfo, error) {
 
 	// TODO Communicate with history server if pod is not running anymore, or always talk to history server?
 	// TODO Or try pod first, and fall back on history server
 	if driverPod.Status.Phase != corev1.PodRunning {
-		r.Log.Info("driver pod not running, will not get spark api information")
+		logger.Info("driver pod not running, will not get spark api information")
 		return nil, nil
 	}
 
-	r.Log.Info("Will call Spark API")
+	logger.Info("Will call Spark API")
 
-	sparkApiClient, err := sparkapiclient.NewDriverPodClient(driverPod, r.RestConfig)
+	sparkApiClient, err := sparkapiclient.NewDriverPodClient(driverPod, restConfig)
 	if err != nil {
 		return nil, fmt.Errorf("could not create driver pod client, %w", err)
 	}
@@ -342,7 +342,7 @@ func (r *SparkPodReconciler) getSparkApiInfo(driverPod *corev1.Pod, applicationI
 		return nil, fmt.Errorf("could not get environment, %w", err)
 	}
 
-	sparkProperties, err := r.parseSparkProperties(environment)
+	sparkProperties, err := parseSparkProperties(environment, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse spark properties, %w", err)
 	}
@@ -372,12 +372,12 @@ func (r *SparkPodReconciler) getSparkApiInfo(driverPod *corev1.Pod, applicationI
 	sparkApiInfo.totalInputBytes = totalInputBytes
 	sparkApiInfo.totalExecutorCpuTime = totalExecutorCpuTime
 
-	r.Log.Info("Finished calling Spark API")
+	logger.Info("Finished calling Spark API")
 
 	return sparkApiInfo, nil
 }
 
-func (r *SparkPodReconciler) parseSparkProperties(environment *sparkapiclient.Environment) (map[string]string, error) {
+func parseSparkProperties(environment *sparkapiclient.Environment, logger logr.Logger) (map[string]string, error) {
 
 	if environment == nil {
 		return nil, fmt.Errorf("environment is nil")
@@ -395,7 +395,7 @@ func (r *SparkPodReconciler) parseSparkProperties(environment *sparkapiclient.En
 		} else {
 			// Ignore, just log error
 			err := fmt.Errorf("got spark property tuple of length %d, wanted 2: %s", len(propertyTuple), propertyTuple)
-			r.Log.Error(err, "spark properties parse error")
+			logger.Error(err, "spark properties parse error")
 		}
 	}
 
