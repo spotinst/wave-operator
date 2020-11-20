@@ -73,7 +73,7 @@ func CreateBucket(name string) (*cloudstorage.StorageInfo, error) {
 			return &cloudstorage.StorageInfo{
 				Name:    name,
 				Region:  region,
-				Path:    fmt.Sprintf("s3://%s/", name),
+				Path:    fmt.Sprintf("s3a://%s/", name),
 				Created: *(b.CreationDate),
 			}, nil
 		}
