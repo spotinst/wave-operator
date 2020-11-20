@@ -3,7 +3,9 @@ package aws
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"text/template"
 
@@ -48,6 +50,15 @@ func CreateBucket(name string) (*cloudstorage.StorageInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	region := *(sess.Config.Region)
+	if region == "" {
+		region, err = getRegionFromMetadata()
+		if err != nil {
+			return nil, err
+		}
+		sess.Config.Region = &region
+	}
+
 	svc := s3.New(sess)
 	_, err = svc.CreateBucket(&s3.CreateBucketInput{
 		Bucket: &name,
@@ -61,7 +72,7 @@ func CreateBucket(name string) (*cloudstorage.StorageInfo, error) {
 		if *(b.Name) == name {
 			return &cloudstorage.StorageInfo{
 				Name:    name,
-				Region:  *(sess.Config.Region),
+				Region:  region,
 				Path:    fmt.Sprintf("s3://%s/", name),
 				Created: *(b.CreationDate),
 			}, nil
@@ -77,6 +88,16 @@ func WriteFile(bucketName, fileName, contents string) error {
 	if err != nil {
 		return err
 	}
+
+	region := *(sess.Config.Region)
+	if region == "" {
+		region, err = getRegionFromMetadata()
+		if err != nil {
+			return err
+		}
+		sess.Config.Region = &region
+	}
+
 	svc := s3.New(sess)
 	input := &s3.PutObjectInput{
 		Body:   strings.NewReader(contents),
@@ -108,4 +129,22 @@ Created: {{.Created}}
 	}
 
 	return output.String(), nil
+}
+
+func getRegionFromMetadata() (string, error) {
+	// curl http://169.254.169.254/latest/dynamic/instance-identity/document
+	r, err := http.Get("http://169.254.169.254/latest/dynamic/instance-identity/document")
+	if err != nil {
+		return "", err
+	}
+
+	metadata := &struct {
+		Region string
+	}{}
+
+	err = json.NewDecoder(r.Body).Decode(metadata)
+	if err != nil {
+		return "", err
+	}
+	return metadata.Region, nil
 }
