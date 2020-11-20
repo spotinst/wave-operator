@@ -18,13 +18,11 @@ package main
 
 import (
 	"flag"
-	"k8s.io/client-go/kubernetes"
 	"os"
 
-	"github.com/spotinst/wave-operator/install"
-	"github.com/spotinst/wave-operator/internal/version"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -32,6 +30,8 @@ import (
 
 	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/controllers"
+	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/version"
 	// +kubebuilder:scaffold:imports
 )
 
