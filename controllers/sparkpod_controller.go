@@ -31,6 +31,8 @@ const (
 
 	sparkDriverContainerName = "spark-kubernetes-driver"
 
+	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
+
 	requeueAfterTimeout = 10 * time.Second
 )
 
@@ -78,6 +80,31 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		err := fmt.Errorf("spark application ID label value missing")
 		log.Error(err, "error handling spark pod")
 		return ctrl.Result{}, nil // Just log error
+	}
+
+	// Set finalizer
+	if p.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !containsString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
+			p.ObjectMeta.Finalizers = append(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
+			err := r.Client.Update(ctx, p)
+			if err != nil {
+				log.Error(err, "could not set finalizer")
+				return ctrl.Result{}, err
+			}
+		}
+	}
+
+	// This removes the finalizer before we handle the pod.
+	// This means we always get an update for the deletion event,
+	// but the handling might fail and we won't get another one
+	// TODO Only remove finalizer if handled successfully?
+	if !p.ObjectMeta.DeletionTimestamp.IsZero() {
+		p.ObjectMeta.Finalizers = removeString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
+		err = r.Client.Update(ctx, p)
+		if err != nil {
+			log.Error(err, "could not remove finalizer")
+			return ctrl.Result{}, err
+		}
 	}
 
 	shouldRequeue := false
@@ -382,7 +409,7 @@ func isSparkDriverRunning(driverPod *corev1.Pod) bool {
 		return false
 	}
 
-	if driverPod.DeletionTimestamp != nil {
+	if !driverPod.DeletionTimestamp.IsZero() {
 		return false
 	}
 

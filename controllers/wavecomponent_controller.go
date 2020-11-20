@@ -38,7 +38,7 @@ import (
 
 const (
 	Wave                   = "wave"
-	FinalizerName          = "operator.wave.spot.io"
+	OperatorFinalizerName  = "operator.wave.spot.io"
 	AnnotationWaveVersion  = "operator.wave.spot.io/version"
 	AnnotationSparkVersion = "spark.wave.spot.io/version"
 )
@@ -121,7 +121,7 @@ func (r *WaveComponentReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 			return ctrl.Result{}, nil
 		}
-		comp.ObjectMeta.Finalizers = removeString(comp.ObjectMeta.Finalizers, FinalizerName)
+		comp.ObjectMeta.Finalizers = removeString(comp.ObjectMeta.Finalizers, OperatorFinalizerName)
 		err = r.Client.Update(ctx, comp)
 		return resp, err
 	}
@@ -140,8 +140,8 @@ func (r *WaveComponentReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *WaveComponentReconciler) setInitialValues(comp *v1alpha1.WaveComponent) bool {
 	changed := false
 	if comp.ObjectMeta.DeletionTimestamp.IsZero() {
-		if !containsString(comp.ObjectMeta.Finalizers, FinalizerName) {
-			comp.ObjectMeta.Finalizers = append(comp.ObjectMeta.Finalizers, FinalizerName)
+		if !containsString(comp.ObjectMeta.Finalizers, OperatorFinalizerName) {
+			comp.ObjectMeta.Finalizers = append(comp.ObjectMeta.Finalizers, OperatorFinalizerName)
 			changed = true
 		}
 	}
