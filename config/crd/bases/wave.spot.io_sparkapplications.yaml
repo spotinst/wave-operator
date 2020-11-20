@@ -50,7 +50,7 @@ spec:
             description: SparkApplicationStatus defines the observed state of SparkApplication
             properties:
               data:
-                description: summarizes the history of the spark application
+                description: summarizes information about the spark application
                 properties:
                   driver:
                     description: a reference to the driver pod
@@ -442,12 +442,8 @@ spec:
                 - runStatistics
                 - sparkProperties
                 type: object
-              state:
-                description: the current state of the spark application
-                type: string
             required:
             - data
-            - state
             type: object
         type: object
     served: true

@@ -22,18 +22,11 @@ import (
 )
 
 type SparkHeritage string
-type SparkApplicationState string
 
 const (
 	SparkHeritageSubmit   SparkHeritage = "spark-submit"
 	SparkHeritageOperator SparkHeritage = "spark-operator"
 	SparkHeritageJupyter  SparkHeritage = "jupyter-notebook"
-
-	SparkStateSubmitted SparkApplicationState = "SUBMITTED"
-	SparkStateRunning   SparkApplicationState = "RUNNING"
-	SparkStateCompleted SparkApplicationState = "COMPLETED"
-	SparkStateFailed    SparkApplicationState = "FAILED"
-	SparkStateUnknown   SparkApplicationState = "UNKNOWN"
 )
 
 // SparkApplicationSpec defines the desired state of SparkApplication
@@ -51,10 +44,7 @@ type SparkApplicationSpec struct {
 
 // SparkApplicationStatus defines the observed state of SparkApplication
 type SparkApplicationStatus struct {
-	//the current state of the spark application
-	State SparkApplicationState `json:"state"`
-
-	//summarizes the history of the spark application
+	//summarizes information about the spark application
 	Data SparkApplicationData `json:"data"`
 }
 
