@@ -56,8 +56,7 @@ func NewSparkPodReconciler(
 	}
 }
 
-func (r *SparkPodReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("pod", req.NamespacedName)
 
 	p := &corev1.Pod{}

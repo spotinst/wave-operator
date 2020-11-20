@@ -3,8 +3,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= ntfrnzn/waveoperator:latest
 
-# Produce multiply-versioned CRDs
-CRD_OPTIONS ?= "crd"
+CRD_OPTIONS ?= "crd:crdVersions=v1,preserveUnknownFields=false"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
