@@ -82,28 +82,33 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil // Just log error
 	}
 
-	// Set finalizer
+	// TODO Do we need this? Perhaps only on drivers?
+	// Set/unset finalizer
 	if p.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !containsString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
-			p.ObjectMeta.Finalizers = append(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
-			err := r.Client.Update(ctx, p)
+			deepCopy := p.DeepCopy()
+			deepCopy.ObjectMeta.Finalizers = append(deepCopy.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
+			log.Info("Adding finalizer")
+			err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(p))
 			if err != nil {
 				log.Error(err, "could not set finalizer")
 				return ctrl.Result{}, err
 			}
 		}
-	}
-
-	// This removes the finalizer before we handle the pod.
-	// This means we always get an update for the deletion event,
-	// but the handling might fail and we won't get another one
-	// TODO Only remove finalizer if handled successfully?
-	if !p.ObjectMeta.DeletionTimestamp.IsZero() {
-		p.ObjectMeta.Finalizers = removeString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
-		err = r.Client.Update(ctx, p)
-		if err != nil {
-			log.Error(err, "could not remove finalizer")
-			return ctrl.Result{}, err
+	} else {
+		// This removes the finalizer before we handle the pod.
+		// This means we always get an update for the deletion event,
+		// but the handling might fail and we won't get another one
+		// TODO Only remove finalizer if handled successfully?
+		if containsString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
+			deepCopy := p.DeepCopy()
+			deepCopy.ObjectMeta.Finalizers = removeString(deepCopy.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
+			log.Info("Removing finalizer")
+			err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(p))
+			if err != nil {
+				log.Error(err, "could not remove finalizer")
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
@@ -146,7 +151,7 @@ func (r *SparkPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId string, driverPod *corev1.Pod) (shouldRequeue bool, err error) {
 	log := r.Log.WithValues("name", driverPod.Name, "namespace", driverPod.Namespace, "sparkApplicationId", applicationId)
-	log.Info("Handling driver pod", "phase", driverPod.Status.Phase)
+	log.Info("Handling driver pod", "phase", driverPod.Status.Phase, "deleted", !driverPod.ObjectMeta.DeletionTimestamp.IsZero())
 
 	// Get application CR if it exists, otherwise build new one
 	crExists := true
@@ -207,7 +212,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 
 func (r *SparkPodReconciler) handleExecutorPod(ctx context.Context, applicationId string, executorPod *corev1.Pod) error {
 	log := r.Log.WithValues("name", executorPod.Name, "namespace", executorPod.Namespace, "sparkApplicationId", applicationId)
-	log.Info("Handling executor pod", "phase", string(executorPod.Status.Phase))
+	log.Info("Handling executor pod", "phase", executorPod.Status.Phase, "deleted", !executorPod.ObjectMeta.DeletionTimestamp.IsZero())
 
 	cr, err := r.getSparkApplicationCr(ctx, applicationId)
 	if err != nil {
