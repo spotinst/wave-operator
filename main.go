@@ -20,6 +20,9 @@ import (
 	"flag"
 	"os"
 
+	"github.com/spotinst/wave-operator/admission"
+	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/controllers"
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/aws"
 	"github.com/spotinst/wave-operator/internal/ocean"
@@ -30,9 +33,6 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
-	"github.com/spotinst/wave-operator/controllers"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -88,6 +88,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	ac := admission.NewAdmissionController(logger)
+	err = mgr.Add(ac)
+	if err != nil {
+		setupLog.Error(err, "unable to add admission controller")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager", "buildVersion", version.BuildVersion, "buildDate", version.BuildDate)

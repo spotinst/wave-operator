@@ -35,6 +35,9 @@ spec:
           imagePullPolicy: IfNotPresent
           name: kube-rbac-proxy
           ports:
+          - name: webhook
+            containerPort: 8443
+            protocol: TCP
           - name: metrics
             containerPort: 8080
             protocol: TCP
@@ -49,6 +52,14 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          - name: webhook-certs
+            mountPath: /etc/webhook/certs
+            readOnly: true
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: wave-admission-control-cert
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -1,0 +1,21 @@
+apiVersion: cert-manager.io/v1alpha2
+kind: Issuer
+metadata:
+  name: wave-issuer
+  namespace: spot-system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: wave-admission-control
+  namespace: spot-system
+spec:
+  dnsNames:
+  - wave-admission-control.spot-system.svc
+  - wave-admission-control.spot-system.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: wave-issuer
+  secretName: wave-admission-control-cert

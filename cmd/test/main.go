@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/spotinst/wave-operator/admission"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
@@ -79,7 +80,8 @@ func main() {
 	runInstall := false
 	checkCatalog := false
 	checkCrd := false
-	s3Bucket := true
+	s3Bucket := false
+	webhook := true
 
 	if runInstall {
 		installer := install.HelmInstaller{
@@ -184,4 +186,11 @@ serviceAccount:
 			fmt.Println("oops on file", err.Error())
 		}
 	}
+
+	if webhook {
+		ac := admission.NewAdmissionController(logger)
+		ctx := ctrl.SetupSignalHandler()
+		ac.Start(ctx)
+	}
+
 }
