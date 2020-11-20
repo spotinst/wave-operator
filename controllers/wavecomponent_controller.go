@@ -23,6 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/cloudstorage"
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/components"
 	"github.com/spotinst/wave-operator/internal/version"
@@ -45,11 +46,12 @@ const (
 
 // WaveComponentReconciler reconciles a WaveComponent object
 type WaveComponentReconciler struct {
-	Client       client.Client
-	Log          logr.Logger
-	getClient    genericclioptions.RESTClientGetter
-	getInstaller InstallerGetter
-	scheme       *runtime.Scheme
+	Client          client.Client
+	Log             logr.Logger
+	getClient       genericclioptions.RESTClientGetter
+	getInstaller    InstallerGetter
+	storageProvider cloudstorage.CloudStorageProvider
+	scheme          *runtime.Scheme
 }
 
 // InstallerGetter is an factory function that returns an implementation of Installer
@@ -59,6 +61,7 @@ func NewWaveComponentReconciler(
 	client client.Client,
 	config *rest.Config,
 	installerGetter InstallerGetter,
+	storageProvider cloudstorage.CloudStorageProvider,
 	log logr.Logger,
 	scheme *runtime.Scheme) *WaveComponentReconciler {
 
@@ -70,11 +73,12 @@ func NewWaveComponentReconciler(
 	kubeConfig.Namespace = &ns
 
 	return &WaveComponentReconciler{
-		Client:       client,
-		getClient:    kubeConfig,
-		getInstaller: installerGetter,
-		Log:          log,
-		scheme:       scheme,
+		Client:          client,
+		getClient:       kubeConfig,
+		getInstaller:    installerGetter,
+		storageProvider: storageProvider,
+		Log:             log,
+		scheme:          scheme,
 	}
 }
 
@@ -99,7 +103,14 @@ func (r *WaveComponentReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
-	changed := r.setInitialValues(comp)
+	if comp.Spec.Type != v1alpha1.HelmComponentType {
+		return r.unsupportedType(ctx, req, comp)
+	}
+
+	changed, err := r.setInitialValues(comp)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	if changed {
 		err := r.Client.Update(ctx, comp)
@@ -126,10 +137,6 @@ func (r *WaveComponentReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return resp, err
 	}
 
-	if comp.Spec.Type != v1alpha1.HelmComponentType {
-		return r.unsupportedType(ctx, req, comp)
-	}
-
 	if comp.Spec.State == v1alpha1.PresentComponentState {
 		return r.reconcilePresent(ctx, req, comp)
 	} else {
@@ -137,7 +144,7 @@ func (r *WaveComponentReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 }
 
-func (r *WaveComponentReconciler) setInitialValues(comp *v1alpha1.WaveComponent) bool {
+func (r *WaveComponentReconciler) setInitialValues(comp *v1alpha1.WaveComponent) (bool, error) {
 	changed := false
 	if comp.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !containsString(comp.ObjectMeta.Finalizers, FinalizerName) {
@@ -153,7 +160,12 @@ func (r *WaveComponentReconciler) setInitialValues(comp *v1alpha1.WaveComponent)
 		changed = true
 	}
 
-	return changed
+	var err error
+	switch comp.Name {
+	case string(v1alpha1.SparkHistoryChartName):
+		changed, err = components.ConfigureHistoryServer(comp, r.storageProvider)
+	}
+	return changed, err
 }
 
 func removeString(names []string, name string) []string {

@@ -6,6 +6,8 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/cloudstorage"
+	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -17,6 +19,36 @@ const (
 	HistoryServerChartName   = "spark-history-server"
 	HistoryServerReleaseName = "wave-spark-history-server"
 )
+
+func ConfigureHistoryServer(comp *v1alpha1.WaveComponent, storageProvider cloudstorage.CloudStorageProvider) (bool, error) {
+	info, err := storageProvider.ConfigureHistoryServerStorage()
+	if err != nil {
+		return false, err
+	}
+	newVals, err := configureS3BucketValues(info, comp.Spec.ValuesConfiguration)
+	if err != nil {
+		return false, err
+	}
+	comp.Spec.ValuesConfiguration = string(newVals)
+	return true, nil
+}
+
+func configureS3BucketValues(b *cloudstorage.StorageInfo, valuesConfiguration string) ([]byte, error) {
+	var newVals map[string]interface{}
+	err := yaml.Unmarshal([]byte(valuesConfiguration), &newVals)
+	if err != nil {
+		return nil, err
+	}
+	if newVals == nil {
+		newVals = map[string]interface{}{}
+	}
+	newVals["s3"] = map[string]interface{}{
+		"enableS3":     true,
+		"enableIAM":    true,
+		"logDirectory": b.Path,
+	}
+	return yaml.Marshal(newVals)
+}
 
 func GetSparkHistoryConditions(client client.Client, log logr.Logger) ([]*v1alpha1.WaveComponentCondition, error) {
 

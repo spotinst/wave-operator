@@ -21,6 +21,8 @@ import (
 	"os"
 
 	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/aws"
+	"github.com/spotinst/wave-operator/internal/ocean"
 	"github.com/spotinst/wave-operator/internal/version"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -71,10 +73,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	clusterName, err := ocean.GetClusterIdentifier()
+
 	controller := controllers.NewWaveComponentReconciler(
 		mgr.GetClient(),
 		mgr.GetConfig(),
 		install.GetHelm,
+		aws.NewS3Provider(clusterName),
 		ctrl.Log.WithName("controllers").WithName("WaveComponent"),
 		mgr.GetScheme(),
 	)

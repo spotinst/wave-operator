@@ -4,6 +4,8 @@ go 1.13
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0 // indirect
+	github.com/aws/aws-sdk-go v1.27.0
+	github.com/aws/aws-sdk-go-v2 v0.18.0
 	//github.com/GoogleCloudPlatform/spark-on-k8s-operator v0.0.0-20201019034553-bd1b7ec1f20d // indirect
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.3.0 // indirect
