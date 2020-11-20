@@ -16,6 +16,7 @@ COPY api/ api/
 COPY catalog/ catalog/
 COPY install/ install/
 COPY internal/ internal/
+COPY cloudstorage/ cloudstorage/
 COPY controllers/ controllers/
 
 # Build
