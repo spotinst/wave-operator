@@ -33,13 +33,13 @@ webhooks:
       name: wave-admission-control
       namespace: spot-system
       path: "/mutate/configmap"
-  objectSelector: {} # spark config-maps don't have labels, we'll just have to look at all of them :(
+  # spark config-maps don't have labels, we'll just have to look at all of them :(
   # https://github.com/apache/spark/blob/527cd3fc3aac40f84ba8eee291e1a955e03f7665/resource-managers/kubernetes/core/src/main/scala/org/apache/spark/deploy/k8s/submit/KubernetesClientApplication.scala#L169
   rules:
   - operations: [ "CREATE" ]
     apiGroups: [""]
     apiVersions: ["v1"]
-    resources: ["configmap"]
+    resources: ["configmaps"]
     scope: "Namespaced"
   admissionReviewVersions: ["v1", "v1beta1"]
   sideEffects: None

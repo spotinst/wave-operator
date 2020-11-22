@@ -74,6 +74,10 @@ func main() {
 	}
 
 	clusterName, err := ocean.GetClusterIdentifier()
+	if err != nil {
+		setupLog.Error(err, "unable to get cluster identifier")
+		os.Exit(1)
+	}
 
 	controller := controllers.NewWaveComponentReconciler(
 		mgr.GetClient(),
@@ -94,8 +98,8 @@ func main() {
 		setupLog.Error(err, "unable to add admission controller")
 		os.Exit(1)
 	}
-	// +kubebuilder:scaffold:builder
 
+	// +kubebuilder:scaffold:builder
 	setupLog.Info("starting manager", "buildVersion", version.BuildVersion, "buildDate", version.BuildDate)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")

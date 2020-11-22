@@ -35,17 +35,18 @@ spec:
           imagePullPolicy: IfNotPresent
           name: kube-rbac-proxy
           ports:
-          - name: webhook
-            containerPort: 8443
-            protocol: TCP
           - name: metrics
             containerPort: 8080
             protocol: TCP
           resources: {}
-        - args:
+        - name: manager
+          args:
           - --metrics-addr=127.0.0.1:8080
           - --enable-leader-election
-          name: manager
+          ports:
+          - name: webhook
+            containerPort: 9443
+            protocol: TCP
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
