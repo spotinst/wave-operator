@@ -1,11 +1,21 @@
 package admission
 
 import (
-	"net/http"
+	admissionv1 "k8s.io/api/admission/v1"
 )
 
-type SparkConfigMapHandler struct{}
+func MutateConfigMap(req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
+	//patchType := admissionv1.PatchTypeJSONPatch
+	resp := &admissionv1.AdmissionResponse{
+		UID:              req.UID,
+		Allowed:          true,
+		Result:           nil,
+		Patch:            nil,
+		PatchType:        nil,
+		AuditAnnotations: nil,
+		Warnings:         nil,
+	}
 
-func (s SparkConfigMapHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	panic("implement me")
+	return resp, nil
+	// return nil, fmt.Errorf("no configmaps mutated today")
 }
