@@ -12,21 +12,26 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/spotinst/wave-operator/cloudstorage"
 	admissionv1 "k8s.io/api/admission/v1"
 )
 
 type AdmissionController struct {
-	log logr.Logger
+	provider cloudstorage.CloudStorageProvider
+	log      logr.Logger
 }
 
-type Mutator func(admissionSpec *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error)
+type Mutator func(storageInfo cloudstorage.CloudStorageProvider, log logr.Logger, admissionSpec *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error)
 
 func handleRoot(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Wave Mutating Admissison Webhook")
+	fmt.Fprintf(w, "Wave Mutating Admission Webhook")
 }
 
-func NewAdmissionController(log logr.Logger) *AdmissionController {
-	return &AdmissionController{log}
+func NewAdmissionController(provider cloudstorage.CloudStorageProvider, log logr.Logger) *AdmissionController {
+	return &AdmissionController{
+		provider: provider,
+		log:      log,
+	}
 }
 
 func (ac *AdmissionController) GetHandlerFunc(mutate Mutator) func(http.ResponseWriter, *http.Request) {
@@ -47,7 +52,7 @@ func (ac *AdmissionController) GetHandlerFunc(mutate Mutator) func(http.Response
 			return
 		}
 
-		response, err := mutate(review.Request)
+		response, err := mutate(ac.provider, ac.log, review.Request)
 		if err != nil {
 			ac.log.Error(err, "mutating webhook request", "name", review.Request.Name, "kind", review.Request.Kind)
 			w.WriteHeader(http.StatusInternalServerError)

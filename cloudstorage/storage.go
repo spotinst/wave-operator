@@ -6,6 +6,7 @@ import (
 
 type CloudStorageProvider interface {
 	ConfigureHistoryServerStorage() (*StorageInfo, error)
+	GetStorageInfo() (*StorageInfo, error)
 }
 
 // General information about the cloud storage, which for AWS is an S3 bucket

@@ -47,3 +47,18 @@ func (mr *MockCloudStorageProviderMockRecorder) ConfigureHistoryServerStorage() 
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureHistoryServerStorage", reflect.TypeOf((*MockCloudStorageProvider)(nil).ConfigureHistoryServerStorage))
 }
+
+// GetStorageInfo mocks base method
+func (m *MockCloudStorageProvider) GetStorageInfo() (*cloudstorage.StorageInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStorageInfo")
+	ret0, _ := ret[0].(*cloudstorage.StorageInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetStorageInfo indicates an expected call of GetStorageInfo
+func (mr *MockCloudStorageProviderMockRecorder) GetStorageInfo() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStorageInfo", reflect.TypeOf((*MockCloudStorageProvider)(nil).GetStorageInfo))
+}

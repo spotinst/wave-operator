@@ -15,34 +15,41 @@ import (
 )
 
 func NewS3Provider(clusterName string) cloudstorage.CloudStorageProvider {
-	return &s3Provider{clusterName}
+	return &s3Provider{
+		clusterName: clusterName,
+	}
 }
 
 type s3Provider struct {
 	clusterName string
+	storageInfo *cloudstorage.StorageInfo
 }
 
-func (s s3Provider) ConfigureHistoryServerStorage() (*cloudstorage.StorageInfo, error) {
+func (s *s3Provider) ConfigureHistoryServerStorage() (*cloudstorage.StorageInfo, error) {
 	name := "spark-history-" + s.clusterName
-	bucket, err := CreateBucket(name)
+	bucket, err := createBucket(name)
+	if err != nil {
+		return nil, err
+	}
+	s.storageInfo = bucket
+
+	aboutText, err := getAboutStorageText(bucket)
 	if err != nil {
 		return nil, err
 	}
 
-	aboutText, err := GetAboutStorageText(bucket)
-	if err != nil {
-		return nil, err
-	}
-
-	err = WriteFile(name, "ABOUT.txt", aboutText)
+	err = writeFile(name, "ABOUT.txt", aboutText)
 	if err != nil {
 		return nil, err
 	}
 	return bucket, nil
-
 }
 
-func CreateBucket(name string) (*cloudstorage.StorageInfo, error) {
+func (s *s3Provider) GetStorageInfo() (*cloudstorage.StorageInfo, error) {
+	return s.storageInfo, nil
+}
+
+func createBucket(name string) (*cloudstorage.StorageInfo, error) {
 
 	sess, err := session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -81,7 +88,7 @@ func CreateBucket(name string) (*cloudstorage.StorageInfo, error) {
 	return nil, err
 }
 
-func WriteFile(bucketName, fileName, contents string) error {
+func writeFile(bucketName, fileName, contents string) error {
 	sess, err := session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	})
@@ -108,7 +115,7 @@ func WriteFile(bucketName, fileName, contents string) error {
 	return err
 }
 
-func GetAboutStorageText(bucket *cloudstorage.StorageInfo) (string, error) {
+func getAboutStorageText(bucket *cloudstorage.StorageInfo) (string, error) {
 
 	aboutText := `Bucket: {{.Name}}
 Region: {{.Region}}

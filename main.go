@@ -79,11 +79,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	storageProvider := aws.NewS3Provider(clusterName)
 	controller := controllers.NewWaveComponentReconciler(
 		mgr.GetClient(),
 		mgr.GetConfig(),
 		install.GetHelm,
-		aws.NewS3Provider(clusterName),
+		storageProvider,
 		ctrl.Log.WithName("controllers").WithName("WaveComponent"),
 		mgr.GetScheme(),
 	)
@@ -92,7 +93,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ac := admission.NewAdmissionController(logger)
+	ac := admission.NewAdmissionController(storageProvider, logger)
 	err = mgr.Add(ac)
 	if err != nil {
 		setupLog.Error(err, "unable to add admission controller")

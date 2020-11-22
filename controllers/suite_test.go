@@ -25,8 +25,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/spotinst/wave-operator/catalog"
-	"github.com/spotinst/wave-operator/cloudstorage"
 	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/util"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -56,17 +56,6 @@ func TestAPIs(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t,
 		"Controller Suite",
 		[]Reporter{printer.NewlineReporter{}})
-}
-
-type fakeStorageProvider struct{}
-
-func (f fakeStorageProvider) ConfigureHistoryServerStorage() (*cloudstorage.StorageInfo, error) {
-	return &cloudstorage.StorageInfo{
-		Name:    "fake",
-		Region:  "nowhere",
-		Path:    "s3://fake/",
-		Created: time.Date(2020, 6, 20, 21, 43, 0, 0, time.UTC),
-	}, nil
 }
 
 var _ = BeforeSuite(func(done Done) {
@@ -108,7 +97,7 @@ var _ = BeforeSuite(func(done Done) {
 		k8sManager.GetClient(),
 		k8sManager.GetConfig(),
 		install.GetHelm,
-		&fakeStorageProvider{},
+		&util.FakeStorageProvider{},
 		ctrl.Log.WithName("controllers").WithName("WaveComponent"),
 		k8sManager.GetScheme(),
 	)

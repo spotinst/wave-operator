@@ -93,6 +93,7 @@ func NewWaveComponentReconciler(
 
 func (r *WaveComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
+	log.Info("reconciling")
 
 	comp := &v1alpha1.WaveComponent{}
 	err := r.Client.Get(ctx, req.NamespacedName, comp)
