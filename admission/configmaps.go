@@ -74,7 +74,8 @@ func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger
 	if props == nil {
 		props = properties.NewProperties()
 	}
-	props.Set("spark.eventLog.dir", storageInfo.Path)
+	props.Set("spark.eventLog.dir", "file:///var/log/spark") //storageInfo.Path)
+	props.Set("spark.eventLog.enabled", "true")
 
 	patchType := admissionv1.PatchTypeJSONPatch
 	var patchBuilder strings.Builder
@@ -85,10 +86,11 @@ func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger
 		patchBuilder.WriteString("=")
 		patchBuilder.Write([]byte(v))
 		patchBuilder.WriteString("\\n")
-		fmt.Println(v)
 	}
 	patchBuilder.WriteString("\"}}]")
 	patchString := patchBuilder.String()
+
+	log.Info("patching configmap", "patch", patchString)
 
 	resp.Patch = []byte(patchString)
 	resp.PatchType = &patchType
