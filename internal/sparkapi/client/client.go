@@ -3,10 +3,11 @@ package client
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spotinst/wave-operator/internal/sparkapi/client/transport"
-	"k8s.io/client-go/kubernetes"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
+
+	"github.com/spotinst/wave-operator/internal/sparkapi/client/transport"
 )
 
 const (
@@ -22,19 +23,19 @@ type Client interface {
 }
 
 type client struct {
-	transportClient transport.TransportClient
+	transportClient transport.Client
 }
 
-func NewHistoryServerClient(host string) Client {
-	tc := transport.NewHTTPClient(host, historyServerPort)
+func NewDriverPodClient(pod *corev1.Pod, clientSet kubernetes.Interface) Client {
+	tc := transport.NewProxyClient(transport.Pod, pod.Name, pod.Namespace, driverPort, clientSet)
 	c := &client{
 		transportClient: tc,
 	}
 	return c
 }
 
-func NewDriverPodClient(pod *corev1.Pod, clientSet kubernetes.Interface) Client {
-	tc := transport.NewPodProxyClient(pod, clientSet, driverPort)
+func NewHistoryServerClient(service *corev1.Service, clientSet kubernetes.Interface) Client {
+	tc := transport.NewProxyClient(transport.Service, service.Name, service.Namespace, historyServerPort, clientSet)
 	c := &client{
 		transportClient: tc,
 	}

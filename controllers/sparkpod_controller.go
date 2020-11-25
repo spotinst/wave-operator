@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"time"
 
@@ -32,6 +33,8 @@ const (
 	sparkDriverContainerName = "spark-kubernetes-driver"
 
 	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
+
+	historyServerServiceName = "wave-spark-history-server"
 
 	requeueAfterTimeout = 10 * time.Second
 )
@@ -111,6 +114,8 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 		}
 	}
+
+	// TODO Add deleted flag to pod info in CRD?
 
 	shouldRequeue := false
 	sparkRole := p.Labels[SparkRoleLabel]
@@ -342,14 +347,11 @@ func (r *SparkPodReconciler) createSparkApplicationCr(ctx context.Context, appli
 // TODO Refactor - should be somewhere else? Async with locking on a CR access layer?
 func getSparkApiInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationId string, logger logr.Logger) (*sparkApiInfo, error) {
 
-	// TODO Communicate with history server if pod is not running anymore, or always talk to history server?
-	// TODO Or try pod first, and fall back on history server
-	if !isSparkDriverRunning(driverPod) {
-		logger.Info("driver pod/container not running or has been marked deleted, will not get spark api information")
-		return nil, nil
+	sparkApiClient, err := getSparkApiClient(clientSet, driverPod, logger)
+	if err != nil {
+		return nil, fmt.Errorf("could not get spark api client, %w", err)
 	}
 
-	sparkApiClient := sparkapiclient.NewDriverPodClient(driverPod, clientSet)
 	sparkApiInfo := &sparkApiInfo{}
 
 	logger.Info("Will call Spark API")
@@ -404,6 +406,38 @@ func getSparkApiInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, appl
 	logger.Info("Finished calling Spark API")
 
 	return sparkApiInfo, nil
+}
+
+// getSparkApiClient gets a Spark API client set up to communicate with the Spark history server.
+// Failing that, a Spark API client set up to communicate directly with the driver pod is returned.
+func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapiclient.Client, error) {
+
+	historyServerService, err := getHistoryServerService(clientSet)
+	if err != nil {
+		logger.Error(err, "could not get history server service")
+	} else {
+		return sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
+	}
+
+	if isSparkDriverRunning(driverPod) {
+		logger.Info("Falling back on driver pod Spark API client")
+		return sparkapiclient.NewDriverPodClient(driverPod, clientSet), nil
+	} else {
+		err := fmt.Errorf("driver pod/container not running")
+		logger.Error(err, "could not get driver pod spark api client")
+	}
+
+	return nil, fmt.Errorf("could not get spark api client for history server or driver")
+}
+
+func getHistoryServerService(clientSet kubernetes.Interface) (*corev1.Service, error) {
+	ctx := context.TODO()
+	service, err := clientSet.CoreV1().Services(SystemNamespace).Get(ctx, historyServerServiceName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return service, nil
 }
 
 func isSparkDriverRunning(driverPod *corev1.Pod) bool {

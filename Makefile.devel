@@ -25,6 +25,7 @@ test: generate fmt vet manifests mocks  ## Run tests
 
 mocks:  ## Generate test mock code
 	mockgen -source=install/installer.go -destination controllers/internal/mock_install/installer_mock.go
+	mockgen -source=internal/sparkapi/client/transport/client.go -destination internal/sparkapi/client/transport/mock_transport/client_mock.go
 
 manager: generate fmt vet  ## Build manager binary
 	go build \
