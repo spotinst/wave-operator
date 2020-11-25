@@ -7,7 +7,27 @@ import (
 	"github.com/spotinst/wave-operator/cloudstorage"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+var (
+	ondemandAffinity = &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
+				{
+					Weight: 1,
+					Preference: corev1.NodeSelectorTerm{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "spotinst.io/node-lifecycle",
+								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{"od"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 )
 
 func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
@@ -27,62 +47,18 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 	}
 	storageInfo, err := provider.GetStorageInfo()
 	if err != nil {
-		message := "cannot get storage configuration"
-		log.Error(err, message)
-		resp.Allowed = false
-		resp.Result = &metav1.Status{
-			Status:  "Failure",
-			Message: message,
-			Reason:  metav1.StatusReasonInvalid,
-			Details: &metav1.StatusDetails{
-				Name:  req.Name,
-				Group: gvk.Group,
-				Kind:  gvk.Kind,
-				UID:   req.UID,
-				Causes: []metav1.StatusCause{metav1.StatusCause{
-					Type:    metav1.CauseTypeUnexpectedServerResponse,
-					Message: message,
-				}},
-				RetryAfterSeconds: 0,
-			},
-		}
-		resp.Warnings = []string{fmt.Sprintf("%s, %s", message, err.Error())}
+		log.Error(err, "cannot get storage configuration, not patching pod")
 		return resp, nil
 	}
 	if storageInfo == nil {
-		message := "storage configuration is nil"
-		resp.Allowed = false
-		resp.Result = &metav1.Status{
-			Status:  "Failure",
-			Message: message,
-			Reason:  metav1.StatusReasonInvalid,
-		}
-		resp.Warnings = []string{message}
+		log.Error(fmt.Errorf("storage configuration is nil"), "not patching pod")
 		return resp, nil
 	}
 
-	// it would be more efficient to construct a series of patches, rather than replacing the entire spec...
 	modObj := sourceObj.DeepCopy()
 	newSpec := modObj.Spec
 
-	newSpec.Affinity = &corev1.Affinity{
-		NodeAffinity: &corev1.NodeAffinity{
-			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
-				{
-					Weight: 1,
-					Preference: corev1.NodeSelectorTerm{
-						MatchExpressions: []corev1.NodeSelectorRequirement{
-							{
-								Key:      "spotinst.io/node-lifecycle",
-								Operator: corev1.NodeSelectorOpIn,
-								Values:   []string{"od"},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	newSpec.Affinity = ondemandAffinity
 
 	volumeMount := corev1.VolumeMount{
 		Name:      "spark-logs",
@@ -113,31 +89,15 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 		},
 	})
 
-	// specBytes, err := json.Marshal(newSpec)
-	// if err != nil {
-	// 	log.Error(err, "cannot serialize spec")
-	// 	resp.Allowed = false
-	// 	resp.Warnings = []string{fmt.Sprintf("cannot serialize spec, %s", err.Error())}
-	// 	return resp, nil
-	// }
-
-	// patch := patchOperation{
-	// 	Op:    "replace",
-	// 	Path:  "/spec",
-	// 	Value: string(specBytes),
-	// }
 	modObj.Spec = newSpec
 	patchBytes, err := GetJsonPatch(sourceObj, modObj)
 	if err != nil {
-		log.Error(err, "cannot generate patch")
-		resp.Allowed = false
-		resp.Warnings = []string{fmt.Sprintf("cannot generate patch, %s", err.Error())}
+		log.Error(err, "unable to generate patch, continuing", "pod", sourceObj.Name)
 		return resp, nil
 	}
-	patchType := admissionv1.PatchTypeJSONPatch
 
 	log.Info("patching pod", "patch", string(patchBytes))
-	resp.PatchType = &patchType
+	resp.PatchType = &jsonPatchType
 	resp.Patch = patchBytes
 
 	return resp, nil

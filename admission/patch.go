@@ -4,16 +4,23 @@ import (
 	"encoding/json"
 
 	"github.com/mattbaird/jsonpatch"
-
-	//	jsonpatch "github.com/evanphx/json-patch/v5"
+	"github.com/spotinst/wave-operator/api/v1alpha1"
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
 
-type patchOperation struct {
-	Op   string `json:"op"`
-	Path string `json:"path"`
-	//Value interface{} `json:"value,omitempty"`
-	Value string `json:"value,omitempty"`
+var (
+	runtimeScheme = runtime.NewScheme()
+	codecs        = serializer.NewCodecFactory(runtimeScheme)
+	deserializer  = codecs.UniversalDeserializer()
+	jsonPatchType = admissionv1.PatchTypeJSONPatch
+)
+
+func init() {
+	_ = clientgoscheme.AddToScheme(runtimeScheme)
+	_ = v1alpha1.AddToScheme(runtimeScheme)
 }
 
 func GetJsonPatch(original, modified runtime.Object) ([]byte, error) {

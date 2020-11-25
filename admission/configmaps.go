@@ -9,14 +9,6 @@ import (
 	"github.com/spotinst/wave-operator/cloudstorage"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
-)
-
-var (
-	runtimeScheme = runtime.NewScheme()
-	codecs        = serializer.NewCodecFactory(runtimeScheme)
-	deserializer  = codecs.UniversalDeserializer()
 )
 
 func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
@@ -54,47 +46,36 @@ func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger
 	storageInfo, err := provider.GetStorageInfo()
 	if err != nil {
 		log.Error(err, "cannot get storage configuration")
-		resp.Allowed = false
-		resp.Warnings = []string{fmt.Sprintf("cannot get storage configuration, %s", err.Error())}
 		return resp, nil
 	}
 	if storageInfo == nil {
 		log.Error(err, "storage information from provider is nil")
-		resp.Allowed = false
-		resp.Warnings = []string{"storage unavailable from provider"}
 		return resp, nil
 	}
 
+	modObj := sourceObj.DeepCopy()
 	log.Info("constructing patch", "configmap", sourceObj.Name, "owner", sourceObj.OwnerReferences[0].Name)
-	propertyString := sourceObj.Data["spark.properties"]
+	propertyString := modObj.Data["spark.properties"]
 	props, err := properties.LoadString(propertyString)
 	if err != nil {
-		return nil, fmt.Errorf("unparseable spark property data, %w", err)
+		log.Error(err, "unparseable spark property data in configmap", "configmap", sourceObj.Name)
+		return resp, nil
 	}
 	if props == nil {
 		props = properties.NewProperties()
 	}
 	props.Set("spark.eventLog.dir", "file:///var/log/spark") //storageInfo.Path)
 	props.Set("spark.eventLog.enabled", "true")
+	modObj.Data["spark.properties"] = props.String()
 
-	patchType := admissionv1.PatchTypeJSONPatch
-	var patchBuilder strings.Builder
-	patchBuilder.WriteString("[{ \"op\": \"replace\", \"path\": \"/data\", \"value\": ")
-	patchBuilder.WriteString("{\"spark.properties\": \"")
-	for k, v := range props.Map() {
-		patchBuilder.Write([]byte(k))
-		patchBuilder.WriteString("=")
-		patchBuilder.Write([]byte(v))
-		patchBuilder.WriteString("\\n")
+	patch, err := GetJsonPatch(sourceObj, modObj)
+	if err != nil {
+		log.Error(err, "unable to generate patch, continuing", "configmap", sourceObj.Name)
+		return resp, nil
 	}
-	patchBuilder.WriteString("\"}}]")
-	patchString := patchBuilder.String()
+	log.Info("patching configmap", "patch", string(patch))
 
-	log.Info("patching configmap", "patch", patchString)
-
-	resp.Patch = []byte(patchString)
-	resp.PatchType = &patchType
-
+	resp.Patch = patch
+	resp.PatchType = &jsonPatchType
 	return resp, nil
-	// return nil, fmt.Errorf("no configmaps mutated today")
 }

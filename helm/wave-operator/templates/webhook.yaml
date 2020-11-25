@@ -14,8 +14,8 @@ webhooks:
       namespace: spot-system
       path: "/mutate/pod"
   objectSelector:
-    # matchLabels:
-    #   spark-role: driver
+    matchLabels:
+      spark-role: driver
     matchExpressions:
       - key: spark-app-selector
         operator: Exists
