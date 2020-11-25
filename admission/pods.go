@@ -41,6 +41,8 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 	if sourceObj == nil {
 		return nil, fmt.Errorf("deserialization failed")
 	}
+	log = log.WithValues("pod", sourceObj.Name)
+
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
 		Allowed: true,
@@ -70,7 +72,7 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 	newSpec.Containers = append(newSpec.Containers, corev1.Container{
 		Name:            "storage-sync",
 		Image:           "ntfrnzn/cloud-storage-sync",
-		ImagePullPolicy: corev1.PullAlways,
+		ImagePullPolicy: corev1.PullIfNotPresent,
 		Command:         []string{"/tini"},
 		Args:            []string{"--", "python3", "sync.py", volumeMount.MountPath, "spark:" + storageInfo.Name},
 		Env:             []corev1.EnvVar{{Name: "S3_REGION", Value: storageInfo.Region}},

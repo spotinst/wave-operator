@@ -22,6 +22,8 @@ func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger
 	if sourceObj == nil {
 		return nil, fmt.Errorf("deserialization failed")
 	}
+	log = log.WithValues("configmap", sourceObj.Name)
+
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
 		Allowed: true,
@@ -54,11 +56,11 @@ func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger
 	}
 
 	modObj := sourceObj.DeepCopy()
-	log.Info("constructing patch", "configmap", sourceObj.Name, "owner", sourceObj.OwnerReferences[0].Name)
+	log.Info("constructing patch", "owner", sourceObj.OwnerReferences[0].Name)
 	propertyString := modObj.Data["spark.properties"]
 	props, err := properties.LoadString(propertyString)
 	if err != nil {
-		log.Error(err, "unparseable spark property data in configmap", "configmap", sourceObj.Name)
+		log.Error(err, "unparseable spark property data in configmap")
 		return resp, nil
 	}
 	if props == nil {
@@ -70,7 +72,7 @@ func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger
 
 	patch, err := GetJsonPatch(sourceObj, modObj)
 	if err != nil {
-		log.Error(err, "unable to generate patch, continuing", "configmap", sourceObj.Name)
+		log.Error(err, "unable to generate patch, continuing")
 		return resp, nil
 	}
 	log.Info("patching configmap", "patch", string(patch))

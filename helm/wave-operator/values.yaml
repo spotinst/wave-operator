@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: ntfrnzn/waveoperator
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: "latest"
 
@@ -51,4 +51,13 @@ nodeSelector: {}
 
 tolerations: []
 
-affinity: {}
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 1
+      preference:
+        matchExpressions:
+        - key: spotinst.io/node-lifecycle
+          operator: In
+          values:
+          - od
