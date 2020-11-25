@@ -3,7 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/spotinst/wave-operator/internal/sparkapi"
 	"k8s.io/client-go/kubernetes"
 	"time"
 
@@ -16,7 +16,6 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/spotinst/wave-operator/api/v1alpha1"
-	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 )
 
 const (
@@ -30,11 +29,7 @@ const (
 	AppLabelValueEnterpriseGateway = "enterprise-gateway"
 	SparkOperatorLaunchedByLabel   = "sparkoperator.k8s.io/launched-by-spark-operator"
 
-	sparkDriverContainerName = "spark-kubernetes-driver"
-
 	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
-
-	historyServerServiceName = "wave-spark-history-server"
 
 	requeueAfterTimeout = 10 * time.Second
 )
@@ -116,6 +111,8 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// TODO Add deleted flag to pod info in CRD?
+	// TODO Add ownerreferences to Driver pods (spark-submit and jupyter)
+	// TODO Only remove finalizer when I have been successful in getting the spark api information
 
 	shouldRequeue := false
 	sparkRole := p.Labels[SparkRoleLabel]
@@ -183,12 +180,12 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	driverPodCr := newPodCR(driverPod)
 	deepCopy.Status.Data.Driver = driverPodCr
 
-	sparkApiInfo, err := getSparkApiInfo(r.ClientSet, driverPod, applicationId, log)
+	sparkApiApplicationInfo, err := getSparkApiApplicationInfo(r.ClientSet, driverPod, applicationId, log)
 	if err != nil {
 		// Best effort, just log error
-		log.Error(err, "could not get spark api information")
-	} else if sparkApiInfo != nil {
-		mapSparkApplicationInfo(deepCopy, sparkApiInfo)
+		log.Error(err, "could not get spark api application information")
+	} else if sparkApiApplicationInfo != nil {
+		mapSparkApplicationInfo(deepCopy, sparkApiApplicationInfo)
 	}
 
 	// We always need an application name, set it to driver pod name if it isn't set already
@@ -273,15 +270,30 @@ func newPodCR(pod *corev1.Pod) v1alpha1.Pod {
 	return podCr
 }
 
-func mapSparkApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkApiInfo) {
-	deepCopy.Spec.ApplicationName = sparkApiInfo.applicationName
-	deepCopy.Status.Data.SparkProperties = sparkApiInfo.sparkProperties
-	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime = sparkApiInfo.totalExecutorCpuTime
-	deepCopy.Status.Data.RunStatistics.TotalInputBytes = sparkApiInfo.totalInputBytes
-	deepCopy.Status.Data.RunStatistics.TotalOutputBytes = sparkApiInfo.totalOutputBytes
+func getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationId string, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
 
-	attempts := make([]v1alpha1.Attempt, 0, len(sparkApiInfo.attempts))
-	for _, apiAttempt := range sparkApiInfo.attempts {
+	manager, err := sparkapi.NewManager(clientSet, driverPod, logger)
+	if err != nil {
+		return nil, fmt.Errorf("could not get spark api manager, %w", err)
+	}
+
+	applicationInfo, err := manager.GetApplicationInfo(applicationId)
+	if err != nil {
+		return nil, fmt.Errorf("could not get spark api application info, %w", err)
+	}
+
+	return applicationInfo, nil
+}
+
+func mapSparkApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo) {
+	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
+	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
+	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime = sparkApiInfo.TotalExecutorCpuTime
+	deepCopy.Status.Data.RunStatistics.TotalInputBytes = sparkApiInfo.TotalInputBytes
+	deepCopy.Status.Data.RunStatistics.TotalOutputBytes = sparkApiInfo.TotalOutputBytes
+
+	attempts := make([]v1alpha1.Attempt, 0, len(sparkApiInfo.Attempts))
+	for _, apiAttempt := range sparkApiInfo.Attempts {
 		attempt := v1alpha1.Attempt{
 			StartTimeEpoch:   apiAttempt.StartTimeEpoch,
 			EndTimeEpoch:     apiAttempt.EndTimeEpoch,
@@ -342,165 +354,4 @@ func (r *SparkPodReconciler) createSparkApplicationCr(ctx context.Context, appli
 	err := r.Create(ctx, application)
 
 	return err
-}
-
-// TODO Refactor - should be somewhere else? Async with locking on a CR access layer?
-func getSparkApiInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationId string, logger logr.Logger) (*sparkApiInfo, error) {
-
-	sparkApiClient, err := getSparkApiClient(clientSet, driverPod, logger)
-	if err != nil {
-		return nil, fmt.Errorf("could not get spark api client, %w", err)
-	}
-
-	sparkApiInfo := &sparkApiInfo{}
-
-	logger.Info("Will call Spark API")
-
-	application, err := sparkApiClient.GetApplication(applicationId)
-	if err != nil {
-		return nil, fmt.Errorf("could not get application, %w", err)
-	}
-
-	if application == nil {
-		return nil, fmt.Errorf("application is nil")
-	}
-
-	sparkApiInfo.applicationName = application.Name
-	sparkApiInfo.attempts = application.Attempts
-
-	environment, err := sparkApiClient.GetEnvironment(applicationId)
-	if err != nil {
-		return nil, fmt.Errorf("could not get environment, %w", err)
-	}
-
-	sparkProperties, err := parseSparkProperties(environment, logger)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse spark properties, %w", err)
-	}
-
-	sparkApiInfo.sparkProperties = sparkProperties
-
-	stages, err := sparkApiClient.GetStages(applicationId)
-	if err != nil {
-		return nil, fmt.Errorf("could not get stages, %w", err)
-	}
-
-	if stages == nil {
-		return nil, fmt.Errorf("stages are nil")
-	}
-
-	var totalExecutorCpuTime int64
-	var totalInputBytes int64
-	var totalOutputBytes int64
-
-	for _, stage := range stages {
-		totalExecutorCpuTime += stage.ExecutorCpuTime
-		totalInputBytes += stage.InputBytes
-		totalOutputBytes += stage.OutputBytes
-	}
-
-	sparkApiInfo.totalOutputBytes = totalOutputBytes
-	sparkApiInfo.totalInputBytes = totalInputBytes
-	sparkApiInfo.totalExecutorCpuTime = totalExecutorCpuTime
-
-	logger.Info("Finished calling Spark API")
-
-	return sparkApiInfo, nil
-}
-
-// getSparkApiClient gets a Spark API client set up to communicate with the Spark history server.
-// Failing that, a Spark API client set up to communicate directly with the driver pod is returned.
-func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapiclient.Client, error) {
-
-	historyServerService, err := getHistoryServerService(clientSet)
-	if err != nil {
-		logger.Error(err, "could not get history server service")
-	} else {
-		return sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
-	}
-
-	if isSparkDriverRunning(driverPod) {
-		logger.Info("Falling back on driver pod Spark API client")
-		return sparkapiclient.NewDriverPodClient(driverPod, clientSet), nil
-	} else {
-		err := fmt.Errorf("driver pod/container not running")
-		logger.Error(err, "could not get driver pod spark api client")
-	}
-
-	return nil, fmt.Errorf("could not get spark api client for history server or driver")
-}
-
-func getHistoryServerService(clientSet kubernetes.Interface) (*corev1.Service, error) {
-	ctx := context.TODO()
-	service, err := clientSet.CoreV1().Services(SystemNamespace).Get(ctx, historyServerServiceName, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	return service, nil
-}
-
-func isSparkDriverRunning(driverPod *corev1.Pod) bool {
-
-	if driverPod.Status.Phase != corev1.PodRunning {
-		return false
-	}
-
-	if !driverPod.DeletionTimestamp.IsZero() {
-		return false
-	}
-
-	if driverPod.Status.ContainerStatuses == nil {
-		return false
-	}
-
-	foundDriverContainer := false
-	for _, containerStatus := range driverPod.Status.ContainerStatuses {
-		if containerStatus.Name == sparkDriverContainerName {
-			foundDriverContainer = true
-			if !containerStatus.Ready {
-				return false
-			}
-		}
-	}
-
-	if !foundDriverContainer {
-		return false
-	}
-
-	return true
-}
-
-func parseSparkProperties(environment *sparkapiclient.Environment, logger logr.Logger) (map[string]string, error) {
-
-	if environment == nil {
-		return nil, fmt.Errorf("environment is nil")
-	}
-
-	if environment.SparkProperties == nil {
-		return nil, fmt.Errorf("spark properties are nil")
-	}
-
-	sparkProperties := make(map[string]string, len(environment.SparkProperties))
-
-	for _, propertyTuple := range environment.SparkProperties {
-		if len(propertyTuple) == 2 {
-			sparkProperties[propertyTuple[0]] = propertyTuple[1]
-		} else {
-			// Ignore, just log error
-			err := fmt.Errorf("got spark property tuple of length %d, wanted 2: %s", len(propertyTuple), propertyTuple)
-			logger.Error(err, "spark properties parse error")
-		}
-	}
-
-	return sparkProperties, nil
-}
-
-type sparkApiInfo struct {
-	applicationName      string
-	sparkProperties      map[string]string
-	totalInputBytes      int64
-	totalOutputBytes     int64
-	totalExecutorCpuTime int64
-	attempts             []sparkapiclient.Attempt
 }
