@@ -7,11 +7,56 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 	"github.com/spotinst/wave-operator/internal/sparkapi/client/mock_client"
 )
+
+func TestNewManager(t *testing.T) {
+
+	t.Run("whenHistoryServerClient", func(tt *testing.T) {
+
+		svc := newHistoryServerService()
+		pod := newRunningDriverPod()
+
+		clientSet := k8sfake.NewSimpleClientset(svc)
+
+		m, err := NewManager(clientSet, pod, getTestLogger())
+		assert.NoError(tt, err)
+		assert.NotNil(tt, m)
+
+	})
+
+	t.Run("whenDriverPodClient", func(tt *testing.T) {
+
+		pod := newRunningDriverPod()
+
+		clientSet := k8sfake.NewSimpleClientset(pod)
+
+		m, err := NewManager(clientSet, pod, getTestLogger())
+		assert.NoError(tt, err)
+		assert.NotNil(tt, m)
+
+	})
+
+	t.Run("whenError", func(tt *testing.T) {
+
+		pod := newRunningDriverPod()
+		pod.Status.Phase = corev1.PodSucceeded // Driver not running
+
+		clientSet := k8sfake.NewSimpleClientset(pod)
+
+		manager, err := NewManager(clientSet, pod, getTestLogger())
+		assert.Nil(tt, manager)
+		assert.Error(tt, err)
+		assert.Contains(tt, err.Error(), "could not get spark api client")
+
+	})
+}
 
 func TestGetApplicationInfo(t *testing.T) {
 
@@ -130,6 +175,32 @@ func getEnvironmentResponse() *sparkapiclient.Environment {
 			},
 			{
 				"prop3", "val3", "thisShouldBeIgnored",
+			},
+		},
+	}
+}
+
+func newHistoryServerService() *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      historyServerServiceName,
+			Namespace: systemNamespace,
+		},
+	}
+}
+
+func newRunningDriverPod() *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			DeletionTimestamp: nil,
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					Name:  sparkDriverContainerName,
+					Ready: true,
+				},
 			},
 		},
 	}
