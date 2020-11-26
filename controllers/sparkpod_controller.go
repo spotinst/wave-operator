@@ -87,7 +87,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil // Just log error
 	}
 
-	// Set/unset finalizer
+	// Set finalizer
 	if p.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !containsString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
 			deepCopy := p.DeepCopy()
@@ -99,27 +99,11 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				return ctrl.Result{}, err
 			}
 		}
-	} else {
-		// This removes the finalizer before we handle the pod.
-		// This means we always get an update for the deletion event,
-		// but the handling might fail and we won't get another one
-		// TODO Only remove finalizer if handled successfully?
-		if containsString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
-			deepCopy := p.DeepCopy()
-			deepCopy.ObjectMeta.Finalizers = removeString(deepCopy.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
-			log.Info("Removing finalizer")
-			err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(p))
-			if err != nil {
-				log.Error(err, "could not remove finalizer")
-				return ctrl.Result{}, err
-			}
-		}
 	}
 
 	// TODO Add deleted flag to pod info in CRD?
 	// TODO Add ownerreferences to Driver pods (spark-submit and jupyter)
 	// TODO Only remove finalizer when I have been successful in getting the spark api information
-	// TODO CR should be in same namespace as driver pod
 
 	shouldRequeue := false
 	switch sparkRole {
@@ -136,9 +120,23 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 	default:
+		// Just log error
 		err := fmt.Errorf("unknown spark role: %q", sparkRole)
 		log.Error(err, "error handling spark pod")
-		return ctrl.Result{}, nil // Just log error
+	}
+
+	// Remove finalizer
+	if !p.ObjectMeta.DeletionTimestamp.IsZero() {
+		if containsString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
+			deepCopy := p.DeepCopy()
+			deepCopy.ObjectMeta.Finalizers = removeString(deepCopy.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
+			log.Info("Removing finalizer")
+			err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(p))
+			if err != nil {
+				log.Error(err, "could not remove finalizer")
+				return ctrl.Result{}, err
+			}
+		}
 	}
 
 	if shouldRequeue {
