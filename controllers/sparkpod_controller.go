@@ -105,7 +105,6 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// TODO Only remove finalizer when I have been successful in getting the spark api information
-	// TODO Fall back on driver API communication if I can't find the application on the history server
 
 	shouldRequeue := false
 	switch sparkRole {
