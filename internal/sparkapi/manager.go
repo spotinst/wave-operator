@@ -51,8 +51,6 @@ func NewManager(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger lo
 		historyServerClient = sparkapiclient.NewHistoryServerClient(historyServerService, clientSet)
 	}
 
-	// TODO create custom error
-
 	// Get client for driver pod
 	if isSparkDriverRunning(driverPod) {
 		logger.Info("Got driver pod Spark API client")
