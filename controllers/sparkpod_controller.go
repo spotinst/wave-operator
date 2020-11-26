@@ -162,14 +162,14 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	log := r.Log.WithValues("name", driverPod.Name, "namespace", driverPod.Namespace, "sparkApplicationId", applicationId)
 	log.Info("Handling driver pod", "phase", driverPod.Status.Phase, "deleted", !driverPod.ObjectMeta.DeletionTimestamp.IsZero())
 
-	// TODO Do I need to handle spark operator garbage collection events?
 	// Get application CR if it exists, otherwise build new one, unless the pod is being garbage collected
 	crExists := true
 	cr, err := r.getSparkApplicationCr(ctx, driverPod.Namespace, applicationId)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			if !driverPod.DeletionTimestamp.IsZero() && hasSparkApplicationOwnerReference(driverPod, applicationId) {
-				// The CR does not exist, the pod has an owner reference to it, and the pod is being deleted
+			if !driverPod.DeletionTimestamp.IsZero() && hasWaveSparkApplicationOwnerReference(driverPod, applicationId) {
+				// The Wave Spark application CR does not exist, the pod has an owner reference to it,
+				// and the pod is being deleted
 				// -> assume this is a garbage collection event and don't re-create the CR
 				log.Info("Ignoring garbage collection event")
 				return false, nil
@@ -291,7 +291,7 @@ func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
 	return changed
 }
 
-func hasSparkApplicationOwnerReference(pod *corev1.Pod, applicationId string) bool {
+func hasWaveSparkApplicationOwnerReference(pod *corev1.Pod, applicationId string) bool {
 	for _, ownerRef := range pod.OwnerReferences {
 		if ownerRef.APIVersion == apiVersion &&
 			ownerRef.Kind == sparkApplicationKind &&
