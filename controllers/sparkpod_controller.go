@@ -31,6 +31,9 @@ const (
 
 	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
 
+	apiVersion           = "wave.spot.io/v1alpha1"
+	sparkApplicationKind = "SparkApplication"
+
 	requeueAfterTimeout = 10 * time.Second
 )
 
@@ -159,11 +162,18 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	log := r.Log.WithValues("name", driverPod.Name, "namespace", driverPod.Namespace, "sparkApplicationId", applicationId)
 	log.Info("Handling driver pod", "phase", driverPod.Status.Phase, "deleted", !driverPod.ObjectMeta.DeletionTimestamp.IsZero())
 
-	// Get application CR if it exists, otherwise build new one
+	// TODO Do I need to handle spark operator garbage collection events?
+	// Get application CR if it exists, otherwise build new one, unless the pod is being garbage collected
 	crExists := true
 	cr, err := r.getSparkApplicationCr(ctx, driverPod.Namespace, applicationId)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
+			if !driverPod.DeletionTimestamp.IsZero() && hasSparkApplicationOwnerReference(driverPod, applicationId) {
+				// The CR does not exist, the pod has an owner reference to it, and the pod is being deleted
+				// -> assume this is a garbage collection event and don't re-create the CR
+				log.Info("Ignoring garbage collection event")
+				return false, nil
+			}
 			crExists = false
 			cr = &v1alpha1.SparkApplication{}
 		} else {
@@ -258,14 +268,18 @@ func shouldSetOwnerReference(driverPod *corev1.Pod, heritage v1alpha1.SparkHerit
 func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
 	changed := false
 
+	// TODO the pods will be garbage collected, and the final reconciliation loop will re-create the spark application CR
+
 	if cr.UID != "" && len(pod.OwnerReferences) == 0 {
+		ownedByController := false // This controller is a pod controller, not a Spark Application CR controller
+		blockOwnerDeletion := true // We still want the pod to be deleted when the CR is deleted
 		ownerRef := v1.OwnerReference{
 			APIVersion:         cr.APIVersion,
 			Kind:               cr.Kind,
 			Name:               cr.Name,
 			UID:                cr.UID,
-			Controller:         nil, // TODO what to do here
-			BlockOwnerDeletion: nil,
+			Controller:         &ownedByController,
+			BlockOwnerDeletion: &blockOwnerDeletion,
 		}
 
 		if pod.OwnerReferences == nil {
@@ -277,6 +291,18 @@ func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
 	}
 
 	return changed
+}
+
+func hasSparkApplicationOwnerReference(pod *corev1.Pod, applicationId string) bool {
+	for _, ownerRef := range pod.OwnerReferences {
+		if ownerRef.APIVersion == apiVersion &&
+			ownerRef.Kind == sparkApplicationKind &&
+			ownerRef.Name == applicationId {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (r *SparkPodReconciler) handleExecutorPod(ctx context.Context, applicationId string, executorPod *corev1.Pod) error {
