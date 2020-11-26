@@ -45,7 +45,7 @@ func NewManager(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger lo
 	// Get client for history server
 	historyServerService, err := getHistoryServerService(clientSet)
 	if err != nil {
-		logger.Error(err, "could not get history server service")
+		logger.Info(fmt.Sprintf("could not get history server service, error: %s", err.Error()))
 	} else {
 		logger.Info("Got history server Spark API client")
 		historyServerClient = sparkapiclient.NewHistoryServerClient(historyServerService, clientSet)
