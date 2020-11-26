@@ -268,11 +268,9 @@ func shouldSetOwnerReference(driverPod *corev1.Pod, heritage v1alpha1.SparkHerit
 func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
 	changed := false
 
-	// TODO the pods will be garbage collected, and the final reconciliation loop will re-create the spark application CR
-
 	if cr.UID != "" && len(pod.OwnerReferences) == 0 {
 		ownedByController := false // This controller is a pod controller, not a Spark Application CR controller
-		blockOwnerDeletion := true // We still want the pod to be deleted when the CR is deleted
+		blockOwnerDeletion := true // We still want the pod to be garbage collected immediately when the CR is deleted
 		ownerRef := v1.OwnerReference{
 			APIVersion:         cr.APIVersion,
 			Kind:               cr.Kind,
