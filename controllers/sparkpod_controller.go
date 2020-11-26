@@ -20,11 +20,10 @@ import (
 )
 
 const (
-	SparkRoleLabel  = "spark-role"
-	SparkAppLabel   = "spark-app-selector"
-	DriverRole      = "driver"
-	ExecutorRole    = "executor"
-	SystemNamespace = "spot-system" // TODO Refactor to single source of truth
+	SparkRoleLabel = "spark-role"
+	SparkAppLabel  = "spark-app-selector"
+	DriverRole     = "driver"
+	ExecutorRole   = "executor"
 
 	AppLabel                       = "app"
 	AppLabelValueEnterpriseGateway = "enterprise-gateway"
@@ -164,7 +163,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 
 	// Get application CR if it exists, otherwise build new one
 	crExists := true
-	cr, err := r.getSparkApplicationCr(ctx, applicationId)
+	cr, err := r.getSparkApplicationCr(ctx, driverPod.Namespace, applicationId)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			crExists = false
@@ -176,6 +175,8 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 
 	deepCopy := cr.DeepCopy()
 
+	deepCopy.Name = applicationId
+	deepCopy.Namespace = driverPod.Namespace
 	deepCopy.Spec.ApplicationId = applicationId
 
 	heritage, err := getHeritage(driverPod)
@@ -221,7 +222,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 
 		if !crExists {
 			// Get the newly created spark application CR
-			createdCr, err := r.getSparkApplicationCr(ctx, applicationId)
+			createdCr, err := r.getSparkApplicationCr(ctx, driverPod.Namespace, applicationId)
 			if err != nil {
 				return false, fmt.Errorf("could not get newly created spark application cr, %w", err)
 			}
@@ -231,7 +232,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 		}
 
 		if podOwnerReferenceChanged {
-			r.Log.Info("Patching driver pod with owner reference")
+			log.Info("Patching driver pod with owner reference")
 			err := r.Client.Patch(ctx, driverPodDeepCopy, client.MergeFrom(driverPod))
 			if err != nil {
 				return false, fmt.Errorf("patch pod error, %w", err)
@@ -265,12 +266,12 @@ func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
 			Kind:               cr.Kind,
 			Name:               cr.Name,
 			UID:                cr.UID,
-			Controller:         nil,
+			Controller:         nil, // TODO what to do here
 			BlockOwnerDeletion: nil,
 		}
 
 		if pod.OwnerReferences == nil {
-			pod.OwnerReferences = make([]v1.OwnerReference, 1)
+			pod.OwnerReferences = make([]v1.OwnerReference, 0, 1)
 		}
 
 		pod.OwnerReferences = append(pod.OwnerReferences, ownerRef)
@@ -284,7 +285,7 @@ func (r *SparkPodReconciler) handleExecutorPod(ctx context.Context, applicationI
 	log := r.Log.WithValues("name", executorPod.Name, "namespace", executorPod.Namespace, "sparkApplicationId", applicationId)
 	log.Info("Handling executor pod", "phase", executorPod.Status.Phase, "deleted", !executorPod.ObjectMeta.DeletionTimestamp.IsZero())
 
-	cr, err := r.getSparkApplicationCr(ctx, applicationId)
+	cr, err := r.getSparkApplicationCr(ctx, executorPod.Namespace, applicationId)
 	if err != nil {
 		// CR should be created during driver reconciliation
 		return fmt.Errorf("could not get spark application cr, %w", err)
@@ -393,9 +394,9 @@ func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
 	return "", fmt.Errorf("could not determine heritage")
 }
 
-func (r *SparkPodReconciler) getSparkApplicationCr(ctx context.Context, applicationId string) (*v1alpha1.SparkApplication, error) {
+func (r *SparkPodReconciler) getSparkApplicationCr(ctx context.Context, namespace string, applicationId string) (*v1alpha1.SparkApplication, error) {
 	app := v1alpha1.SparkApplication{}
-	err := r.Get(ctx, ctrlclient.ObjectKey{Name: applicationId, Namespace: SystemNamespace}, &app)
+	err := r.Get(ctx, ctrlclient.ObjectKey{Name: applicationId, Namespace: namespace}, &app)
 	if err != nil {
 		return nil, err
 	}
@@ -404,8 +405,6 @@ func (r *SparkPodReconciler) getSparkApplicationCr(ctx context.Context, applicat
 }
 
 func (r *SparkPodReconciler) createSparkApplicationCr(ctx context.Context, application *v1alpha1.SparkApplication) error {
-	application.Name = application.Spec.ApplicationId
-	application.Namespace = SystemNamespace
 
 	if application.Status.Data.Executors == nil {
 		application.Status.Data.Executors = make([]v1alpha1.Pod, 0)
