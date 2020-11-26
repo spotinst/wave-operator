@@ -56,7 +56,7 @@ spec:
                     description: a reference to the driver pod
                     properties:
                       containerStatuses:
-                        description: the set of container statues
+                        description: the set of container statuses
                         items:
                           description: ContainerStatus contains details for the current status of this container.
                           properties:
@@ -196,6 +196,9 @@ spec:
                           - restartCount
                           type: object
                         type: array
+                      deleted:
+                        description: has the pod been marked as deleted
+                        type: boolean
                       phase:
                         description: the phase of the pod
                         type: string
@@ -210,6 +213,7 @@ spec:
                         type: string
                     required:
                     - containerStatuses
+                    - deleted
                     - phase
                     - podName
                     - podNamespace
@@ -220,7 +224,7 @@ spec:
                     items:
                       properties:
                         containerStatuses:
-                          description: the set of container statues
+                          description: the set of container statuses
                           items:
                             description: ContainerStatus contains details for the current status of this container.
                             properties:
@@ -360,6 +364,9 @@ spec:
                             - restartCount
                             type: object
                           type: array
+                        deleted:
+                          description: has the pod been marked as deleted
+                          type: boolean
                         phase:
                           description: the phase of the pod
                           type: string
@@ -374,6 +381,7 @@ spec:
                           type: string
                       required:
                       - containerStatuses
+                      - deleted
                       - phase
                       - podName
                       - podNamespace

@@ -106,8 +106,10 @@ type Pod struct {
 	UID string `json:"podUid"`
 	//the phase of the pod
 	Phase v1.PodPhase `json:"phase"`
-	//the set of container statues
+	//the set of container statuses
 	Statuses []v1.ContainerStatus `json:"containerStatuses"`
+	//has the pod been marked as deleted
+	Deleted bool `json:"deleted"`
 }
 
 // +kubebuilder:object:root=true

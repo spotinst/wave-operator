@@ -105,8 +105,8 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// TODO Add deleted flag to pod info in CRD?
-	// TODO Add ownerreferences to Driver pods (spark-submit and jupyter)
 	// TODO Only remove finalizer when I have been successful in getting the spark api information
+	// TODO Fall back on driver API communication if I can't find the application on the history server
 
 	shouldRequeue := false
 	switch sparkRole {
@@ -353,6 +353,7 @@ func newPodCR(pod *corev1.Pod) v1alpha1.Pod {
 	podCr.Name = pod.Name
 	podCr.Phase = pod.Status.Phase
 	podCr.Statuses = pod.Status.ContainerStatuses
+	podCr.Deleted = !pod.DeletionTimestamp.IsZero()
 
 	if podCr.Statuses == nil {
 		podCr.Statuses = make([]corev1.ContainerStatus, 0)
