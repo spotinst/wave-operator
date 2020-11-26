@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/spotinst/wave-operator/internal/sparkapi"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"time"
 
@@ -80,7 +81,13 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil // Just log error
 	}
 
-	// TODO Do we need this? Perhaps only on drivers?
+	sparkRole := p.Labels[SparkRoleLabel]
+	if !(sparkRole == DriverRole || sparkRole == ExecutorRole) {
+		err := fmt.Errorf("unknown spark role: %q", sparkRole)
+		log.Error(err, "error handling spark pod")
+		return ctrl.Result{}, nil // Just log error
+	}
+
 	// Set/unset finalizer
 	if p.ObjectMeta.DeletionTimestamp.IsZero() {
 		if !containsString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
@@ -113,9 +120,9 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// TODO Add deleted flag to pod info in CRD?
 	// TODO Add ownerreferences to Driver pods (spark-submit and jupyter)
 	// TODO Only remove finalizer when I have been successful in getting the spark api information
+	// TODO CR should be in same namespace as driver pod
 
 	shouldRequeue := false
-	sparkRole := p.Labels[SparkRoleLabel]
 	switch sparkRole {
 	case DriverRole:
 		shouldRequeue, err = r.handleDriverPod(ctx, sparkApplicationId, p)
@@ -151,7 +158,7 @@ func (r *SparkPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId string, driverPod *corev1.Pod) (shouldRequeue bool, err error) {
+func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId string, driverPod *corev1.Pod) (bool, error) {
 	log := r.Log.WithValues("name", driverPod.Name, "namespace", driverPod.Namespace, "sparkApplicationId", applicationId)
 	log.Info("Handling driver pod", "phase", driverPod.Status.Phase, "deleted", !driverPod.ObjectMeta.DeletionTimestamp.IsZero())
 
@@ -184,7 +191,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	if err != nil {
 		// Best effort, just log error
 		log.Error(err, "could not get spark api application information")
-	} else if sparkApiApplicationInfo != nil {
+	} else {
 		mapSparkApplicationInfo(deepCopy, sparkApiApplicationInfo)
 	}
 
@@ -205,11 +212,72 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 		}
 	}
 
-	// Requeue driver pods in running phase
-	shouldRequeue = driverPod.Status.Phase == corev1.PodRunning
-	log.Info("Finished handling driver pod", "requeue", shouldRequeue)
+	// Set owner reference driver pod -> spark application CR if needed
+	shouldSetOwnerReference := shouldSetOwnerReference(driverPod, heritage)
 
+	if shouldSetOwnerReference {
+		podOwnerReferenceChanged := false
+		driverPodDeepCopy := driverPod.DeepCopy()
+
+		if !crExists {
+			// Get the newly created spark application CR
+			createdCr, err := r.getSparkApplicationCr(ctx, applicationId)
+			if err != nil {
+				return false, fmt.Errorf("could not get newly created spark application cr, %w", err)
+			}
+			podOwnerReferenceChanged = setPodOwnerReference(driverPodDeepCopy, createdCr)
+		} else {
+			podOwnerReferenceChanged = setPodOwnerReference(driverPodDeepCopy, deepCopy)
+		}
+
+		if podOwnerReferenceChanged {
+			r.Log.Info("Patching driver pod with owner reference")
+			err := r.Client.Patch(ctx, driverPodDeepCopy, client.MergeFrom(driverPod))
+			if err != nil {
+				return false, fmt.Errorf("patch pod error, %w", err)
+			}
+		}
+	}
+
+	// Requeue driver pods in running phase
+	shouldRequeue := driverPod.Status.Phase == corev1.PodRunning
+
+	log.Info("Finished handling driver pod", "requeue", shouldRequeue)
 	return shouldRequeue, nil
+}
+
+func shouldSetOwnerReference(driverPod *corev1.Pod, heritage v1alpha1.SparkHeritage) bool {
+	if !(heritage == v1alpha1.SparkHeritageSubmit || heritage == v1alpha1.SparkHeritageJupyter) {
+		return false
+	}
+	if len(driverPod.OwnerReferences) != 0 {
+		return false
+	}
+	return true
+}
+
+func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
+	changed := false
+
+	if cr.UID != "" && len(pod.OwnerReferences) == 0 {
+		ownerRef := v1.OwnerReference{
+			APIVersion:         cr.APIVersion,
+			Kind:               cr.Kind,
+			Name:               cr.Name,
+			UID:                cr.UID,
+			Controller:         nil,
+			BlockOwnerDeletion: nil,
+		}
+
+		if pod.OwnerReferences == nil {
+			pod.OwnerReferences = make([]v1.OwnerReference, 1)
+		}
+
+		pod.OwnerReferences = append(pod.OwnerReferences, ownerRef)
+		changed = true
+	}
+
+	return changed
 }
 
 func (r *SparkPodReconciler) handleExecutorPod(ctx context.Context, applicationId string, executorPod *corev1.Pod) error {
