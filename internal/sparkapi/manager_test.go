@@ -18,16 +18,42 @@ import (
 
 func TestNewManager(t *testing.T) {
 
-	t.Run("whenHistoryServerClient", func(tt *testing.T) {
+	logger := getTestLogger()
+
+	t.Run("whenHistoryServerAndDriverPodClient", func(tt *testing.T) {
 
 		svc := newHistoryServerService()
 		pod := newRunningDriverPod()
 
-		clientSet := k8sfake.NewSimpleClientset(svc)
+		clientSet := k8sfake.NewSimpleClientset(svc, pod)
 
-		m, err := NewManager(clientSet, pod, getTestLogger())
+		m, err := NewManager(clientSet, pod, logger)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, m)
+
+		managerImpl, ok := m.(manager)
+		assert.True(tt, ok)
+		assert.NotNil(tt, managerImpl.historyServerClient)
+		assert.NotNil(tt, managerImpl.driverPodClient)
+
+	})
+
+	t.Run("whenHistoryServerClient", func(tt *testing.T) {
+
+		svc := newHistoryServerService()
+		pod := newRunningDriverPod()
+		pod.Status.Phase = corev1.PodSucceeded // Driver not running
+
+		clientSet := k8sfake.NewSimpleClientset(svc, pod)
+
+		m, err := NewManager(clientSet, pod, logger)
+		assert.NoError(tt, err)
+		assert.NotNil(tt, m)
+
+		managerImpl, ok := m.(manager)
+		assert.True(tt, ok)
+		assert.NotNil(tt, managerImpl.historyServerClient)
+		assert.Nil(tt, managerImpl.driverPodClient)
 
 	})
 
@@ -37,9 +63,14 @@ func TestNewManager(t *testing.T) {
 
 		clientSet := k8sfake.NewSimpleClientset(pod)
 
-		m, err := NewManager(clientSet, pod, getTestLogger())
+		m, err := NewManager(clientSet, pod, logger)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, m)
+
+		managerImpl, ok := m.(manager)
+		assert.True(tt, ok)
+		assert.Nil(tt, managerImpl.historyServerClient)
+		assert.NotNil(tt, managerImpl.driverPodClient)
 
 	})
 
@@ -50,7 +81,7 @@ func TestNewManager(t *testing.T) {
 
 		clientSet := k8sfake.NewSimpleClientset(pod)
 
-		manager, err := NewManager(clientSet, pod, getTestLogger())
+		manager, err := NewManager(clientSet, pod, logger)
 		assert.Nil(tt, manager)
 		assert.Error(tt, err)
 		assert.Contains(tt, err.Error(), "could not get spark api client")
@@ -73,8 +104,8 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetStages(applicationId).Return(getStagesResponse(), nil).Times(0)
 
 		manager := &manager{
-			client: m,
-			logger: getTestLogger(),
+			historyServerClient: m,
+			logger:              getTestLogger(),
 		}
 
 		_, err := manager.GetApplicationInfo(applicationId)
@@ -91,8 +122,92 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetStages(applicationId).Return(getStagesResponse(), nil).Times(1)
 
 		manager := &manager{
-			client: m,
-			logger: getTestLogger(),
+			historyServerClient: m,
+			logger:              getTestLogger(),
+		}
+
+		res, err := manager.GetApplicationInfo(applicationId)
+		assert.NoError(tt, err)
+
+		assert.Equal(tt, "my-test-application", res.ApplicationName)
+
+		assert.Equal(tt, int64(900), res.TotalExecutorCpuTime)
+		assert.Equal(tt, int64(500), res.TotalInputBytes)
+		assert.Equal(tt, int64(700), res.TotalOutputBytes)
+
+		assert.Equal(tt, 2, len(res.SparkProperties))
+		assert.Equal(tt, "val1", res.SparkProperties["prop1"])
+		assert.Equal(tt, "val2", res.SparkProperties["prop2"])
+
+		assert.Equal(tt, 2, len(res.Attempts))
+		assert.Equal(tt, getApplicationResponse().Attempts[0], res.Attempts[0])
+		assert.Equal(tt, getApplicationResponse().Attempts[1], res.Attempts[1])
+	})
+
+	t.Run("whenNoClient", func(tt *testing.T) {
+
+		manager := &manager{
+			historyServerClient: nil,
+			driverPodClient:     nil,
+			logger:              getTestLogger(),
+		}
+
+		_, err := manager.GetApplicationInfo(applicationId)
+		assert.Error(tt, err)
+		assert.Contains(tt, err.Error(), "could not get client")
+	})
+
+	t.Run("whenNoFallbackAvailable", func(tt *testing.T) {
+
+		mockHistoryServerClient := mock_client.NewMockClient(ctrl)
+		mockHistoryServerClient.EXPECT().GetApplication(applicationId).Return(nil, fmt.Errorf("test error history server")).Times(1)
+
+		manager := &manager{
+			historyServerClient: mockHistoryServerClient,
+			driverPodClient:     nil,
+			logger:              getTestLogger(),
+		}
+
+		_, err := manager.GetApplicationInfo(applicationId)
+		assert.Error(tt, err)
+		assert.Contains(tt, err.Error(), "test error history server")
+	})
+
+	t.Run("whenFallbackToDriverPodClientUnsuccessful", func(tt *testing.T) {
+
+		mockHistoryServerClient := mock_client.NewMockClient(ctrl)
+		mockHistoryServerClient.EXPECT().GetApplication(applicationId).Return(nil, fmt.Errorf("test error history server")).Times(1)
+
+		mockDriverPodClient := mock_client.NewMockClient(ctrl)
+		mockDriverPodClient.EXPECT().GetApplication(applicationId).Return(nil, fmt.Errorf("test error driver pod")).Times(1)
+
+		manager := &manager{
+			historyServerClient: mockHistoryServerClient,
+			driverPodClient:     mockDriverPodClient,
+			logger:              getTestLogger(),
+		}
+
+		_, err := manager.GetApplicationInfo(applicationId)
+		assert.Error(tt, err)
+		assert.Contains(tt, err.Error(), "test error driver pod")
+	})
+
+	t.Run("whenFallbackToDriverPodClientSuccessful", func(tt *testing.T) {
+
+		mockHistoryServerClient := mock_client.NewMockClient(ctrl)
+		mockHistoryServerClient.EXPECT().GetApplication(applicationId).Return(nil, fmt.Errorf("test error")).Times(1)
+		mockHistoryServerClient.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).Times(0)
+		mockHistoryServerClient.EXPECT().GetStages(applicationId).Return(getStagesResponse(), nil).Times(0)
+
+		mockDriverPodClient := mock_client.NewMockClient(ctrl)
+		mockDriverPodClient.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).Times(1)
+		mockDriverPodClient.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).Times(1)
+		mockDriverPodClient.EXPECT().GetStages(applicationId).Return(getStagesResponse(), nil).Times(1)
+
+		manager := &manager{
+			historyServerClient: mockHistoryServerClient,
+			driverPodClient:     mockDriverPodClient,
+			logger:              getTestLogger(),
 		}
 
 		res, err := manager.GetApplicationInfo(applicationId)

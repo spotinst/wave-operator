@@ -23,8 +23,9 @@ type Manager interface {
 }
 
 type manager struct {
-	client sparkapiclient.Client
-	logger logr.Logger
+	historyServerClient sparkapiclient.Client
+	driverPodClient     sparkapiclient.Client // TODO Do we need the driver pod client?
+	logger              logr.Logger
 }
 
 type ApplicationInfo struct {
@@ -38,46 +39,65 @@ type ApplicationInfo struct {
 
 func NewManager(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (Manager, error) {
 
-	var client sparkapiclient.Client
+	var historyServerClient sparkapiclient.Client
+	var driverPodClient sparkapiclient.Client
 
 	// Get client for history server
 	historyServerService, err := getHistoryServerService(clientSet)
 	if err != nil {
 		logger.Error(err, "could not get history server service")
 	} else {
-		logger.Info("Using history server Spark API client")
-		client = sparkapiclient.NewHistoryServerClient(historyServerService, clientSet)
+		logger.Info("Got history server Spark API client")
+		historyServerClient = sparkapiclient.NewHistoryServerClient(historyServerService, clientSet)
 	}
 
-	// TODO Health check?
+	// TODO create custom error
 
-	// Fall back on client for driver pod
-	if client == nil {
-		if isSparkDriverRunning(driverPod) {
-			logger.Info("Falling back on driver pod Spark API client")
-			client = sparkapiclient.NewDriverPodClient(driverPod, clientSet)
-		} else {
-			logger.Info("Driver pod/container not running, will not create Spark API client")
-		}
+	// Get client for driver pod
+	if isSparkDriverRunning(driverPod) {
+		logger.Info("Got driver pod Spark API client")
+		driverPodClient = sparkapiclient.NewDriverPodClient(driverPod, clientSet)
+	} else {
+		logger.Info("Driver pod/container not running, will not create Spark API client")
 	}
 
-	if client == nil {
+	if historyServerClient == nil && driverPodClient == nil {
 		return nil, fmt.Errorf("could not get spark api client")
 	}
 
 	return manager{
-		client: client,
-		logger: logger,
+		historyServerClient: historyServerClient,
+		driverPodClient:     driverPodClient,
+		logger:              logger,
 	}, nil
 }
 
 func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, error) {
 
 	applicationInfo := &ApplicationInfo{}
+	var client sparkapiclient.Client
 
 	m.logger.Info("Will call Spark API")
 
-	application, err := m.client.GetApplication(applicationId)
+	// Prefer history server client if we have one
+	if m.historyServerClient != nil {
+		m.logger.Info("Using history server client")
+		client = m.historyServerClient
+	} else if m.driverPodClient != nil {
+		m.logger.Info("Using driver pod client")
+		client = m.driverPodClient
+	} else {
+		return nil, fmt.Errorf("could not get client")
+	}
+
+	application, err := client.GetApplication(applicationId)
+	if err != nil {
+		if client == m.historyServerClient && m.driverPodClient != nil {
+			m.logger.Info(fmt.Sprintf("Falling back on driver pod client, got error from history server: %s", err.Error()))
+			client = m.driverPodClient
+			application, err = client.GetApplication(applicationId)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("could not get application, %w", err)
 	}
@@ -89,7 +109,7 @@ func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, err
 	applicationInfo.ApplicationName = application.Name
 	applicationInfo.Attempts = application.Attempts
 
-	environment, err := m.client.GetEnvironment(applicationId)
+	environment, err := client.GetEnvironment(applicationId)
 	if err != nil {
 		return nil, fmt.Errorf("could not get environment, %w", err)
 	}
@@ -101,7 +121,7 @@ func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, err
 
 	applicationInfo.SparkProperties = sparkProperties
 
-	stages, err := m.client.GetStages(applicationId)
+	stages, err := client.GetStages(applicationId)
 	if err != nil {
 		return nil, fmt.Errorf("could not get stages, %w", err)
 	}
