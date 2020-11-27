@@ -252,6 +252,68 @@ func TestReconcile_executor_whenCrDoesntExist(t *testing.T) {
 	assert.Contains(t, err.Error(), "could not get spark application cr")
 }
 
+func TestReconcile_finalizer_add(t *testing.T) {
+	ctx := context.TODO()
+
+	applicationId := "spark-123"
+	ns := "test-ns"
+
+	pod := getTestPod(ns, "exec1", "123890", ExecutorRole, applicationId, false)
+
+	cr := getMinimalTestCr(ns, applicationId)
+
+	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
+	clientSet := k8sfake.NewSimpleClientset()
+
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getTestLogger(), testScheme)
+
+	req := ctrlrt.Request{
+		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+	}
+	_, err := controller.Reconcile(ctx, req)
+	require.NoError(t, err)
+
+	updatedPod := &corev1.Pod{}
+	err = ctrlClient.Get(ctx, client.ObjectKey{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, len(updatedPod.Finalizers))
+	assert.Equal(t, sparkApplicationFinalizerName, updatedPod.Finalizers[0])
+}
+
+func TestReconcile_finalizer_remove(t *testing.T) {
+	ctx := context.TODO()
+
+	applicationId := "spark-123"
+	ns := "test-ns"
+
+	pod := getTestPod(ns, "exec1", "123890", ExecutorRole, applicationId, true)
+	pod.Finalizers = []string{sparkApplicationFinalizerName}
+
+	cr := getMinimalTestCr(ns, applicationId)
+
+	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
+	clientSet := k8sfake.NewSimpleClientset()
+
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getTestLogger(), testScheme)
+
+	req := ctrlrt.Request{
+		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+	}
+	_, err := controller.Reconcile(ctx, req)
+	require.NoError(t, err)
+
+	updatedPod := &corev1.Pod{}
+	err = ctrlClient.Get(ctx, client.ObjectKey{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, len(updatedPod.Finalizers))
+}
+
+func TestReconcile_ownerReference_add(t *testing.T) {
+
+}
+
 func getTestLogger() logr.Logger {
 	return zap.New(zap.UseDevMode(true))
 }
