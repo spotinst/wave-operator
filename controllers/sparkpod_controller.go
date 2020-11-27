@@ -59,6 +59,11 @@ func NewSparkPodReconciler(
 	}
 }
 
+// TODO
+// What if the spark api communication fails indefinitely?
+// - Still want to create the spark application CR if the spark api communication fails
+// - Still want to requeue if the spark api communication fails (want to get final Spark API info after the app finishes)
+
 func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("pod", req.NamespacedName)
 
@@ -220,7 +225,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	}
 
 	// Set owner reference driver pod -> spark application CR if needed
-	shouldSetOwnerReference := shouldSetOwnerReference(driverPod, heritage)
+	shouldSetOwnerReference := shouldSetPodOwnerReference(driverPod, heritage)
 	if shouldSetOwnerReference {
 		podOwnerReferenceChanged := false
 		driverPodDeepCopy := driverPod.DeepCopy()
@@ -257,7 +262,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	return shouldRequeue, nil
 }
 
-func shouldSetOwnerReference(driverPod *corev1.Pod, heritage v1alpha1.SparkHeritage) bool {
+func shouldSetPodOwnerReference(driverPod *corev1.Pod, heritage v1alpha1.SparkHeritage) bool {
 	if !(heritage == v1alpha1.SparkHeritageSubmit || heritage == v1alpha1.SparkHeritageJupyter) {
 		return false
 	}
