@@ -104,8 +104,6 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 
-	// TODO Only remove finalizer when I have been successful in getting the spark api information
-
 	shouldRequeue := false
 	switch sparkRole {
 	case DriverRole:
@@ -127,7 +125,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Remove finalizer
-	if !p.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !p.ObjectMeta.DeletionTimestamp.IsZero() && !shouldRequeue {
 		if containsString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
 			deepCopy := p.DeepCopy()
 			deepCopy.ObjectMeta.Finalizers = removeString(deepCopy.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
@@ -194,11 +192,13 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	driverPodCr := newPodCR(driverPod)
 	deepCopy.Status.Data.Driver = driverPodCr
 
+	sparkApiSuccess := false
 	sparkApiApplicationInfo, err := getSparkApiApplicationInfo(r.ClientSet, driverPod, applicationId, log)
 	if err != nil {
 		// Best effort, just log error
 		log.Error(err, "could not get spark api application information")
 	} else {
+		sparkApiSuccess = true
 		mapSparkApplicationInfo(deepCopy, sparkApiApplicationInfo)
 	}
 
@@ -245,8 +245,13 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 		}
 	}
 
-	// Requeue driver pods in running phase
-	shouldRequeue := driverPod.Status.Phase == corev1.PodRunning
+	shouldRequeue := false
+
+	// Requeue if we were unsuccessful in communicating with Spark API,
+	// or if the driver pod is still running
+	if !sparkApiSuccess || driverPod.Status.Phase == corev1.PodRunning {
+		shouldRequeue = true
+	}
 
 	log.Info("Finished handling driver pod", "requeue", shouldRequeue)
 	return shouldRequeue, nil
