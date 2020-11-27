@@ -204,7 +204,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 		log.Error(err, "could not get spark api application information")
 	} else {
 		sparkApiSuccess = true
-		mapSparkApplicationInfo(deepCopy, sparkApiApplicationInfo)
+		mapSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
 	}
 
 	// We always need an application name, set it to driver pod name if it isn't set already
@@ -384,7 +384,7 @@ func getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev
 	return applicationInfo, nil
 }
 
-func mapSparkApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo) {
+func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo) {
 	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
 	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime = sparkApiInfo.TotalExecutorCpuTime
