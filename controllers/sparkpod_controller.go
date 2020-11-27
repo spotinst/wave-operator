@@ -165,7 +165,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	cr, err := r.getSparkApplicationCr(ctx, driverPod.Namespace, applicationId)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			if !driverPod.DeletionTimestamp.IsZero() && hasWaveSparkApplicationOwnerReference(driverPod, applicationId) {
+			if !driverPod.DeletionTimestamp.IsZero() && hasWaveSparkApplicationOwnerRef(driverPod, applicationId) {
 				// The Wave Spark application CR does not exist, the pod has an owner reference to it,
 				// and the pod is being deleted
 				// -> assume this is a garbage collection event and don't re-create the CR
@@ -221,7 +221,6 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 
 	// Set owner reference driver pod -> spark application CR if needed
 	shouldSetOwnerReference := shouldSetOwnerReference(driverPod, heritage)
-
 	if shouldSetOwnerReference {
 		podOwnerReferenceChanged := false
 		driverPodDeepCopy := driverPod.DeepCopy()
@@ -289,7 +288,7 @@ func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
 	return changed
 }
 
-func hasWaveSparkApplicationOwnerReference(pod *corev1.Pod, applicationId string) bool {
+func hasWaveSparkApplicationOwnerRef(pod *corev1.Pod, applicationId string) bool {
 	for _, ownerRef := range pod.OwnerReferences {
 		if ownerRef.APIVersion == apiVersion &&
 			ownerRef.Kind == sparkApplicationKind &&
