@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"github.com/spotinst/wave-operator/internal/sparkapi"
 	"os"
 
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
@@ -93,6 +94,7 @@ func main() {
 	sparkPodController := controllers.NewSparkPodReconciler(
 		mgr.GetClient(),
 		clientSet,
+		sparkapi.GetManager,
 		ctrl.Log.WithName("controllers").WithName("SparkPod"),
 		mgr.GetScheme())
 

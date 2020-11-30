@@ -40,29 +40,36 @@ const (
 // SparkPodReconciler reconciles Pod objects to discover Spark applications
 type SparkPodReconciler struct {
 	client.Client
-	ClientSet kubernetes.Interface
-	Log       logr.Logger
-	Scheme    *runtime.Scheme
+	ClientSet          kubernetes.Interface
+	getSparkApiManager SparkApiManagerGetter
+	Log                logr.Logger
+	Scheme             *runtime.Scheme
 }
 
 func NewSparkPodReconciler(
 	client client.Client,
 	clientSet kubernetes.Interface,
+	sparkApiManagerGetter SparkApiManagerGetter,
 	log logr.Logger,
 	scheme *runtime.Scheme) *SparkPodReconciler {
 
 	return &SparkPodReconciler{
-		Client:    client,
-		ClientSet: clientSet,
-		Log:       log,
-		Scheme:    scheme,
+		Client:             client,
+		ClientSet:          clientSet,
+		getSparkApiManager: sparkApiManagerGetter,
+		Log:                log,
+		Scheme:             scheme,
 	}
 }
+
+// SparkApiManagerGetter is a factory function that returns an implementation of sparkapi.Manager
+type SparkApiManagerGetter func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error)
 
 // TODO
 // What if the spark api communication fails indefinitely?
 // - Still want to create the spark application CR if the spark api communication fails
 // - Still want to requeue if the spark api communication fails (want to get final Spark API info after the app finishes)
+// - Better to fail reconciliation on spark api communication error instead of just requeueing - break it up into two steps?
 
 func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("pod", req.NamespacedName)
@@ -198,7 +205,7 @@ func (r *SparkPodReconciler) handleDriverPod(ctx context.Context, applicationId 
 	deepCopy.Status.Data.Driver = driverPodCr
 
 	sparkApiSuccess := false
-	sparkApiApplicationInfo, err := getSparkApiApplicationInfo(r.ClientSet, driverPod, applicationId, log)
+	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, driverPod, applicationId, log)
 	if err != nil {
 		// Best effort, just log error
 		log.Error(err, "could not get spark api application information")
@@ -369,9 +376,9 @@ func newPodCR(pod *corev1.Pod) v1alpha1.Pod {
 	return podCr
 }
 
-func getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationId string, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
+func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationId string, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
 
-	manager, err := sparkapi.NewManager(clientSet, driverPod, logger)
+	manager, err := r.getSparkApiManager(clientSet, driverPod, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api manager, %w", err)
 	}

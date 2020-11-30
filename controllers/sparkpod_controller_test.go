@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
+	"github.com/golang/mock/gomock"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/internal/sparkapi"
+	"github.com/spotinst/wave-operator/internal/sparkapi/mock_sparkapi"
 	"github.com/spotinst/wave-operator/internal/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,6 +15,7 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrlrt "sigs.k8s.io/controller-runtime"
@@ -48,7 +52,7 @@ func TestReconcile_sparkAppIdMissing(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -84,7 +88,7 @@ func TestReconcile_unknownRole(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -122,7 +126,7 @@ func TestReconcile_driver_garbageCollectionEvent(t *testing.T) {
 					APIVersion: apiVersion,
 					Kind:       sparkApplicationKind,
 					Name:       "spark-123456",
-					UID:        "123-456-789",
+					UID:        "123-456-789-5555",
 				},
 			},
 		},
@@ -131,7 +135,15 @@ func TestReconcile_driver_garbageCollectionEvent(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getTestLogger(), testScheme)
+	// Mock Spark API manager
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := mock_sparkapi.NewMockManager(ctrl)
+	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
+		return m, nil
+	}
+
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -170,7 +182,7 @@ func TestReconcile_executor_whenSuccessful(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, exec1, exec2, cr)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
 
 	// Executor 1
 
@@ -241,7 +253,7 @@ func TestReconcile_executor_whenCrDoesntExist(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -265,7 +277,7 @@ func TestReconcile_finalizer_add(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -295,7 +307,7 @@ func TestReconcile_finalizer_remove(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -311,7 +323,7 @@ func TestReconcile_finalizer_remove(t *testing.T) {
 }
 
 func TestReconcile_ownerReference_add(t *testing.T) {
-
+	// TODO
 }
 
 func getTestLogger() logr.Logger {
