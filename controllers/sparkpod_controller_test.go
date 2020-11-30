@@ -7,6 +7,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/internal/sparkapi"
+	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 	"github.com/spotinst/wave-operator/internal/sparkapi/mock_sparkapi"
 	"github.com/spotinst/wave-operator/internal/version"
 	"github.com/stretchr/testify/assert"
@@ -112,27 +113,13 @@ func TestReconcile_driver_garbageCollectionEvent(t *testing.T) {
 
 	sparkAppId := "spark-123456"
 
-	deletionTimestamp := metav1.Unix(int64(1234), int64(1000))
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-driver",
-			Namespace: "test-ns",
-			UID:       "123-456-789",
-			Labels: map[string]string{
-				SparkAppLabel:  sparkAppId,
-				SparkRoleLabel: DriverRole,
-			},
-			DeletionTimestamp: &deletionTimestamp,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: apiVersion,
-					Kind:       sparkApplicationKind,
-					Name:       sparkAppId,
-					UID:        "123-456-789-5555",
-				},
-			},
-		},
-	}
+	pod := getTestPod("test-ns", "test-driver", "123-456", DriverRole, sparkAppId, true)
+	pod.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: apiVersion,
+		Kind:       sparkApplicationKind,
+		Name:       sparkAppId,
+		UID:        "123-456-789-5555",
+	}}
 
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
 	clientSet := k8sfake.NewSimpleClientset()
@@ -169,17 +156,7 @@ func TestReconcile_driver_whenSparkApiCommunicationFails(t *testing.T) {
 
 	sparkAppId := "spark-123456"
 
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-driver",
-			Namespace: "test-ns",
-			UID:       "123-456-789",
-			Labels: map[string]string{
-				SparkAppLabel:  sparkAppId,
-				SparkRoleLabel: DriverRole,
-			},
-		},
-	}
+	pod := getTestPod("test-ns", "test-driver", "123-456", DriverRole, sparkAppId, false)
 
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
 	clientSet := k8sfake.NewSimpleClientset()
@@ -213,10 +190,51 @@ func TestReconcile_driver_whenSparkApiCommunicationFails(t *testing.T) {
 	verifyCrPod(t, pod, createdCr.Status.Data.Driver, false)
 	assert.Equal(t, pod.Name, createdCr.Spec.ApplicationName) // Fall back on driver name
 	assert.Equal(t, sparkAppId, createdCr.Spec.ApplicationId)
-
 }
 
 func TestReconcile_driver_whenSuccessful(t *testing.T) {
+	ctx := context.TODO()
+
+	sparkAppId := "spark-123456"
+
+	pod := getTestPod("test-ns", "test-driver", "123-456", DriverRole, sparkAppId, false)
+
+	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
+	clientSet := k8sfake.NewSimpleClientset()
+
+	// Mock Spark API manager
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mock_sparkapi.NewMockManager(ctrl)
+	m.EXPECT().GetApplicationInfo(sparkAppId).Return(getTestApplicationInfo(), nil).Times(1)
+
+	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
+		return m, nil
+	}
+
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+
+	req := ctrlrt.Request{
+		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+	}
+
+	res, err := controller.Reconcile(ctx, req)
+	assert.NoError(t, err)
+	assert.Equal(t, ctrlrt.Result{Requeue: true, RequeueAfter: requeueAfterTimeout}, res) // Requeue running driver
+
+	createdCr := &v1alpha1.SparkApplication{}
+	err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppId, Namespace: pod.Namespace}, createdCr)
+	require.NoError(t, err)
+
+	verifyCrPod(t, pod, createdCr.Status.Data.Driver, false)
+	assert.Equal(t, getTestApplicationInfo().ApplicationName, createdCr.Spec.ApplicationName)
+	assert.Equal(t, sparkAppId, createdCr.Spec.ApplicationId)
+	assert.Equal(t, getTestApplicationInfo().SparkProperties, createdCr.Status.Data.SparkProperties)
+	assert.Equal(t, getTestApplicationInfo().TotalOutputBytes, createdCr.Status.Data.RunStatistics.TotalOutputBytes)
+	assert.Equal(t, getTestApplicationInfo().TotalInputBytes, createdCr.Status.Data.RunStatistics.TotalInputBytes)
+	assert.Equal(t, getTestApplicationInfo().TotalExecutorCpuTime, createdCr.Status.Data.RunStatistics.TotalExecutorCpuTime)
+	verifyCrAttempts(t, getTestApplicationInfo().Attempts, createdCr.Status.Data.RunStatistics.Attempts)
 }
 
 func TestReconcile_executor_whenSuccessful(t *testing.T) {
@@ -409,6 +427,25 @@ func verifyCrPod(t *testing.T, pod *corev1.Pod, crPod v1alpha1.Pod, deleted bool
 	}
 }
 
+func verifyCrAttempts(t *testing.T, attempts []sparkapiclient.Attempt, crAttempts []v1alpha1.Attempt) {
+	assert.Equal(t, len(attempts), len(crAttempts))
+
+	for _, expectedAttempt := range attempts {
+		foundAttempt := false
+		for _, actualAttempt := range crAttempts {
+			foundAttempt = actualAttempt.Completed == expectedAttempt.Completed &&
+				actualAttempt.StartTimeEpoch == expectedAttempt.StartTimeEpoch &&
+				actualAttempt.EndTimeEpoch == expectedAttempt.EndTimeEpoch &&
+				actualAttempt.LastUpdatedEpoch == expectedAttempt.LastUpdatedEpoch &&
+				actualAttempt.AppSparkVersion == expectedAttempt.AppSparkVersion
+			if foundAttempt {
+				break
+			}
+		}
+		assert.True(t, foundAttempt)
+	}
+}
+
 func getMinimalTestCr(namespace string, applicationId string) *v1alpha1.SparkApplication {
 	return &v1alpha1.SparkApplication{
 		ObjectMeta: metav1.ObjectMeta{
@@ -472,6 +509,39 @@ func getTestPod(namespace string, name string, uid string, role string, applicat
 					ContainerID:          "container-id",
 					Started:              nil,
 				},
+			},
+		},
+	}
+}
+
+func getTestApplicationInfo() *sparkapi.ApplicationInfo {
+	return &sparkapi.ApplicationInfo{
+		ApplicationName: "The application name",
+		SparkProperties: map[string]string{
+			"prop1": "val1",
+			"prop2": "val2",
+		},
+		TotalInputBytes:      987,
+		TotalOutputBytes:     765,
+		TotalExecutorCpuTime: 543,
+		Attempts: []sparkapiclient.Attempt{
+			{
+				StartTimeEpoch:   3528,
+				EndTimeEpoch:     5146,
+				LastUpdatedEpoch: 5684,
+				Duration:         4563,
+				SparkUser:        "the spark user",
+				Completed:        false,
+				AppSparkVersion:  "v3.0.0",
+			},
+			{
+				StartTimeEpoch:   9213,
+				EndTimeEpoch:     4672,
+				LastUpdatedEpoch: 9435,
+				Duration:         5678,
+				SparkUser:        "the second spark user",
+				Completed:        true,
+				AppSparkVersion:  "v7.0.0",
 			},
 		},
 	}
