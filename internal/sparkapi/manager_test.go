@@ -21,12 +21,12 @@ func TestGetSparkApiClient(t *testing.T) {
 
 	logger := getTestLogger()
 
-	t.Run("whenHistoryServerAvailable", func(tt *testing.T) {
+	t.Run("whenDriverAvailable", func(tt *testing.T) {
 
 		svc := newHistoryServerService()
 		pod := newRunningDriverPod()
 
-		clientSet := k8sfake.NewSimpleClientset(svc)
+		clientSet := k8sfake.NewSimpleClientset(svc, pod)
 
 		c, err := getSparkApiClient(clientSet, pod, logger)
 		assert.NoError(tt, err)
@@ -34,11 +34,13 @@ func TestGetSparkApiClient(t *testing.T) {
 
 	})
 
-	t.Run("whenHistoryServerNotAvailableDriverAvailable", func(tt *testing.T) {
+	t.Run("whenDriverNotAvailableHistoryServerAvailable", func(tt *testing.T) {
 
+		svc := newHistoryServerService()
 		pod := newRunningDriverPod()
+		pod.Status.Phase = corev1.PodSucceeded // Driver not running
 
-		clientSet := k8sfake.NewSimpleClientset(pod)
+		clientSet := k8sfake.NewSimpleClientset(svc, pod)
 
 		c, err := getSparkApiClient(clientSet, pod, logger)
 		assert.NoError(tt, err)

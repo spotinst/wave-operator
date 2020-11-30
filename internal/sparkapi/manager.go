@@ -50,7 +50,16 @@ var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, log
 
 func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapiclient.Client, error) {
 
-	// TODO Stop using driver pod client when we have history server fully functional
+	// Try the driver API first, to get information on running applications
+	// Once the application is finished the info is written to history server
+
+	// Get client for driver pod
+	if isSparkDriverRunning(driverPod) {
+		logger.Info("Using driver pod client")
+		return sparkapiclient.NewDriverPodClient(driverPod, clientSet), nil
+	}
+
+	logger.Info("Driver pod/container not running, will use history server")
 
 	// Get client for history server
 	historyServerService, err := getHistoryServerService(clientSet)
@@ -59,14 +68,6 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 	} else {
 		logger.Info("Using history server client")
 		return sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
-	}
-
-	// Get client for driver pod
-	if !isSparkDriverRunning(driverPod) {
-		logger.Info("Driver pod/container not running, will not create spark api client")
-	} else {
-		logger.Info("Using driver pod client")
-		return sparkapiclient.NewDriverPodClient(driverPod, clientSet), nil
 	}
 
 	return nil, fmt.Errorf("could not get spark api client")
