@@ -12,6 +12,8 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/internal/components"
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 	"github.com/spotinst/wave-operator/internal/sparkapi/client/mock_client"
 )
@@ -186,8 +188,8 @@ func getEnvironmentResponse() *sparkapiclient.Environment {
 func newHistoryServerService() *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      historyServerServiceName,
-			Namespace: systemNamespace,
+			Name:      components.HistoryServerReleaseName,
+			Namespace: catalog.SystemNamespace,
 		},
 	}
 }

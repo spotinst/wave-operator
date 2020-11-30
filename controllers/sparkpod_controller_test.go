@@ -179,8 +179,7 @@ func TestReconcile_driver_whenSparkApiCommunicationFails(t *testing.T) {
 	}
 
 	res, err := controller.Reconcile(ctx, req)
-	// TODO throw error instead of just requeue
-	assert.NoError(t, err) // Should be no error
+	assert.NoError(t, err) // Shouldn't error, just requeue
 	assert.Equal(t, ctrlrt.Result{Requeue: true, RequeueAfter: requeueAfterTimeout}, res)
 
 	createdCr := &v1alpha1.SparkApplication{}

@@ -9,13 +9,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/internal/components"
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 )
 
 const (
-	systemNamespace          = "spot-system" // TODO Refactor to single source of truth
 	sparkDriverContainerName = "spark-kubernetes-driver"
-	historyServerServiceName = "wave-spark-history-server"
 )
 
 type Manager interface {
@@ -156,7 +156,7 @@ func parseSparkProperties(environment *sparkapiclient.Environment, logger logr.L
 
 func getHistoryServerService(clientSet kubernetes.Interface) (*corev1.Service, error) {
 	ctx := context.TODO()
-	service, err := clientSet.CoreV1().Services(systemNamespace).Get(ctx, historyServerServiceName, metav1.GetOptions{})
+	service, err := clientSet.CoreV1().Services(catalog.SystemNamespace).Get(ctx, components.HistoryServerReleaseName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
