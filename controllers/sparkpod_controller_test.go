@@ -392,7 +392,122 @@ func TestReconcile_finalizer_remove(t *testing.T) {
 }
 
 func TestReconcile_ownerReference_add(t *testing.T) {
-	// TODO
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	type testCase struct {
+		heritagePodLabels      map[string]string
+		shouldAddOwnerRef      bool
+		podHasExistingOwnerRef bool
+		message                string
+	}
+
+	testCases := []testCase{
+		{
+			heritagePodLabels:      nil,
+			shouldAddOwnerRef:      true,
+			podHasExistingOwnerRef: false,
+			message:                "when spark-submit",
+		},
+		{
+			heritagePodLabels: map[string]string{
+				AppLabel: AppLabelValueEnterpriseGateway,
+			},
+			shouldAddOwnerRef:      true,
+			podHasExistingOwnerRef: false,
+			message:                "when jupyter",
+		},
+		{
+			heritagePodLabels: map[string]string{
+				SparkOperatorLaunchedByLabel: "true",
+			},
+			shouldAddOwnerRef:      false,
+			podHasExistingOwnerRef: false,
+			message:                "when spark-operator",
+		},
+		{
+			heritagePodLabels: map[string]string{
+				AppLabel: AppLabelValueEnterpriseGateway,
+			},
+			shouldAddOwnerRef:      false,
+			podHasExistingOwnerRef: true,
+			message:                "when jupyter with existing owner ref",
+		},
+	}
+
+	t.Run("testOwnerReferenceAdd", func(tt *testing.T) {
+
+		for _, tc := range testCases {
+
+			ctx := context.TODO()
+			sparkAppId := "spark-123456"
+			ns := "test-ns"
+
+			cr := getMinimalTestCr(ns, sparkAppId)
+			pod := getTestPod(ns, "test-driver", "123-456", DriverRole, sparkAppId, false)
+
+			for k, v := range tc.heritagePodLabels {
+				pod.Labels[k] = v
+			}
+
+			if tc.podHasExistingOwnerRef {
+				pod.OwnerReferences = []metav1.OwnerReference{
+					{
+						APIVersion: "api",
+						Kind:       "kind",
+						Name:       "name",
+						UID:        "uid",
+					},
+				}
+			}
+
+			ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
+			clientSet := k8sfake.NewSimpleClientset()
+
+			// Mock Spark API manager
+			m := mock_sparkapi.NewMockManager(ctrl)
+			m.EXPECT().GetApplicationInfo(sparkAppId).Return(getTestApplicationInfo(), nil).Times(1)
+
+			var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
+				return m, nil
+			}
+
+			controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+
+			req := ctrlrt.Request{
+				NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+			}
+
+			_, err := controller.Reconcile(ctx, req)
+			assert.NoError(t, err, tc.message)
+
+			fetchedCr := &v1alpha1.SparkApplication{}
+			err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppId, Namespace: pod.Namespace}, fetchedCr)
+			require.NoError(t, err, tc.message)
+
+			updatedPod := &corev1.Pod{}
+			err = ctrlClient.Get(ctx, client.ObjectKey{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
+			require.NoError(t, err, tc.message)
+
+			if tc.shouldAddOwnerRef {
+				assert.Equal(t, 1, len(updatedPod.OwnerReferences), tc.message)
+				assert.Equal(t, fetchedCr.UID, updatedPod.OwnerReferences[0].UID, tc.message)
+				assert.Equal(t, fetchedCr.Name, updatedPod.OwnerReferences[0].Name, tc.message)
+				assert.Equal(t, apiVersion, updatedPod.OwnerReferences[0].APIVersion, tc.message)
+				assert.Equal(t, sparkApplicationKind, updatedPod.OwnerReferences[0].Kind, tc.message)
+				assert.Equal(t, true, *updatedPod.OwnerReferences[0].BlockOwnerDeletion, tc.message)
+				assert.Equal(t, false, *updatedPod.OwnerReferences[0].Controller, tc.message)
+			} else {
+				if tc.podHasExistingOwnerRef {
+					assert.Equal(t, 1, len(updatedPod.OwnerReferences), tc.message)
+				} else {
+					assert.Equal(t, 0, len(updatedPod.OwnerReferences), tc.message)
+				}
+			}
+		}
+	})
+
 }
 
 func getTestLogger() logr.Logger {
@@ -451,6 +566,7 @@ func getMinimalTestCr(namespace string, applicationId string) *v1alpha1.SparkApp
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      applicationId,
 			Namespace: namespace,
+			UID:       "123-456-999-1234",
 		},
 		Spec: v1alpha1.SparkApplicationSpec{
 			ApplicationId:   applicationId,
