@@ -10,12 +10,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/spotinst/wave-operator/catalog"
-	"github.com/spotinst/wave-operator/internal/components"
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 )
 
 const (
-	sparkDriverContainerName = "spark-kubernetes-driver"
+	sparkDriverContainerName       = "spark-kubernetes-driver"
+	appNameLabel                   = "app.kubernetes.io/name"
+	historyServerAppNameLabelValue = "spark-history-server"
 )
 
 type Manager interface {
@@ -156,12 +157,20 @@ func parseSparkProperties(environment *sparkapiclient.Environment, logger logr.L
 
 func getHistoryServerService(clientSet kubernetes.Interface) (*corev1.Service, error) {
 	ctx := context.TODO()
-	service, err := clientSet.CoreV1().Services(catalog.SystemNamespace).Get(ctx, components.HistoryServerReleaseName, metav1.GetOptions{})
+	foundServices, err := clientSet.CoreV1().Services(catalog.SystemNamespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", appNameLabel, historyServerAppNameLabelValue),
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not list services, %w", err)
 	}
 
-	return service, nil
+	if len(foundServices.Items) != 1 {
+		return nil, fmt.Errorf("could not find history server service, found %d but wanted 1", len(foundServices.Items))
+	}
+
+	service := foundServices.Items[0]
+
+	return &service, nil
 }
 
 func isSparkDriverRunning(driverPod *corev1.Pod) bool {

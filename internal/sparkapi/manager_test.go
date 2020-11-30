@@ -13,7 +13,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/spotinst/wave-operator/catalog"
-	"github.com/spotinst/wave-operator/internal/components"
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 	"github.com/spotinst/wave-operator/internal/sparkapi/client/mock_client"
 )
@@ -188,8 +187,10 @@ func getEnvironmentResponse() *sparkapiclient.Environment {
 func newHistoryServerService() *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      components.HistoryServerReleaseName,
 			Namespace: catalog.SystemNamespace,
+			Labels: map[string]string{
+				appNameLabel: historyServerAppNameLabelValue,
+			},
 		},
 	}
 }
