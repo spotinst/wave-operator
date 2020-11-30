@@ -3,9 +3,6 @@ package transport
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 )
@@ -13,56 +10,6 @@ import (
 type Client interface {
 	Get(path string) ([]byte, error)
 }
-
-//region HTTP transport client
-
-// TODO Remove?
-
-type httpClient struct {
-	client *http.Client
-	host   string
-	port   string
-}
-
-func NewHTTPClient(host string, port string) Client {
-	c := &httpClient{
-		host:   host,
-		port:   port,
-		client: &http.Client{},
-	}
-	return c
-}
-
-func (h httpClient) Get(path string) ([]byte, error) {
-
-	url := fmt.Sprintf("http://%s:%s/%s", h.host, h.port, path)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Add("Content-Type", "application/json")
-
-	resp, err := h.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("got http status %d", resp.StatusCode)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return body, nil
-}
-
-//endregion
-
-//region Proxy client
 
 type ProxyResource string
 
@@ -128,5 +75,3 @@ func decorateError(err error, statusError *k8serrors.StatusError) error {
 
 	return fmt.Errorf("code: %d, reason: %s, causes: %s, %w", code, reason, causeMessages, err)
 }
-
-//endregion
