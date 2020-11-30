@@ -65,12 +65,6 @@ func NewSparkPodReconciler(
 // SparkApiManagerGetter is a factory function that returns an implementation of sparkapi.Manager
 type SparkApiManagerGetter func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error)
 
-// TODO
-// What if the spark api communication fails indefinitely?
-// - Still want to create the spark application CR if the spark api communication fails
-// - Still want to requeue if the spark api communication fails (want to get final Spark API info after the app finishes)
-// - Better to fail reconciliation on spark api communication error instead of just requeueing - break it up into two steps?
-
 func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("pod", req.NamespacedName)
 
@@ -204,6 +198,7 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, applicationId str
 	driverPodCr := newPodCR(pod)
 	deepCopy.Status.Data.Driver = driverPodCr
 
+	// Fetch information from Spark API
 	sparkApiSuccess := false
 	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, applicationId, log)
 	if err != nil {
