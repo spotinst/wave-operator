@@ -110,6 +110,8 @@ func TestReconcile_unknownRole(t *testing.T) {
 func TestReconcile_driver_garbageCollectionEvent(t *testing.T) {
 	ctx := context.TODO()
 
+	sparkAppId := "spark-123456"
+
 	deletionTimestamp := metav1.Unix(int64(1234), int64(1000))
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -117,7 +119,7 @@ func TestReconcile_driver_garbageCollectionEvent(t *testing.T) {
 			Namespace: "test-ns",
 			UID:       "123-456-789",
 			Labels: map[string]string{
-				SparkAppLabel:  "spark-123456",
+				SparkAppLabel:  sparkAppId,
 				SparkRoleLabel: DriverRole,
 			},
 			DeletionTimestamp: &deletionTimestamp,
@@ -125,7 +127,7 @@ func TestReconcile_driver_garbageCollectionEvent(t *testing.T) {
 				{
 					APIVersion: apiVersion,
 					Kind:       sparkApplicationKind,
-					Name:       "spark-123456",
+					Name:       sparkAppId,
 					UID:        "123-456-789-5555",
 				},
 			},
@@ -163,6 +165,55 @@ func TestReconcile_driver_garbageCollectionEvent(t *testing.T) {
 }
 
 func TestReconcile_driver_whenSparkApiCommunicationFails(t *testing.T) {
+	ctx := context.TODO()
+
+	sparkAppId := "spark-123456"
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-driver",
+			Namespace: "test-ns",
+			UID:       "123-456-789",
+			Labels: map[string]string{
+				SparkAppLabel:  sparkAppId,
+				SparkRoleLabel: DriverRole,
+			},
+		},
+	}
+
+	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
+	clientSet := k8sfake.NewSimpleClientset()
+
+	// Mock Spark API manager
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mock_sparkapi.NewMockManager(ctrl)
+	m.EXPECT().GetApplicationInfo(sparkAppId).Return(nil, fmt.Errorf("test error")).Times(1)
+
+	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
+		return m, nil
+	}
+
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+
+	req := ctrlrt.Request{
+		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+	}
+
+	res, err := controller.Reconcile(ctx, req)
+	// TODO throw error instead of just requeue
+	assert.NoError(t, err) // Should be no error
+	assert.Equal(t, ctrlrt.Result{Requeue: true, RequeueAfter: requeueAfterTimeout}, res)
+
+	createdCr := &v1alpha1.SparkApplication{}
+	err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppId, Namespace: pod.Namespace}, createdCr)
+	require.NoError(t, err)
+
+	verifyCrPod(t, pod, createdCr.Status.Data.Driver, false)
+	assert.Equal(t, pod.Name, createdCr.Spec.ApplicationName) // Fall back on driver name
+	assert.Equal(t, sparkAppId, createdCr.Spec.ApplicationId)
+
 }
 
 func TestReconcile_driver_whenSuccessful(t *testing.T) {
