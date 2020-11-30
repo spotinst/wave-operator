@@ -3,13 +3,10 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
-	"github.com/spotinst/wave-operator/api/v1alpha1"
-	"github.com/spotinst/wave-operator/internal/sparkapi"
-	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
-	"github.com/spotinst/wave-operator/internal/sparkapi/mock_sparkapi"
-	"github.com/spotinst/wave-operator/internal/version"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -23,10 +20,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlrt_fake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"testing"
-)
 
-//var testScheme = runtime.NewScheme()
+	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/internal/sparkapi"
+	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
+	"github.com/spotinst/wave-operator/internal/sparkapi/mock_sparkapi"
+	"github.com/spotinst/wave-operator/internal/version"
+)
 
 func init() {
 	_ = clientgoscheme.AddToScheme(testScheme)

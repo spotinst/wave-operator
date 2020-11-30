@@ -18,7 +18,6 @@ package main
 
 import (
 	"flag"
-	"github.com/spotinst/wave-operator/internal/sparkapi"
 	"os"
 
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
@@ -32,6 +31,7 @@ import (
 	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/controllers"
 	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/sparkapi"
 	"github.com/spotinst/wave-operator/internal/version"
 	// +kubebuilder:scaffold:imports
 )
