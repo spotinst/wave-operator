@@ -3,8 +3,6 @@ package transport
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 )
@@ -78,16 +76,8 @@ func decorateError(err error, statusError *k8serrors.StatusError) error {
 	wrappedErr := fmt.Errorf("code: %d, reason: %s, causes: %s, %w", code, reason, causeMessages, err)
 
 	if k8serrors.IsNotFound(statusError) {
-		for _, causeMsg := range causeMessages {
-			if strings.Contains(causeMsg, "unknown app") ||
-				strings.Contains(causeMsg, "no such app") {
-				wrappedErr = newUnknownAppError(wrappedErr)
-				break
-			}
-		}
-	}
-
-	if k8serrors.IsServiceUnavailable(statusError) {
+		wrappedErr = newUnknownAppError(wrappedErr)
+	} else if k8serrors.IsServiceUnavailable(statusError) {
 		wrappedErr = newServiceUnavailableError(wrappedErr)
 	}
 
