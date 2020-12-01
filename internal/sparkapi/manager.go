@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spotinst/wave-operator/internal/sparkapi/client/transport"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/spotinst/wave-operator/catalog"
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
+	"github.com/spotinst/wave-operator/internal/sparkapi/client/transport"
 )
 
 const (

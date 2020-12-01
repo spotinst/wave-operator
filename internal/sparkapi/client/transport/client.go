@@ -3,9 +3,10 @@ package transport
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
-	"strings"
 )
 
 type Client interface {
