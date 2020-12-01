@@ -4,13 +4,16 @@ import sys
 import os
 import pyinotify
 import requests
+import time
 
 sourceDir = sys.argv[1]
 targetDir = sys.argv[2]
 
-manager = pyinotify.WatchManager()
-mask = pyinotify.IN_DELETE | pyinotify.IN_MODIFY | pyinotify.IN_CREATE
-manager.add_watch(sourceDir, rec=True, mask=mask)
+frequency = "forever"
+if len(sys.argv) > 3:
+    frequency = sys.argv[3]
+
+print("running sync on {} -> {} {}\n".format(sourceDir, targetDir, frequency), flush=True)
 
 
 class CredentialProvider:
@@ -37,11 +40,19 @@ provider = CredentialProvider()
 
 
 # use "copy", not "sync": don't delete files in target directory
-def handler(ev):
+def sync(ev):
     c = provider.load()
     credentialArg = """--s3-access-key-id {} --s3-secret-access-key {} --s3-session-token {}""".format(c["AccessKeyId"], c["SecretAccessKey"], c["Token"])
-    os.system("""rclone --exclude '*.inprogress' {} {} copy {} {} """.format(regionArg, credentialArg, sourceDir, targetDir))
+    print("""rclone {} copy {} {} """.format(regionArg, sourceDir, targetDir), flush=True)
+    os.system("""rclone {} {} copy {} {} """.format(regionArg, credentialArg, sourceDir, targetDir))
 
 
-notifier = pyinotify.Notifier(manager, handler)
-notifier.loop()
+if frequency == "forever":
+    manager = pyinotify.WatchManager()
+    mask = pyinotify.IN_DELETE | pyinotify.IN_MODIFY | pyinotify.IN_CREATE
+    manager.add_watch(sourceDir, rec=True, mask=mask)
+    notifier = pyinotify.Notifier(manager, sync)
+    notifier.loop()
+else:
+    time.sleep(1)
+    sync(None)

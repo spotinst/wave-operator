@@ -72,10 +72,17 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 	newSpec.Containers = append(newSpec.Containers, corev1.Container{
 		Name:            "storage-sync",
 		Image:           "ntfrnzn/cloud-storage-sync",
-		ImagePullPolicy: corev1.PullIfNotPresent,
+		ImagePullPolicy: corev1.PullAlways,
 		Command:         []string{"/tini"},
 		Args:            []string{"--", "python3", "sync.py", volumeMount.MountPath, "spark:" + storageInfo.Name},
 		Env:             []corev1.EnvVar{{Name: "S3_REGION", Value: storageInfo.Region}},
+		Lifecycle: &corev1.Lifecycle{
+			PreStop: &corev1.Handler{
+				Exec: &corev1.ExecAction{
+					Command: []string{"python3", "sync.py", volumeMount.MountPath, "spark:" + storageInfo.Name, "once"},
+				},
+			},
+		},
 	})
 
 	for i := range newSpec.Containers {
