@@ -96,6 +96,12 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil // Just log error
 	}
 
+	heritage, err := getHeritage(p)
+	if err != nil {
+		log.Error(err, "could not get heritage")
+		return ctrl.Result{}, nil // Just log error
+	}
+
 	log = r.Log.WithValues("name", p.Name, "namespace", p.Namespace, "sparkApplicationId", sparkApplicationId,
 		"role", sparkRole, "phase", p.Status.Phase, "deleted", !p.ObjectMeta.DeletionTimestamp.IsZero())
 
@@ -156,7 +162,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Set owner reference driver pod -> spark application CR if needed
-	changed = setPodOwnerReference(p, sparkRole, cr)
+	changed = setPodOwnerReference(p, sparkRole, heritage, cr)
 	if changed {
 		err := r.Client.Update(ctx, p)
 		if err != nil {
@@ -237,12 +243,15 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 	deepCopy.Status.Data.Driver = driverPodCr
 
 	// Fetch information from Spark API
+	// Let's update the driver pod information even though the Spark API call fails
+
+	var sparkApiError error
 	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationId, log)
 	if err != nil {
-		return fmt.Errorf("could not get spark api application information, %w", err)
+		sparkApiError = fmt.Errorf("could not get spark api application information, %w", err)
+	} else {
+		mapSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
 	}
-
-	mapSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
 
 	// Make sure we have an application name
 	if deepCopy.Spec.ApplicationName == "" {
@@ -254,16 +263,20 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 		return fmt.Errorf("patch error, %w", err)
 	}
 
+	if sparkApiError != nil {
+		return sparkApiError
+	}
+
 	log.Info("Finished handling driver pod")
 
 	return nil
 }
 
-func setPodOwnerReference(pod *corev1.Pod, role string, cr *v1alpha1.SparkApplication) bool {
+func setPodOwnerReference(pod *corev1.Pod, role string, heritage v1alpha1.SparkHeritage, cr *v1alpha1.SparkApplication) bool {
 	if role != DriverRole {
 		return false
 	}
-	if !(cr.Spec.Heritage == v1alpha1.SparkHeritageSubmit || cr.Spec.Heritage == v1alpha1.SparkHeritageJupyter) {
+	if !(heritage == v1alpha1.SparkHeritageSubmit || heritage == v1alpha1.SparkHeritageJupyter) {
 		return false
 	}
 	if len(pod.OwnerReferences) != 0 {
@@ -461,7 +474,8 @@ func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, dr
 	}
 	cr.Spec.Heritage = heritage
 
-	cr.Status.Data.Driver.Statuses = make([]corev1.ContainerStatus, 0)
+	cr.Status.Data.Driver = newPodCR(driverPod)
+
 	cr.Status.Data.Executors = make([]v1alpha1.Pod, 0)
 	cr.Status.Data.RunStatistics.Attempts = make([]v1alpha1.Attempt, 0)
 	cr.Status.Data.SparkProperties = make(map[string]string)

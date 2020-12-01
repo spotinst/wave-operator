@@ -120,6 +120,7 @@ func TestReconcile_driver_garbageCollectionEvent(t *testing.T) {
 		Name:       sparkAppId,
 		UID:        "123-456-789-5555",
 	}}
+	pod.Finalizers = []string{sparkApplicationFinalizerName}
 
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
 	clientSet := k8sfake.NewSimpleClientset()
@@ -142,6 +143,12 @@ func TestReconcile_driver_garbageCollectionEvent(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, ctrlrt.Result{}, res)
 
+	// Finalizer should have been removed
+	updatedPod := &corev1.Pod{}
+	err = ctrlClient.Get(ctx, client.ObjectKey{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(updatedPod.Finalizers))
+
 	// No spark application CR should have been created
 	crList := &v1alpha1.SparkApplicationList{}
 	err = ctrlClient.List(ctx, crList, &client.ListOptions{
@@ -156,9 +163,18 @@ func TestReconcile_driver_whenSparkApiCommunicationFails(t *testing.T) {
 
 	sparkAppId := "spark-123456"
 
-	pod := getTestPod("test-ns", "test-driver", "123-456", DriverRole, sparkAppId, false)
+	cr := getMinimalTestCr("test-ns", sparkAppId)
 
-	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
+	pod := getTestPod("test-ns", "test-driver", "123-456", DriverRole, sparkAppId, false)
+	pod.Finalizers = []string{sparkApplicationFinalizerName}
+	pod.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: apiVersion,
+		Kind:       sparkApplicationKind,
+		Name:       cr.Name,
+		UID:        cr.UID,
+	}}
+
+	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
 	clientSet := k8sfake.NewSimpleClientset()
 
 	// Mock Spark API manager
@@ -178,17 +194,14 @@ func TestReconcile_driver_whenSparkApiCommunicationFails(t *testing.T) {
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
 	}
 
-	res, err := controller.Reconcile(ctx, req)
-	assert.NoError(t, err) // Shouldn't error, just requeue
-	assert.Equal(t, ctrlrt.Result{Requeue: true, RequeueAfter: requeueAfterTimeout}, res)
+	_, err := controller.Reconcile(ctx, req)
+	assert.Error(t, err)
 
+	// Still want to have updated the driver pod info in the CR
 	createdCr := &v1alpha1.SparkApplication{}
 	err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppId, Namespace: pod.Namespace}, createdCr)
 	require.NoError(t, err)
-
 	verifyCrPod(t, pod, createdCr.Status.Data.Driver, false)
-	assert.Equal(t, pod.Name, createdCr.Spec.ApplicationName) // Fall back on driver name
-	assert.Equal(t, sparkAppId, createdCr.Spec.ApplicationId)
 }
 
 func TestReconcile_driver_whenSuccessful(t *testing.T) {
@@ -218,11 +231,48 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
 	}
 
+	// First reconcile - finalizer added
 	res, err := controller.Reconcile(ctx, req)
 	assert.NoError(t, err)
-	assert.Equal(t, ctrlrt.Result{Requeue: true, RequeueAfter: requeueAfterTimeout}, res) // Requeue running driver
+	assert.Equal(t, ctrlrt.Result{Requeue: true}, res)
+
+	updatedPod := &corev1.Pod{}
+	err = ctrlClient.Get(ctx, client.ObjectKey{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(updatedPod.Finalizers))
+
+	// Second reconcile - cr created
+	res, err = controller.Reconcile(ctx, req)
+	assert.NoError(t, err)
+	assert.Equal(t, ctrlrt.Result{Requeue: true}, res)
 
 	createdCr := &v1alpha1.SparkApplication{}
+	err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppId, Namespace: pod.Namespace}, createdCr)
+	require.NoError(t, err)
+	assert.Equal(t, sparkAppId, createdCr.Name)
+	assert.Equal(t, pod.Namespace, createdCr.Namespace)
+	// Application name == driver name until we learn otherwise from Spark API
+	assert.Equal(t, pod.Name, createdCr.Spec.ApplicationName)
+	assert.Equal(t, v1alpha1.SparkHeritageSubmit, createdCr.Spec.Heritage)
+	assert.Equal(t, sparkAppId, createdCr.Spec.ApplicationId)
+	verifyCrPod(t, pod, createdCr.Status.Data.Driver, false)
+
+	// Third reconcile - owner reference added
+	res, err = controller.Reconcile(ctx, req)
+	assert.NoError(t, err)
+	assert.Equal(t, ctrlrt.Result{Requeue: true}, res)
+
+	err = ctrlClient.Get(ctx, client.ObjectKey{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
+	require.NoError(t, err)
+	assert.Equal(t, 1, len(updatedPod.OwnerReferences))
+	assert.Equal(t, createdCr.Name, updatedPod.OwnerReferences[0].Name)
+
+	// Fourth reconcile - cr updated
+	res, err = controller.Reconcile(ctx, req)
+	assert.NoError(t, err)
+	assert.Equal(t, ctrlrt.Result{Requeue: true, RequeueAfter: requeueAfterTimeout}, res)
+
+	createdCr = &v1alpha1.SparkApplication{}
 	err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppId, Namespace: pod.Namespace}, createdCr)
 	require.NoError(t, err)
 
@@ -243,7 +293,9 @@ func TestReconcile_executor_whenSuccessful(t *testing.T) {
 	ns := "test-ns"
 
 	exec1 := getTestPod(ns, "exec1", "123890", ExecutorRole, applicationId, false)
+	exec1.Finalizers = []string{sparkApplicationFinalizerName}
 	exec2 := getTestPod(ns, "exec2", "456789", ExecutorRole, applicationId, false)
+	exec2.Finalizers = []string{sparkApplicationFinalizerName}
 
 	cr := getMinimalTestCr(ns, applicationId)
 
@@ -315,6 +367,9 @@ func TestReconcile_executor_whenCrDoesntExist(t *testing.T) {
 				SparkAppLabel:  "spark-123456",
 				SparkRoleLabel: ExecutorRole,
 			},
+			Finalizers: []string{
+				sparkApplicationFinalizerName,
+			},
 		},
 	}
 
@@ -329,7 +384,7 @@ func TestReconcile_executor_whenCrDoesntExist(t *testing.T) {
 
 	_, err := controller.Reconcile(ctx, req)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "could not get spark application cr")
+	assert.Contains(t, err.Error(), "spark application cr not found")
 }
 
 func TestReconcile_finalizer_add(t *testing.T) {
@@ -445,6 +500,7 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 
 			cr := getMinimalTestCr(ns, sparkAppId)
 			pod := getTestPod(ns, "test-driver", "123-456", DriverRole, sparkAppId, false)
+			pod.Finalizers = []string{sparkApplicationFinalizerName}
 
 			for k, v := range tc.heritagePodLabels {
 				pod.Labels[k] = v
@@ -466,7 +522,7 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 
 			// Mock Spark API manager
 			m := mock_sparkapi.NewMockManager(ctrl)
-			m.EXPECT().GetApplicationInfo(sparkAppId).Return(getTestApplicationInfo(), nil).Times(1)
+			m.EXPECT().GetApplicationInfo(sparkAppId).Return(getTestApplicationInfo(), nil).AnyTimes()
 
 			var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
 				return m, nil
