@@ -79,7 +79,8 @@ func decorateError(err error, statusError *k8serrors.StatusError) error {
 
 	if k8serrors.IsNotFound(statusError) {
 		for _, causeMsg := range causeMessages {
-			if strings.Contains(causeMsg, "unknown app") {
+			if strings.Contains(causeMsg, "unknown app") ||
+				strings.Contains(causeMsg, "no such app") {
 				wrappedErr = newUnknownAppError(wrappedErr)
 				break
 			}
