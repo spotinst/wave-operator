@@ -26,7 +26,7 @@ const (
 	ExecutorRole   = "executor"
 
 	AppLabel                       = "app"
-	AppLabelValueEnterpriseGateway = "enterprise-gateway"
+	AppEnterpriseGatewayLabelValue = "enterprise-gateway"
 	SparkOperatorLaunchedByLabel   = "sparkoperator.k8s.io/launched-by-spark-operator"
 
 	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
@@ -74,7 +74,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if !k8serrors.IsNotFound(err) {
 			log.Error(err, "cannot get pod")
 		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, err
 	}
 
 	sparkApplicationId, ok := p.Labels[SparkAppLabel]
@@ -96,30 +96,86 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil // Just log error
 	}
 
-	// Set finalizer
-	if p.ObjectMeta.DeletionTimestamp.IsZero() {
-		if !containsString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
-			deepCopy := p.DeepCopy()
-			deepCopy.ObjectMeta.Finalizers = append(deepCopy.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
-			log.Info("Adding finalizer")
-			err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(p))
-			if err != nil {
-				log.Error(err, "could not set finalizer")
+	log = r.Log.WithValues("name", p.Name, "namespace", p.Namespace, "sparkApplicationId", sparkApplicationId,
+		"role", sparkRole, "phase", p.Status.Phase, "deleted", !p.ObjectMeta.DeletionTimestamp.IsZero())
+
+	// Add finalizer if needed
+	changed := addFinalizer(p)
+	if changed {
+		err := r.Client.Update(ctx, p)
+		if err != nil {
+			log.Error(err, "could not add finalizer")
+			return ctrl.Result{}, err
+		}
+		log.Info("Finalizer added")
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// Get or create Spark application CR
+	cr, err := r.getSparkApplicationCr(ctx, p.Namespace, sparkApplicationId)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			if !p.DeletionTimestamp.IsZero() && hasWaveSparkApplicationOwnerRef(p, sparkApplicationId) {
+				// The Wave Spark application CR does not exist but the pod has an owner reference to it,
+				// and the pod is being deleted -> this is a garbage collection event
+				changed = removeFinalizer(p)
+				if changed {
+					err := r.Client.Update(ctx, p)
+					if err != nil {
+						log.Error(err, "could not remove finalizer")
+						return ctrl.Result{}, err
+					}
+					log.Info("Finalizer removed")
+				}
+				log.Info("Ignoring garbage collection event")
+				return ctrl.Result{}, nil
+			} else if sparkRole == DriverRole {
+				err := r.createNewSparkApplicationCr(ctx, p, sparkApplicationId)
+				if err != nil {
+					log.Error(err, "could not create spark application cr")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{Requeue: true}, nil
+			} else {
+				log.Info("Spark application CR not found")
+				err := fmt.Errorf("spark application cr not found")
 				return ctrl.Result{}, err
 			}
+		} else {
+			log.Error(err, "could not get spark application cr")
+			return ctrl.Result{}, err
 		}
 	}
 
-	shouldRequeue := false
+	// Set owner reference driver pod -> spark application CR if needed
+	changed = setPodOwnerReference(p, sparkRole, cr)
+	if changed {
+		err := r.Client.Update(ctx, p)
+		if err != nil {
+			log.Error(err, "could not set owner reference")
+			return ctrl.Result{}, err
+		}
+		log.Info("Added owner reference")
+		return ctrl.Result{Requeue: true}, nil
+	}
+
 	switch sparkRole {
 	case DriverRole:
-		shouldRequeue, err = r.handleDriver(ctx, sparkApplicationId, p)
+		err := r.handleDriver(ctx, p, cr, log)
 		if err != nil {
 			log.Error(err, "error handling driver pod")
 			return ctrl.Result{}, err
 		}
+		// Requeue running drivers
+		if p.Status.Phase == corev1.PodRunning {
+			log.Info("Requeue running driver")
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: requeueAfterTimeout,
+			}, nil
+		}
 	case ExecutorRole:
-		err = r.handleExecutor(ctx, sparkApplicationId, p)
+		err = r.handleExecutor(ctx, p, cr, log)
 		if err != nil {
 			log.Error(err, "error handling executor pod")
 			return ctrl.Result{}, err
@@ -130,25 +186,15 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Error(err, "error handling spark pod")
 	}
 
-	// Remove finalizer
-	if !p.ObjectMeta.DeletionTimestamp.IsZero() && !shouldRequeue {
-		if containsString(p.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
-			deepCopy := p.DeepCopy()
-			deepCopy.ObjectMeta.Finalizers = removeString(deepCopy.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
-			log.Info("Removing finalizer")
-			err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(p))
-			if err != nil {
-				log.Error(err, "could not remove finalizer")
-				return ctrl.Result{}, err
-			}
+	// Remove finalizer if needed
+	changed = removeFinalizer(p)
+	if changed {
+		err := r.Client.Update(ctx, p)
+		if err != nil {
+			log.Error(err, "could not remove finalizer")
+			return ctrl.Result{}, err
 		}
-	}
-
-	if shouldRequeue {
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: requeueAfterTimeout,
-		}, nil
+		log.Info("Finalizer removed")
 	}
 
 	return ctrl.Result{}, nil
@@ -160,141 +206,90 @@ func (r *SparkPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *SparkPodReconciler) handleDriver(ctx context.Context, applicationId string, pod *corev1.Pod) (bool, error) {
-	log := r.Log.WithValues("name", pod.Name, "namespace", pod.Namespace, "sparkApplicationId", applicationId)
-	log.Info("Handling driver pod", "phase", pod.Status.Phase, "deleted", !pod.ObjectMeta.DeletionTimestamp.IsZero())
-
-	// Get application CR if it exists, otherwise build new one, unless the pod is being garbage collected
-	crExists := true
-	cr, err := r.getSparkApplicationCr(ctx, pod.Namespace, applicationId)
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			if !pod.DeletionTimestamp.IsZero() && hasWaveSparkApplicationOwnerRef(pod, applicationId) {
-				// The Wave Spark application CR does not exist, the pod has an owner reference to it,
-				// and the pod is being deleted
-				// -> assume this is a garbage collection event and don't re-create the CR
-				log.Info("Ignoring garbage collection event")
-				return false, nil
-			}
-			crExists = false
-			cr = &v1alpha1.SparkApplication{}
-		} else {
-			return false, fmt.Errorf("could not get spark application cr, %w", err)
-		}
-	}
+func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, cr *v1alpha1.SparkApplication, log logr.Logger) error {
+	log.Info("Handling driver pod")
 
 	deepCopy := cr.DeepCopy()
-
-	deepCopy.Name = applicationId
-	deepCopy.Namespace = pod.Namespace
-	deepCopy.Spec.ApplicationId = applicationId
-
-	heritage, err := getHeritage(pod)
-	if err != nil {
-		return false, fmt.Errorf("could not get heritage, %w", err)
-	}
-	deepCopy.Spec.Heritage = heritage
 
 	driverPodCr := newPodCR(pod)
 	deepCopy.Status.Data.Driver = driverPodCr
 
 	// Fetch information from Spark API
-	sparkApiSuccess := false
-	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, applicationId, log)
+	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationId, log)
 	if err != nil {
-		// Best effort, just log error
-		log.Error(err, "could not get spark api application information")
-	} else {
-		sparkApiSuccess = true
-		mapSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
+		return fmt.Errorf("could not get spark api application information, %w", err)
 	}
 
-	// We always need an application name, set it to driver pod name if it isn't set already
+	mapSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
+
+	// Make sure we have an application name
 	if deepCopy.Spec.ApplicationName == "" {
 		deepCopy.Spec.ApplicationName = pod.Name
 	}
 
-	if crExists {
-		err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
-		if err != nil {
-			return false, fmt.Errorf("patch error, %w", err)
-		}
-	} else {
-		err := r.createSparkApplicationCr(ctx, deepCopy)
-		if err != nil {
-			return false, fmt.Errorf("could not create spark application cr, %w", err)
-		}
+	err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
+	if err != nil {
+		return fmt.Errorf("patch error, %w", err)
 	}
 
-	// Set owner reference driver pod -> spark application CR if needed
-	shouldSetOwnerReference := shouldSetPodOwnerReference(pod, heritage)
-	if shouldSetOwnerReference {
-		podOwnerReferenceChanged := false
-		podDeepCopy := pod.DeepCopy()
+	log.Info("Finished handling driver pod")
 
-		if !crExists {
-			// Get the newly created spark application CR
-			createdCr, err := r.getSparkApplicationCr(ctx, pod.Namespace, applicationId)
-			if err != nil {
-				return false, fmt.Errorf("could not get newly created spark application cr, %w", err)
-			}
-			podOwnerReferenceChanged = setPodOwnerReference(podDeepCopy, createdCr)
-		} else {
-			podOwnerReferenceChanged = setPodOwnerReference(podDeepCopy, deepCopy)
-		}
-
-		if podOwnerReferenceChanged {
-			log.Info("Patching driver pod with owner reference")
-			err := r.Client.Patch(ctx, podDeepCopy, client.MergeFrom(pod))
-			if err != nil {
-				return false, fmt.Errorf("patch pod error, %w", err)
-			}
-		}
-	}
-
-	shouldRequeue := false
-
-	// Requeue if we were unsuccessful in communicating with Spark API,
-	// or if the driver pod is still running
-	if !sparkApiSuccess || pod.Status.Phase == corev1.PodRunning {
-		shouldRequeue = true
-	}
-
-	log.Info("Finished handling driver pod", "requeue", shouldRequeue)
-	return shouldRequeue, nil
+	return nil
 }
 
-func shouldSetPodOwnerReference(pod *corev1.Pod, heritage v1alpha1.SparkHeritage) bool {
-	if !(heritage == v1alpha1.SparkHeritageSubmit || heritage == v1alpha1.SparkHeritageJupyter) {
+func setPodOwnerReference(pod *corev1.Pod, role string, cr *v1alpha1.SparkApplication) bool {
+	if role != DriverRole {
+		return false
+	}
+	if !(cr.Spec.Heritage == v1alpha1.SparkHeritageSubmit || cr.Spec.Heritage == v1alpha1.SparkHeritageJupyter) {
 		return false
 	}
 	if len(pod.OwnerReferences) != 0 {
 		return false
 	}
+
+	// This controller is a pod controller, not a Spark Application CR controller
+	ownedByController := false
+	// We still want the pod to be garbage collected immediately when the CR is deleted
+	blockOwnerDeletion := true
+
+	ownerRef := v1.OwnerReference{
+		APIVersion:         cr.APIVersion,
+		Kind:               cr.Kind,
+		Name:               cr.Name,
+		UID:                cr.UID,
+		Controller:         &ownedByController,
+		BlockOwnerDeletion: &blockOwnerDeletion,
+	}
+
+	if pod.OwnerReferences == nil {
+		pod.OwnerReferences = make([]v1.OwnerReference, 0, 1)
+	}
+
+	pod.OwnerReferences = append(pod.OwnerReferences, ownerRef)
+
 	return true
 }
 
-func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
+func addFinalizer(pod *corev1.Pod) bool {
 	changed := false
-
-	if cr.UID != "" && len(pod.OwnerReferences) == 0 {
-		ownedByController := false // This controller is a pod controller, not a Spark Application CR controller
-		blockOwnerDeletion := true // We still want the pod to be garbage collected immediately when the CR is deleted
-		ownerRef := v1.OwnerReference{
-			APIVersion:         cr.APIVersion,
-			Kind:               cr.Kind,
-			Name:               cr.Name,
-			UID:                cr.UID,
-			Controller:         &ownedByController,
-			BlockOwnerDeletion: &blockOwnerDeletion,
+	if pod.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !containsString(pod.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
+			pod.ObjectMeta.Finalizers = append(pod.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
+			changed = true
 		}
+	}
 
-		if pod.OwnerReferences == nil {
-			pod.OwnerReferences = make([]v1.OwnerReference, 0, 1)
+	return changed
+}
+
+func removeFinalizer(pod *corev1.Pod) bool {
+	changed := false
+	if !pod.ObjectMeta.DeletionTimestamp.IsZero() {
+		if containsString(pod.ObjectMeta.Finalizers, sparkApplicationFinalizerName) {
+			pod.ObjectMeta.Finalizers = removeString(pod.ObjectMeta.Finalizers, sparkApplicationFinalizerName)
+			changed = true
 		}
-
-		pod.OwnerReferences = append(pod.OwnerReferences, ownerRef)
-		changed = true
 	}
 
 	return changed
@@ -312,15 +307,8 @@ func hasWaveSparkApplicationOwnerRef(pod *corev1.Pod, applicationId string) bool
 	return false
 }
 
-func (r *SparkPodReconciler) handleExecutor(ctx context.Context, applicationId string, pod *corev1.Pod) error {
-	log := r.Log.WithValues("name", pod.Name, "namespace", pod.Namespace, "sparkApplicationId", applicationId)
-	log.Info("Handling executor pod", "phase", pod.Status.Phase, "deleted", !pod.ObjectMeta.DeletionTimestamp.IsZero())
-
-	cr, err := r.getSparkApplicationCr(ctx, pod.Namespace, applicationId)
-	if err != nil {
-		// CR should be created during driver reconciliation
-		return fmt.Errorf("could not get spark application cr, %w", err)
-	}
+func (r *SparkPodReconciler) handleExecutor(ctx context.Context, pod *corev1.Pod, cr *v1alpha1.SparkApplication, log logr.Logger) error {
+	log.Info("Handling executor pod")
 
 	deepCopy := cr.DeepCopy()
 
@@ -344,7 +332,7 @@ func (r *SparkPodReconciler) handleExecutor(ctx context.Context, applicationId s
 		deepCopy.Status.Data.Executors[foundIdx] = updatedExecutor
 	}
 
-	err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
+	err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
 	if err != nil {
 		return fmt.Errorf("patch error, %w", err)
 	}
@@ -409,7 +397,7 @@ func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 }
 
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
-	if pod.Labels[AppLabel] == AppLabelValueEnterpriseGateway {
+	if pod.Labels[AppLabel] == AppEnterpriseGatewayLabelValue {
 		return v1alpha1.SparkHeritageJupyter, nil
 	}
 
@@ -436,21 +424,30 @@ func (r *SparkPodReconciler) getSparkApplicationCr(ctx context.Context, namespac
 	return &app, nil
 }
 
-func (r *SparkPodReconciler) createSparkApplicationCr(ctx context.Context, application *v1alpha1.SparkApplication) error {
+func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, driverPod *corev1.Pod, applicationId string) error {
+	cr := &v1alpha1.SparkApplication{}
 
-	if application.Status.Data.Executors == nil {
-		application.Status.Data.Executors = make([]v1alpha1.Pod, 0)
+	cr.Name = applicationId
+	cr.Namespace = driverPod.Namespace
+	cr.Spec.ApplicationId = applicationId
+	// We always need an application name, set it to driver pod name (will be updated with application name from Spark API)
+	cr.Spec.ApplicationName = driverPod.Name
+
+	heritage, err := getHeritage(driverPod)
+	if err != nil {
+		return fmt.Errorf("could not get heritage, %w", err)
+	}
+	cr.Spec.Heritage = heritage
+
+	cr.Status.Data.Driver.Statuses = make([]corev1.ContainerStatus, 0)
+	cr.Status.Data.Executors = make([]v1alpha1.Pod, 0)
+	cr.Status.Data.RunStatistics.Attempts = make([]v1alpha1.Attempt, 0)
+	cr.Status.Data.SparkProperties = make(map[string]string)
+
+	err = r.Create(ctx, cr)
+	if err != nil {
+		return fmt.Errorf("could not create cr, %w", err)
 	}
 
-	if application.Status.Data.RunStatistics.Attempts == nil {
-		application.Status.Data.RunStatistics.Attempts = make([]v1alpha1.Attempt, 0)
-	}
-
-	if application.Status.Data.SparkProperties == nil {
-		application.Status.Data.SparkProperties = make(map[string]string)
-	}
-
-	err := r.Create(ctx, application)
-
-	return err
+	return nil
 }

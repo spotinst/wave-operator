@@ -411,7 +411,7 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 		},
 		{
 			heritagePodLabels: map[string]string{
-				AppLabel: AppLabelValueEnterpriseGateway,
+				AppLabel: AppEnterpriseGatewayLabelValue,
 			},
 			shouldAddOwnerRef:      true,
 			podHasExistingOwnerRef: false,
@@ -427,7 +427,7 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 		},
 		{
 			heritagePodLabels: map[string]string{
-				AppLabel: AppLabelValueEnterpriseGateway,
+				AppLabel: AppEnterpriseGatewayLabelValue,
 			},
 			shouldAddOwnerRef:      false,
 			podHasExistingOwnerRef: true,
