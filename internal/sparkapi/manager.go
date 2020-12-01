@@ -2,7 +2,9 @@ package sparkapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/spotinst/wave-operator/internal/sparkapi/client/transport"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -190,5 +192,19 @@ func isSparkDriverRunning(driverPod *corev1.Pod) bool {
 		}
 	}
 
+	return false
+}
+
+func IsServiceUnavailableError(err error) bool {
+	if errors.As(err, &transport.ServiceUnavailableError{}) {
+		return true
+	}
+	return false
+}
+
+func IsApplicationNotFoundError(err error) bool {
+	if errors.As(err, &transport.UnknownAppError{}) {
+		return true
+	}
 	return false
 }

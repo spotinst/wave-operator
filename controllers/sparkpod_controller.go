@@ -175,7 +175,13 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	case DriverRole:
 		err := r.handleDriver(ctx, p, cr, log)
 		if err != nil {
-			log.Error(err, "error handling driver pod")
+			// Check for expected Spark API communication errors
+			if sparkapi.IsApplicationNotFoundError(err) ||
+				sparkapi.IsServiceUnavailableError(err) {
+				log.Info(fmt.Sprintf("Spark API error: %s", err.Error()))
+			} else {
+				log.Error(err, "error handling driver pod")
+			}
 			return ctrl.Result{}, err
 		}
 		// Requeue running drivers

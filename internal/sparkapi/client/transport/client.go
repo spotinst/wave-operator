@@ -5,6 +5,7 @@ import (
 	"fmt"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
+	"strings"
 )
 
 type Client interface {
@@ -73,5 +74,54 @@ func decorateError(err error, statusError *k8serrors.StatusError) error {
 		}
 	}
 
-	return fmt.Errorf("code: %d, reason: %s, causes: %s, %w", code, reason, causeMessages, err)
+	wrappedErr := fmt.Errorf("code: %d, reason: %s, causes: %s, %w", code, reason, causeMessages, err)
+
+	if k8serrors.IsNotFound(statusError) {
+		for _, causeMsg := range causeMessages {
+			if strings.Contains(causeMsg, "unknown app") {
+				wrappedErr = newUnknownAppError(wrappedErr)
+				break
+			}
+		}
+	}
+
+	if k8serrors.IsServiceUnavailable(statusError) {
+		wrappedErr = newServiceUnavailableError(wrappedErr)
+	}
+
+	return wrappedErr
+}
+
+// UnknownAppError indicates that the app was not found
+type UnknownAppError struct {
+	err error
+}
+
+func newUnknownAppError(err error) UnknownAppError {
+	return UnknownAppError{err: err}
+}
+
+func (e UnknownAppError) Error() string {
+	return fmt.Sprintf("unknown app error: %s", e.err.Error())
+}
+
+func (e UnknownAppError) Unwrap() error {
+	return e.err
+}
+
+// ServiceUnavailableError indicates that the Spark API is unavailable
+type ServiceUnavailableError struct {
+	err error
+}
+
+func newServiceUnavailableError(err error) ServiceUnavailableError {
+	return ServiceUnavailableError{err: err}
+}
+
+func (e ServiceUnavailableError) Error() string {
+	return fmt.Sprintf("service unavailable error: %s", e.err.Error())
+}
+
+func (e ServiceUnavailableError) Unwrap() error {
+	return e.err
 }
