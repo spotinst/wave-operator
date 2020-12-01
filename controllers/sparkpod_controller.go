@@ -104,7 +104,11 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if changed {
 		err := r.Client.Update(ctx, p)
 		if err != nil {
-			log.Error(err, "could not add finalizer")
+			if k8serrors.IsConflict(err) {
+				log.Info(fmt.Sprintf("could not add finalizer, conflict error: %s", err.Error()))
+			} else {
+				log.Error(err, "could not add finalizer")
+			}
 			return ctrl.Result{}, err
 		}
 		log.Info("Finalizer added")
@@ -122,7 +126,11 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				if changed {
 					err := r.Client.Update(ctx, p)
 					if err != nil {
-						log.Error(err, "could not remove finalizer")
+						if k8serrors.IsConflict(err) {
+							log.Info(fmt.Sprintf("could not remove finalizer, conflict error: %s", err.Error()))
+						} else {
+							log.Error(err, "could not remove finalizer")
+						}
 						return ctrl.Result{}, err
 					}
 					log.Info("Finalizer removed")
@@ -152,7 +160,11 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if changed {
 		err := r.Client.Update(ctx, p)
 		if err != nil {
-			log.Error(err, "could not set owner reference")
+			if k8serrors.IsConflict(err) {
+				log.Info(fmt.Sprintf("could not set owner reference, conflict error: %s", err.Error()))
+			} else {
+				log.Error(err, "could not set owner reference")
+			}
 			return ctrl.Result{}, err
 		}
 		log.Info("Added owner reference")
@@ -191,7 +203,11 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if changed {
 		err := r.Client.Update(ctx, p)
 		if err != nil {
-			log.Error(err, "could not remove finalizer")
+			if k8serrors.IsConflict(err) {
+				log.Info(fmt.Sprintf("could not remove finalizer, conflict error: %s", err.Error()))
+			} else {
+				log.Error(err, "could not remove finalizer")
+			}
 			return ctrl.Result{}, err
 		}
 		log.Info("Finalizer removed")
