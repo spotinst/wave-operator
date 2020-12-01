@@ -184,23 +184,11 @@ func isSparkDriverRunning(driverPod *corev1.Pod) bool {
 		return false
 	}
 
-	if driverPod.Status.ContainerStatuses == nil {
-		return false
-	}
-
-	foundDriverContainer := false
 	for _, containerStatus := range driverPod.Status.ContainerStatuses {
-		if containerStatus.Name == sparkDriverContainerName {
-			foundDriverContainer = true
-			if !containerStatus.Ready {
-				return false
-			}
+		if containerStatus.Name == sparkDriverContainerName && containerStatus.Ready {
+			return true
 		}
 	}
 
-	if !foundDriverContainer {
-		return false
-	}
-
-	return true
+	return false
 }
