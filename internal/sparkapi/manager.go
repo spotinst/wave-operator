@@ -57,18 +57,16 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 
 	// Get client for driver pod
 	if isSparkDriverRunning(driverPod) {
-		logger.Info("Using driver pod client")
 		return sparkapiclient.NewDriverPodClient(driverPod, clientSet), nil
 	}
 
-	logger.Info("Driver pod/container not running, will use history server")
+	logger.Info("Driver pod/container not running, will use history server Spark API client")
 
 	// Get client for history server
 	historyServerService, err := getHistoryServerService(clientSet)
 	if err != nil {
 		logger.Info(fmt.Sprintf("Could not get history server service, error: %s", err.Error()))
 	} else {
-		logger.Info("Using history server client")
 		return sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
 	}
 
@@ -78,8 +76,6 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, error) {
 
 	applicationInfo := &ApplicationInfo{}
-
-	m.logger.Info("Will call Spark API")
 
 	application, err := m.client.GetApplication(applicationId)
 	if err != nil {
@@ -127,8 +123,6 @@ func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, err
 	applicationInfo.TotalOutputBytes = totalOutputBytes
 	applicationInfo.TotalInputBytes = totalInputBytes
 	applicationInfo.TotalExecutorCpuTime = totalExecutorCpuTime
-
-	m.logger.Info("Finished calling Spark API")
 
 	return applicationInfo, nil
 }

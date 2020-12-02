@@ -37,6 +37,9 @@ const (
 	requeueAfterTimeout = 10 * time.Second
 )
 
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=wave.spot.io,resources=sparkapplications,verbs=get;list;watch;create;update;patch;delete
+
 // SparkPodReconciler reconciles Pod objects to discover Spark applications
 type SparkPodReconciler struct {
 	client.Client
@@ -261,8 +264,6 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 		return sparkApiError
 	}
 
-	log.Info("Finished handling driver pod")
-
 	return nil
 }
 
@@ -379,8 +380,6 @@ func (r *SparkPodReconciler) handleExecutor(ctx context.Context, pod *corev1.Pod
 	if err != nil {
 		return fmt.Errorf("patch error, %w", err)
 	}
-
-	log.Info("Finished handling executor pod")
 
 	return nil
 }
