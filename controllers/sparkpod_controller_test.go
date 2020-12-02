@@ -730,7 +730,14 @@ func getTestPod(namespace string, name string, uid string, role string, applicat
 				SparkRoleLabel: role,
 			},
 		},
-		Spec: corev1.PodSpec{},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "spark-kubernetes-driver",
+					Image: "doesnt-matter",
+				},
+			},
+		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{

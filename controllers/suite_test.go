@@ -18,6 +18,8 @@ package controllers
 
 import (
 	"context"
+	"github.com/spotinst/wave-operator/internal/sparkapi"
+	"k8s.io/client-go/kubernetes"
 	"path/filepath"
 	"testing"
 	"time"
@@ -92,6 +94,11 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(componentList.Items).To(BeEmpty())
 
+	sparkApplicationList := &v1alpha1.SparkApplicationList{}
+	err = k8sClient.List(context.Background(), sparkApplicationList)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(sparkApplicationList.Items).To(BeEmpty())
+
 	controller := NewWaveComponentReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetConfig(),
@@ -100,6 +107,19 @@ var _ = BeforeSuite(func(done Done) {
 		k8sManager.GetScheme(),
 	)
 	err = controller.SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	clientSet, err := kubernetes.NewForConfig(k8sManager.GetConfig())
+	Expect(err).ToNot(HaveOccurred())
+
+	sparkPodController := NewSparkPodReconciler(
+		k8sManager.GetClient(),
+		clientSet,
+		sparkapi.GetManager,
+		ctrl.Log.WithName("controllers").WithName("SparkPod"),
+		k8sManager.GetScheme(),
+	)
+	err = sparkPodController.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	// there should be no preexisting helm release
