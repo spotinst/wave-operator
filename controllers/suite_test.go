@@ -18,19 +18,16 @@ package controllers
 
 import (
 	"context"
-	"github.com/spotinst/wave-operator/internal/sparkapi"
-	"k8s.io/client-go/kubernetes"
 	"path/filepath"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/spotinst/wave-operator/catalog"
-	"github.com/spotinst/wave-operator/install"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,6 +38,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/sparkapi"
 	// +kubebuilder:scaffold:imports
 )
 
