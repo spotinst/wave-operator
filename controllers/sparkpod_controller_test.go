@@ -450,43 +450,117 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	ns := "test-ns"
+	sparkAppId := "spark-123456"
+	cr := getMinimalTestCr(ns, sparkAppId)
+	controller := false
+	blockOwnerDeletion := true
+	crOwnerRef := metav1.OwnerReference{
+		APIVersion:         apiVersion,
+		Kind:               sparkApplicationKind,
+		Name:               cr.Name,
+		UID:                cr.UID,
+		Controller:         &controller,
+		BlockOwnerDeletion: &blockOwnerDeletion,
+	}
+	otherOwnerRef1 := metav1.OwnerReference{
+		APIVersion:         "sparkoperator",
+		Kind:               "sparkoperator.sparkapplication",
+		Name:               "my-spark-operator-application",
+		UID:                "4132-2345-63546-1324",
+		Controller:         &controller,
+		BlockOwnerDeletion: &blockOwnerDeletion,
+	}
+	otherOwnerRef2 := metav1.OwnerReference{
+		APIVersion:         "some-api",
+		Kind:               "some-kind",
+		Name:               "some-name",
+		UID:                "xxxx-yyyy-xxxx-yyyy",
+		Controller:         &controller,
+		BlockOwnerDeletion: &blockOwnerDeletion,
+	}
+
 	type testCase struct {
-		heritagePodLabels      map[string]string
-		shouldAddOwnerRef      bool
-		podHasExistingOwnerRef bool
+		existingOwnerRefs      []metav1.OwnerReference
+		ownerRefAlreadyPresent bool
 		message                string
 	}
 
 	testCases := []testCase{
 		{
-			heritagePodLabels:      nil,
-			shouldAddOwnerRef:      true,
-			podHasExistingOwnerRef: false,
-			message:                "when spark-submit",
+			existingOwnerRefs:      nil,
+			ownerRefAlreadyPresent: false,
+			message:                "when owner refs nil",
 		},
 		{
-			heritagePodLabels: map[string]string{
-				AppLabel: AppEnterpriseGatewayLabelValue,
-			},
-			shouldAddOwnerRef:      true,
-			podHasExistingOwnerRef: false,
-			message:                "when jupyter",
+			existingOwnerRefs:      make([]metav1.OwnerReference, 0),
+			ownerRefAlreadyPresent: false,
+			message:                "when owner refs empty",
 		},
 		{
-			heritagePodLabels: map[string]string{
-				SparkOperatorLaunchedByLabel: "true",
+			existingOwnerRefs: []metav1.OwnerReference{
+				crOwnerRef,
 			},
-			shouldAddOwnerRef:      false,
-			podHasExistingOwnerRef: false,
-			message:                "when spark-operator",
+			ownerRefAlreadyPresent: true,
+			message:                "when owner ref already present",
 		},
 		{
-			heritagePodLabels: map[string]string{
-				AppLabel: AppEnterpriseGatewayLabelValue,
+			existingOwnerRefs: []metav1.OwnerReference{
+				otherOwnerRef1,
 			},
-			shouldAddOwnerRef:      false,
-			podHasExistingOwnerRef: true,
-			message:                "when jupyter with existing owner ref",
+			ownerRefAlreadyPresent: false,
+			message:                "when existing different owner ref",
+		},
+		{
+			existingOwnerRefs: []metav1.OwnerReference{
+				otherOwnerRef1,
+				otherOwnerRef2,
+			},
+			ownerRefAlreadyPresent: false,
+			message:                "when existing multiple different owner ref",
+		},
+		{
+			existingOwnerRefs: []metav1.OwnerReference{
+				crOwnerRef,
+				otherOwnerRef1,
+			},
+			ownerRefAlreadyPresent: true,
+			message:                "when already exists front of list",
+		},
+		{
+			existingOwnerRefs: []metav1.OwnerReference{
+				crOwnerRef,
+				otherOwnerRef1,
+				otherOwnerRef2,
+			},
+			ownerRefAlreadyPresent: true,
+			message:                "when already exists front of list - multiple",
+		},
+		{
+			existingOwnerRefs: []metav1.OwnerReference{
+				otherOwnerRef1,
+				crOwnerRef,
+			},
+			ownerRefAlreadyPresent: true,
+			message:                "when already exists not front of list",
+		},
+		{
+			existingOwnerRefs: []metav1.OwnerReference{
+				otherOwnerRef1,
+				otherOwnerRef2,
+				crOwnerRef,
+			},
+			ownerRefAlreadyPresent: true,
+			message:                "when already exists not front of list - multiple 1",
+		},
+		{
+			existingOwnerRefs: []metav1.OwnerReference{
+				otherOwnerRef1,
+				crOwnerRef,
+				otherOwnerRef2,
+			},
+			ownerRefAlreadyPresent: true,
+			message:                "when already exists not front of list - multiple 2",
 		},
 	}
 
@@ -495,26 +569,12 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 		for _, tc := range testCases {
 
 			ctx := context.TODO()
-			sparkAppId := "spark-123456"
-			ns := "test-ns"
 
-			cr := getMinimalTestCr(ns, sparkAppId)
 			pod := getTestPod(ns, "test-driver", "123-456", DriverRole, sparkAppId, false)
 			pod.Finalizers = []string{sparkApplicationFinalizerName}
 
-			for k, v := range tc.heritagePodLabels {
-				pod.Labels[k] = v
-			}
-
-			if tc.podHasExistingOwnerRef {
-				pod.OwnerReferences = []metav1.OwnerReference{
-					{
-						APIVersion: "api",
-						Kind:       "kind",
-						Name:       "name",
-						UID:        "uid",
-					},
-				}
+			if tc.existingOwnerRefs != nil {
+				pod.OwnerReferences = tc.existingOwnerRefs
 			}
 
 			ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
@@ -545,20 +605,34 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 			err = ctrlClient.Get(ctx, client.ObjectKey{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
 			require.NoError(t, err, tc.message)
 
-			if tc.shouldAddOwnerRef {
-				assert.Equal(t, 1, len(updatedPod.OwnerReferences), tc.message)
-				assert.Equal(t, fetchedCr.UID, updatedPod.OwnerReferences[0].UID, tc.message)
-				assert.Equal(t, fetchedCr.Name, updatedPod.OwnerReferences[0].Name, tc.message)
-				assert.Equal(t, apiVersion, updatedPod.OwnerReferences[0].APIVersion, tc.message)
-				assert.Equal(t, sparkApplicationKind, updatedPod.OwnerReferences[0].Kind, tc.message)
-				assert.Equal(t, true, *updatedPod.OwnerReferences[0].BlockOwnerDeletion, tc.message)
-				assert.Equal(t, false, *updatedPod.OwnerReferences[0].Controller, tc.message)
+			if tc.ownerRefAlreadyPresent {
+				assert.Equal(t, len(tc.existingOwnerRefs), len(updatedPod.OwnerReferences), tc.message)
 			} else {
-				if tc.podHasExistingOwnerRef {
-					assert.Equal(t, 1, len(updatedPod.OwnerReferences), tc.message)
-				} else {
-					assert.Equal(t, 0, len(updatedPod.OwnerReferences), tc.message)
+				assert.Equal(t, len(tc.existingOwnerRefs)+1, len(updatedPod.OwnerReferences), tc.message)
+			}
+
+			// The CR owner ref should be at the front of the list
+			assert.Equal(t, fetchedCr.UID, updatedPod.OwnerReferences[0].UID, tc.message)
+			assert.Equal(t, fetchedCr.Name, updatedPod.OwnerReferences[0].Name, tc.message)
+			assert.Equal(t, apiVersion, updatedPod.OwnerReferences[0].APIVersion, tc.message)
+			assert.Equal(t, sparkApplicationKind, updatedPod.OwnerReferences[0].Kind, tc.message)
+			assert.Equal(t, true, *updatedPod.OwnerReferences[0].BlockOwnerDeletion, tc.message)
+			assert.Equal(t, false, *updatedPod.OwnerReferences[0].Controller, tc.message)
+
+			// All existing owner refs should still be there, with no duplicates
+			for _, existingOwnerRef := range tc.existingOwnerRefs {
+				found := 0
+				for _, podOwnerRef := range updatedPod.OwnerReferences {
+					if existingOwnerRef.UID == podOwnerRef.UID &&
+						existingOwnerRef.Name == podOwnerRef.Name &&
+						existingOwnerRef.Kind == podOwnerRef.Kind &&
+						existingOwnerRef.APIVersion == podOwnerRef.APIVersion &&
+						*existingOwnerRef.Controller == *podOwnerRef.Controller &&
+						*existingOwnerRef.BlockOwnerDeletion == *podOwnerRef.BlockOwnerDeletion {
+						found++
+					}
 				}
+				assert.Equal(t, 1, found, tc.message)
 			}
 		}
 	})

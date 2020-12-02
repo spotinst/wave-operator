@@ -96,12 +96,6 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil // Just log error
 	}
 
-	heritage, err := getHeritage(p)
-	if err != nil {
-		log.Error(err, "could not get heritage")
-		return ctrl.Result{}, nil // Just log error
-	}
-
 	log = r.Log.WithValues("name", p.Name, "namespace", p.Namespace, "sparkApplicationId", sparkApplicationId,
 		"role", sparkRole, "phase", p.Status.Phase, "deleted", !p.ObjectMeta.DeletionTimestamp.IsZero())
 
@@ -161,24 +155,23 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 
-	// Set owner reference driver pod -> spark application CR if needed
-	changed = setPodOwnerReference(p, sparkRole, heritage, cr)
-	if changed {
-		err := r.Client.Update(ctx, p)
-		if err != nil {
-			if k8serrors.IsConflict(err) {
-				log.Info(fmt.Sprintf("could not set owner reference, conflict error: %s", err.Error()))
-			} else {
-				log.Error(err, "could not set owner reference")
-			}
-			return ctrl.Result{}, err
-		}
-		log.Info("Added owner reference")
-		return ctrl.Result{Requeue: true}, nil
-	}
-
 	switch sparkRole {
 	case DriverRole:
+		changed = setPodOwnerReference(p, cr)
+		if changed {
+			err := r.Client.Update(ctx, p)
+			if err != nil {
+				if k8serrors.IsConflict(err) {
+					log.Info(fmt.Sprintf("could not set owner reference, conflict error: %s", err.Error()))
+				} else {
+					log.Error(err, "could not set owner reference")
+				}
+				return ctrl.Result{}, err
+			}
+			log.Info("Added owner reference")
+			return ctrl.Result{Requeue: true}, nil
+		}
+
 		err := r.handleDriver(ctx, p, cr, log)
 		if err != nil {
 			// Check for expected Spark API communication errors
@@ -190,6 +183,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			}
 			return ctrl.Result{}, err
 		}
+
 		// Requeue running drivers
 		if p.Status.Phase == corev1.PodRunning {
 			log.Info("Requeue running driver")
@@ -272,22 +266,43 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 	return nil
 }
 
-func setPodOwnerReference(pod *corev1.Pod, role string, heritage v1alpha1.SparkHeritage, cr *v1alpha1.SparkApplication) bool {
-	if role != DriverRole {
-		return false
-	}
-	if !(heritage == v1alpha1.SparkHeritageSubmit || heritage == v1alpha1.SparkHeritageJupyter) {
-		return false
-	}
-	if len(pod.OwnerReferences) != 0 {
-		return false
+// setPodOwnerReference adds an owner reference to the spark application cr to the front of the pod's owner reference list
+// returns true if pod's owner references were updated, false otherwise
+func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
+	foundIdx := -1
+	for idx, ownerRef := range pod.OwnerReferences {
+		if ownerRef.APIVersion == apiVersion &&
+			ownerRef.Kind == sparkApplicationKind &&
+			ownerRef.Name == cr.Name &&
+			ownerRef.UID == cr.UID {
+			foundIdx = idx
+			break
+		}
 	}
 
+	if foundIdx == 0 {
+		// Owner reference found at the front of the list
+		return false
+	} else if foundIdx == -1 {
+		// Owner reference not found
+		updatedOwnerRefs := make([]v1.OwnerReference, 0, len(pod.OwnerReferences)+1)
+		newOwnerRef := newOwnerReference(cr)
+		updatedOwnerRefs = append(updatedOwnerRefs, newOwnerRef)
+		updatedOwnerRefs = append(updatedOwnerRefs, pod.OwnerReferences...)
+		pod.OwnerReferences = updatedOwnerRefs
+		return true
+	} else {
+		// Owner reference found but not at the front of the list, move it to the front
+		pod.OwnerReferences[0], pod.OwnerReferences[foundIdx] = pod.OwnerReferences[foundIdx], pod.OwnerReferences[0]
+		return true
+	}
+}
+
+func newOwnerReference(cr *v1alpha1.SparkApplication) v1.OwnerReference {
 	// This controller is a pod controller, not a Spark Application CR controller
 	ownedByController := false
 	// We still want the pod to be garbage collected immediately when the CR is deleted
 	blockOwnerDeletion := true
-
 	ownerRef := v1.OwnerReference{
 		APIVersion:         cr.APIVersion,
 		Kind:               cr.Kind,
@@ -296,14 +311,7 @@ func setPodOwnerReference(pod *corev1.Pod, role string, heritage v1alpha1.SparkH
 		Controller:         &ownedByController,
 		BlockOwnerDeletion: &blockOwnerDeletion,
 	}
-
-	if pod.OwnerReferences == nil {
-		pod.OwnerReferences = make([]v1.OwnerReference, 0, 1)
-	}
-
-	pod.OwnerReferences = append(pod.OwnerReferences, ownerRef)
-
-	return true
+	return ownerRef
 }
 
 func addFinalizer(pod *corev1.Pod) bool {
