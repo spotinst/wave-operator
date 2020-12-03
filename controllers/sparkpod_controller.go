@@ -33,6 +33,7 @@ const (
 
 	apiVersion           = "wave.spot.io/v1alpha1"
 	sparkApplicationKind = "SparkApplication"
+	waveKindLabel        = "wave.spot.io/kind"
 
 	requeueAfterTimeout = 10 * time.Second
 	podDeletionTimeout  = 10 * time.Minute
@@ -500,6 +501,10 @@ func (r *SparkPodReconciler) getSparkApplicationCr(ctx context.Context, namespac
 
 func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, driverPod *corev1.Pod, applicationId string) error {
 	cr := &v1alpha1.SparkApplication{}
+
+	cr.Labels = map[string]string{
+		waveKindLabel: sparkApplicationKind, // Facilitates cost calculations
+	}
 
 	cr.Name = applicationId
 	cr.Namespace = driverPod.Namespace
