@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
@@ -286,6 +287,47 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	verifyCrAttempts(t, getTestApplicationInfo().Attempts, createdCr.Status.Data.RunStatistics.Attempts)
 }
 
+func TestReconcile_driver_whenPodDeletionTimeoutPassed(t *testing.T) {
+	ctx := context.TODO()
+
+	sparkAppId := "spark-123456"
+	pod := getTestPod("test-ns", "test-driver", "123-456", DriverRole, sparkAppId, false)
+	pod.Finalizers = []string{sparkApplicationFinalizerName}
+	deletionTimestamp := metav1.NewTime(time.Now().Add(-30 * time.Minute)) // Deleted 30 minutes ago
+	pod.DeletionTimestamp = &deletionTimestamp
+
+	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
+	clientSet := k8sfake.NewSimpleClientset()
+
+	// Mock Spark API manager
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mock_sparkapi.NewMockManager(ctrl)
+	m.EXPECT().GetApplicationInfo(sparkAppId).Return(getTestApplicationInfo(), nil).Times(0)
+
+	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
+		return m, nil
+	}
+
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+
+	req := ctrlrt.Request{
+		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+	}
+
+	// Reconcile should just return without requeue
+	res, err := controller.Reconcile(ctx, req)
+	assert.NoError(t, err)
+	assert.Equal(t, ctrlrt.Result{}, res)
+
+	// Finalizer should have been removed
+	updatedPod := &corev1.Pod{}
+	err = ctrlClient.Get(ctx, client.ObjectKey{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(updatedPod.Finalizers))
+}
+
 func TestReconcile_executor_whenSuccessful(t *testing.T) {
 	ctx := context.TODO()
 
@@ -337,7 +379,7 @@ func TestReconcile_executor_whenSuccessful(t *testing.T) {
 	// Update executor 1
 
 	exec1.Status.Phase = corev1.PodSucceeded
-	deletionTimestamp := metav1.Unix(int64(1234), int64(1000))
+	deletionTimestamp := metav1.Now()
 	exec1.DeletionTimestamp = &deletionTimestamp
 	err = ctrlClient.Update(ctx, exec1, &client.UpdateOptions{})
 	require.NoError(t, err)

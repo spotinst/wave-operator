@@ -35,6 +35,7 @@ const (
 	sparkApplicationKind = "SparkApplication"
 
 	requeueAfterTimeout = 10 * time.Second
+	podDeletionTimeout  = 10 * time.Minute
 )
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;update;patch
@@ -116,6 +117,26 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		log.Info("Finalizer added")
 		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// Pod deletion timeout
+	// If we haven't been able to remove the finalizer and allow the pod to be deleted
+	// within the timeout just give up and remove the finalizer
+	if podDeletionTimeoutPassed(p) {
+		changed = removeFinalizer(p)
+		if changed {
+			err := r.Client.Update(ctx, p)
+			if err != nil {
+				if k8serrors.IsConflict(err) {
+					log.Info(fmt.Sprintf("could not remove finalizer, conflict error: %s", err.Error()))
+				} else {
+					log.Error(err, "could not remove finalizer")
+				}
+				return ctrl.Result{}, err
+			}
+			log.Info("Finalizer removed due to deletion timeout")
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Get or create Spark application CR
@@ -337,6 +358,17 @@ func removeFinalizer(pod *corev1.Pod) bool {
 	}
 
 	return changed
+}
+
+func podDeletionTimeoutPassed(pod *corev1.Pod) bool {
+	if !pod.ObjectMeta.DeletionTimestamp.IsZero() {
+		currentTime := time.Now().Unix()
+		timeoutTime := pod.ObjectMeta.DeletionTimestamp.Add(podDeletionTimeout).Unix()
+		if currentTime >= timeoutTime {
+			return true
+		}
+	}
+	return false
 }
 
 func hasWaveSparkApplicationOwnerRef(pod *corev1.Pod, applicationId string) bool {
