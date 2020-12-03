@@ -3,11 +3,14 @@ module github.com/spotinst/wave-operator
 go 1.13
 
 require (
-	//github.com/GoogleCloudPlatform/spark-on-k8s-operator v0.0.0-20201019034553-bd1b7ec1f20d // indirect
+	github.com/aws/aws-sdk-go v1.27.0
+	github.com/evanphx/json-patch/v5 v5.1.0
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.3.0 // indirect
 	github.com/golang/mock v1.4.4
 	github.com/google/go-cmp v0.5.2
+	github.com/magiconair/properties v1.8.0
+	github.com/mattbaird/jsonpatch v0.0.0-20200820163806-098863c1fc24
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.2

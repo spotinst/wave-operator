@@ -7,9 +7,11 @@ import (
 	"log"
 	"os"
 
+	"github.com/spotinst/wave-operator/admission"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/util"
 	sparkoperator "github.com/spotinst/wave-operator/sparkoperator.k8s.io/v1beta2"
 	"helm.sh/helm/v3/pkg/action"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
@@ -77,7 +79,9 @@ func main() {
 
 	runInstall := false
 	checkCatalog := false
-	checkCrd := true
+	checkCrd := false
+	// s3Bucket := false
+	webhook := true
 
 	if runInstall {
 		installer := install.HelmInstaller{
@@ -169,4 +173,27 @@ serviceAccount:
 		}
 
 	}
+
+	// if s3Bucket {
+	// 	bucketName := "waht-bucket"
+	// 	b, err := aws.CreateBucket(bucketName)
+	// 	if err != nil {
+	// 		fmt.Println("oops on bucket", err.Error())
+	// 	}
+	// 	contents, err := aws.GetAboutStorageText(b)
+	// 	err = aws.WriteFile(bucketName, "about.txt", contents)
+	// 	if err != nil {
+	// 		fmt.Println("oops on file", err.Error())
+	// 	}
+	// }
+	if webhook {
+
+		ac := admission.NewAdmissionController(
+			&util.FakeStorageProvider{},
+			logger,
+		)
+		ctx := ctrl.SetupSignalHandler()
+		ac.Start(ctx)
+	}
+
 }

@@ -12,11 +12,13 @@ RUN go mod download
 # Copy the go source
 COPY main.go main.go
 COPY VERSION VERSION
+COPY admission/ admission/
 COPY api/ api/
 COPY catalog/ catalog/
+COPY cloudstorage/ cloudstorage/
+COPY controllers/ controllers/
 COPY install/ install/
 COPY internal/ internal/
-COPY controllers/ controllers/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build \

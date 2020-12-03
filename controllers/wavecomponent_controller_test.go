@@ -2,12 +2,16 @@ package controllers
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/controllers/internal/mock_cloudstorage"
 	"github.com/spotinst/wave-operator/controllers/internal/mock_install"
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/version"
@@ -42,6 +46,13 @@ var (
 		BearerTokenFile: "",
 		Impersonate:     rest.ImpersonationConfig{},
 		TLSClientConfig: rest.TLSClientConfig{},
+	}
+
+	historyStorage = &cloudstorage.StorageInfo{
+		Name:    "spark-history-test",
+		Region:  "us-east-2",
+		Path:    "s3://spark-history-test/",
+		Created: time.Date(2020, 12, 21, 10, 02, 0, 0, time.UTC),
 	}
 )
 
@@ -153,11 +164,12 @@ func TestBadComponentType(t *testing.T) {
 	// mock the installer
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	m := mock_install.NewMockInstaller(ctrl)
+	mi := mock_install.NewMockInstaller(ctrl)
+	mcs := mock_cloudstorage.NewMockCloudStorageProvider(ctrl)
 
 	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mock
 	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
-		return m
+		return mi
 	}
 
 	component.Spec.State = v1alpha1.AbsentComponentState
@@ -165,6 +177,7 @@ func TestBadComponentType(t *testing.T) {
 		ctrlrt_fake.NewFakeClientWithScheme(testScheme, component),
 		emptyConfig,
 		getMockInstaller,
+		mcs,
 		log,
 		testScheme,
 	)
@@ -195,16 +208,18 @@ func TestInitialInstall(t *testing.T) {
 	// mock the installer
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	m := mock_install.NewMockInstaller(ctrl)
-	m.EXPECT().GetReleaseName(string(v1alpha1.SparkHistoryChartName)).Return(withPrefix(string(v1alpha1.SparkHistoryChartName))).AnyTimes()
+	mi := mock_install.NewMockInstaller(ctrl)
+	mi.EXPECT().GetReleaseName(string(v1alpha1.SparkHistoryChartName)).Return(withPrefix(string(v1alpha1.SparkHistoryChartName))).AnyTimes()
 	// installation not present
-	m.EXPECT().Get(gomock.Any()).Return(nil, install.ErrReleaseNotFound).Times(2)
+	mi.EXPECT().Get(gomock.Any()).Return(nil, install.ErrReleaseNotFound).Times(2)
 	// Install returns no error
-	m.EXPECT().Install(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	mi.EXPECT().Install(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	mcs := mock_cloudstorage.NewMockCloudStorageProvider(ctrl)
+	mcs.EXPECT().ConfigureHistoryServerStorage().Return(historyStorage, nil).Times(2)
 
 	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mock
 	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
-		return m
+		return mi
 	}
 
 	component.Spec.State = v1alpha1.AbsentComponentState
@@ -212,6 +227,7 @@ func TestInitialInstall(t *testing.T) {
 		ctrlrt_fake.NewFakeClientWithScheme(testScheme, component),
 		emptyConfig,
 		getMockInstaller,
+		mcs,
 		log,
 		testScheme,
 	)
@@ -252,6 +268,8 @@ func TestInitialInstall(t *testing.T) {
 		assert.NotNil(t, c)
 		assert.Equal(t, v1.ConditionTrue, c.Status)
 		assert.Equal(t, InstallingReason, c.Reason)
+
+		assert.True(t, strings.Contains(updated.Spec.ValuesConfiguration, historyStorage.Path), "values should contain path "+historyStorage.Path)
 	}
 }
 
@@ -271,21 +289,24 @@ func TestInstallSparkHistory(t *testing.T) {
 	// mock the installer
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	m := mock_install.NewMockInstaller(ctrl)
-	m.EXPECT().GetReleaseName(string(v1alpha1.SparkHistoryChartName)).Return(withPrefix(string(v1alpha1.SparkHistoryChartName))).AnyTimes()
+	mi := mock_install.NewMockInstaller(ctrl)
+	mi.EXPECT().GetReleaseName(string(v1alpha1.SparkHistoryChartName)).Return(withPrefix(string(v1alpha1.SparkHistoryChartName))).AnyTimes()
 	// installation present
-	m.EXPECT().Get(gomock.Any()).Return(&deployed, nil).Times(subTestCount)
+	mi.EXPECT().Get(gomock.Any()).Return(&deployed, nil).Times(subTestCount)
 	// Install is not called
-	m.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).Times(subTestCount)
+	mi.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).Times(subTestCount)
 	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
-		return m
+		return mi
 	}
+	mcs := mock_cloudstorage.NewMockCloudStorageProvider(ctrl)
+	mcs.EXPECT().ConfigureHistoryServerStorage().Return(historyStorage, nil).Times(subTestCount)
 
 	fakeClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, component)
 	controller := NewWaveComponentReconciler(
 		fakeClient,
 		emptyConfig,
 		getMockInstaller,
+		mcs,
 		log,
 		testScheme,
 	)
@@ -306,7 +327,7 @@ func TestInstallSparkHistory(t *testing.T) {
 	assert.Equal(t, "DeploymentAbsent", c.Reason)
 
 	// Deployment is not available
-	dep, cm := getSparkHistoryObjects(m.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
+	dep, cm := getSparkHistoryObjects(mi.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	dep.Status.AvailableReplicas = 0
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, cm)
 	result, err = controller.Reconcile(context.TODO(), request)
@@ -323,7 +344,7 @@ func TestInstallSparkHistory(t *testing.T) {
 	assert.Equal(t, "PodsUnavailable", c.Reason)
 
 	// Deployment is available
-	dep, cm = getSparkHistoryObjects(m.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
+	dep, cm = getSparkHistoryObjects(mi.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, cm)
 	result, err = controller.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
@@ -360,20 +381,23 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	// mock the installer
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	m := mock_install.NewMockInstaller(ctrl)
+	mi := mock_install.NewMockInstaller(ctrl)
 	// installation present
-	m.EXPECT().Get(gomock.Any()).Return(&deployed, nil).Times(subTestCount)
+	mi.EXPECT().Get(gomock.Any()).Return(&deployed, nil).Times(subTestCount)
 	// Install is not called
-	m.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).Times(subTestCount)
+	mi.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).Times(subTestCount)
 	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
-		return m
+		return mi
 	}
+	mcs := mock_cloudstorage.NewMockCloudStorageProvider(ctrl)
+	mcs.EXPECT().ConfigureHistoryServerStorage().Return(historyStorage, nil).AnyTimes()
 
 	fakeClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, component)
 	controller := NewWaveComponentReconciler(
 		fakeClient,
 		emptyConfig,
 		getMockInstaller,
+		mcs,
 		log,
 		testScheme,
 	)
@@ -411,7 +435,7 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	assert.Equal(t, "DeploymentAbsent", c.Reason)
 
 	// Deployment is not available
-	dep, cm := getSparkHistoryObjects(m.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
+	dep, cm := getSparkHistoryObjects(mi.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
 	dep.Status.AvailableReplicas = 0
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, cm, crd)
 	result, err = controller.Reconcile(context.TODO(), request)
@@ -428,7 +452,7 @@ func x_doesnt_work_TestInstallSparkOperator(t *testing.T) {
 	assert.Equal(t, "PodsUnavailable", c.Reason)
 
 	// Deployment is available
-	dep, cm = getSparkHistoryObjects(m.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
+	dep, cm = getSparkHistoryObjects(mi.GetReleaseName(string(v1alpha1.SparkOperatorChartName)))
 	controller.Client = ctrlrt_fake.NewFakeClientWithScheme(testScheme, component, dep, cm, crd)
 	result, err = controller.Reconcile(context.TODO(), request)
 	assert.NoError(t, err)
@@ -458,16 +482,18 @@ func TestReinstall(t *testing.T) {
 	// mock the installer
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	m := mock_install.NewMockInstaller(ctrl)
+	mi := mock_install.NewMockInstaller(ctrl)
 	// installation not present
-	m.EXPECT().GetReleaseName(string(v1alpha1.SparkHistoryChartName)).Return(withPrefix(string(v1alpha1.SparkHistoryChartName))).AnyTimes()
-	m.EXPECT().Get(gomock.Any()).Return(&uninstalled, nil).AnyTimes()
-	m.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
-	m.EXPECT().Install(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	mi.EXPECT().GetReleaseName(string(v1alpha1.SparkHistoryChartName)).Return(withPrefix(string(v1alpha1.SparkHistoryChartName))).AnyTimes()
+	mi.EXPECT().Get(gomock.Any()).Return(&uninstalled, nil).AnyTimes()
+	mi.EXPECT().IsUpgrade(gomock.Any(), gomock.Any()).Return(false).AnyTimes()
+	mi.EXPECT().Install(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	mcs := mock_cloudstorage.NewMockCloudStorageProvider(ctrl)
+	mcs.EXPECT().ConfigureHistoryServerStorage().Return(historyStorage, nil).AnyTimes()
 
 	// getMockInstaller is an instance of type controller.InstallerGetter, and returns a mock
 	var getMockInstaller InstallerGetter = func(name string, getter genericclioptions.RESTClientGetter, log logr.Logger) install.Installer {
-		return m
+		return mi
 	}
 
 	component.Spec.State = v1alpha1.AbsentComponentState
@@ -475,6 +501,7 @@ func TestReinstall(t *testing.T) {
 		ctrlrt_fake.NewFakeClientWithScheme(testScheme, component),
 		emptyConfig,
 		getMockInstaller,
+		mcs,
 		log,
 		testScheme,
 	)
