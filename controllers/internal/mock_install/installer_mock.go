@@ -34,6 +34,32 @@ func (m *MockInstaller) EXPECT() *MockInstallerMockRecorder {
 	return m.recorder
 }
 
+// GetNamespace mocks base method
+func (m *MockInstaller) GetNamespace() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNamespace")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetNamespace indicates an expected call of GetNamespace
+func (mr *MockInstallerMockRecorder) GetNamespace() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNamespace", reflect.TypeOf((*MockInstaller)(nil).GetNamespace))
+}
+
+// SetNamespace mocks base method
+func (m *MockInstaller) SetNamespace(namespace string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetNamespace", namespace)
+}
+
+// SetNamespace indicates an expected call of SetNamespace
+func (mr *MockInstallerMockRecorder) SetNamespace(namespace interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNamespace", reflect.TypeOf((*MockInstaller)(nil).SetNamespace), namespace)
+}
+
 // GetReleaseName mocks base method
 func (m *MockInstaller) GetReleaseName(chartName string) string {
 	m.ctrl.T.Helper()

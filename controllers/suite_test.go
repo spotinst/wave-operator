@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/util"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -96,6 +97,7 @@ var _ = BeforeSuite(func(done Done) {
 		k8sManager.GetClient(),
 		k8sManager.GetConfig(),
 		install.GetHelm,
+		&util.FakeStorageProvider{},
 		ctrl.Log.WithName("controllers").WithName("WaveComponent"),
 		k8sManager.GetScheme(),
 	)

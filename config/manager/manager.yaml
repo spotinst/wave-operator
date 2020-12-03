@@ -29,5 +29,18 @@ spec:
           requests:
             cpu: 50m
             memory: 50Mi
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        volumeMounts:
+        - name: webhook-certs
+          mountPath: /etc/webhook/certs
+          readOnly: true
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: wave-admission-control-cert
       serviceAccountName: operator
       terminationGracePeriodSeconds: 10
+

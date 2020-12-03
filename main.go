@@ -20,7 +20,12 @@ import (
 	"flag"
 	"os"
 
+	"github.com/spotinst/wave-operator/admission"
+	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/controllers"
 	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/aws"
+	"github.com/spotinst/wave-operator/internal/ocean"
 	"github.com/spotinst/wave-operator/internal/version"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,9 +33,6 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
-	"github.com/spotinst/wave-operator/controllers"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -71,10 +73,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	clusterName, err := ocean.GetClusterIdentifier()
+	if err != nil {
+		setupLog.Error(err, "unable to get cluster identifier")
+		os.Exit(1)
+	}
+
+	storageProvider := aws.NewS3Provider(clusterName)
 	controller := controllers.NewWaveComponentReconciler(
 		mgr.GetClient(),
 		mgr.GetConfig(),
 		install.GetHelm,
+		storageProvider,
 		ctrl.Log.WithName("controllers").WithName("WaveComponent"),
 		mgr.GetScheme(),
 	)
@@ -83,8 +93,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// +kubebuilder:scaffold:builder
+	ac := admission.NewAdmissionController(storageProvider, logger)
+	err = mgr.Add(ac)
+	if err != nil {
+		setupLog.Error(err, "unable to add admission controller")
+		os.Exit(1)
+	}
 
+	// +kubebuilder:scaffold:builder
 	setupLog.Info("starting manager", "buildVersion", version.BuildVersion, "buildDate", version.BuildDate)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
