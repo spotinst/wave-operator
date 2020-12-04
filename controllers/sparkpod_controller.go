@@ -36,7 +36,7 @@ const (
 	waveKindLabel        = "wave.spot.io/kind"
 
 	requeueAfterTimeout = 10 * time.Second
-	podDeletionTimeout  = 10 * time.Minute
+	podDeletionTimeout  = 5 * time.Minute
 )
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;update;patch
