@@ -104,7 +104,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log = r.Log.WithValues("role", sparkRole, "name", p.Name, "namespace", p.Namespace,
 		"sparkApplicationId", sparkApplicationId, "phase", p.Status.Phase, "deleted", !p.ObjectMeta.DeletionTimestamp.IsZero())
 
-	log.Info("reconciling")
+	log.Info("Reconciling")
 
 	// Add finalizer if needed
 	changed := addFinalizer(p)
