@@ -44,7 +44,7 @@ def sync(ev):
     c = provider.load()
     credentialArg = """--s3-access-key-id {} --s3-secret-access-key {} --s3-session-token {}""".format(c["AccessKeyId"], c["SecretAccessKey"], c["Token"])
     print("""rclone {} copy {} {} """.format(regionArg, sourceDir, targetDir), flush=True)
-    os.system("""rclone {} {} copy {} {} """.format(regionArg, credentialArg, sourceDir, targetDir))
+    os.system("""rclone {} {} copy {} {} --local-no-check-updated""".format(regionArg, credentialArg, sourceDir, targetDir))
 
 
 if frequency == "forever":
