@@ -213,7 +213,6 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 		// Requeue running drivers
 		if p.Status.Phase == corev1.PodRunning {
-			log.Info("Requeue running driver")
 			return ctrl.Result{
 				Requeue:      true,
 				RequeueAfter: requeueAfterTimeout,
