@@ -101,8 +101,10 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil // Just log error
 	}
 
-	log = r.Log.WithValues("name", p.Name, "namespace", p.Namespace, "sparkApplicationId", sparkApplicationId,
-		"role", sparkRole, "phase", p.Status.Phase, "deleted", !p.ObjectMeta.DeletionTimestamp.IsZero())
+	log = r.Log.WithValues("role", sparkRole, "name", p.Name, "namespace", p.Namespace,
+		"sparkApplicationId", sparkApplicationId, "phase", p.Status.Phase, "deleted", !p.ObjectMeta.DeletionTimestamp.IsZero())
+
+	log.Info("reconciling")
 
 	// Add finalizer if needed
 	changed := addFinalizer(p)
@@ -254,8 +256,6 @@ func (r *SparkPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, cr *v1alpha1.SparkApplication, log logr.Logger) error {
-	log.Info("Handling driver pod")
-
 	deepCopy := cr.DeepCopy()
 
 	driverPodCr := newPodCR(pod)
@@ -385,8 +385,6 @@ func hasWaveSparkApplicationOwnerRef(pod *corev1.Pod, applicationId string) bool
 }
 
 func (r *SparkPodReconciler) handleExecutor(ctx context.Context, pod *corev1.Pod, cr *v1alpha1.SparkApplication, log logr.Logger) error {
-	log.Info("Handling executor pod")
-
 	deepCopy := cr.DeepCopy()
 
 	// Do we already have an entry for this executor in the CR?
