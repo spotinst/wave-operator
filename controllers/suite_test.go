@@ -24,12 +24,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/spotinst/wave-operator/catalog"
-	"github.com/spotinst/wave-operator/install"
-	"github.com/spotinst/wave-operator/internal/util"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -40,6 +38,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/sparkapi"
+	"github.com/spotinst/wave-operator/internal/util"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -93,6 +95,11 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(componentList.Items).To(BeEmpty())
 
+	sparkApplicationList := &v1alpha1.SparkApplicationList{}
+	err = k8sClient.List(context.Background(), sparkApplicationList)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(sparkApplicationList.Items).To(BeEmpty())
+
 	controller := NewWaveComponentReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetConfig(),
@@ -102,6 +109,19 @@ var _ = BeforeSuite(func(done Done) {
 		k8sManager.GetScheme(),
 	)
 	err = controller.SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	clientSet, err := kubernetes.NewForConfig(k8sManager.GetConfig())
+	Expect(err).ToNot(HaveOccurred())
+
+	sparkPodController := NewSparkPodReconciler(
+		k8sManager.GetClient(),
+		clientSet,
+		sparkapi.GetManager,
+		ctrl.Log.WithName("controllers").WithName("SparkPod"),
+		k8sManager.GetScheme(),
+	)
+	err = sparkPodController.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	// there should be no preexisting helm release

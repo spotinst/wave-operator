@@ -243,7 +243,7 @@ func TestInitialInstall(t *testing.T) {
 		err = controller.Client.Get(context.TODO(), objectKey, &updated)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, updated.Finalizers)
-		assert.True(t, containsString(updated.Finalizers, FinalizerName))
+		assert.True(t, containsString(updated.Finalizers, OperatorFinalizerName))
 		assert.NotEmpty(t, updated.Status)
 		c := getConditionForType(v1alpha1.WaveComponentAvailable, updated.Status)
 		assert.NotNil(t, c)

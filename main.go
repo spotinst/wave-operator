@@ -20,19 +20,22 @@ import (
 	"flag"
 	"os"
 
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
 	"github.com/spotinst/wave-operator/admission"
 	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/controllers"
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/aws"
 	"github.com/spotinst/wave-operator/internal/ocean"
+	"github.com/spotinst/wave-operator/internal/sparkapi"
 	"github.com/spotinst/wave-operator/internal/version"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -73,6 +76,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	clientSet, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		setupLog.Error(err, "unable to get client set")
+		os.Exit(1)
+	}
+
 	clusterName, err := ocean.GetClusterIdentifier()
 	if err != nil {
 		setupLog.Error(err, "unable to get cluster identifier")
@@ -90,6 +99,18 @@ func main() {
 	)
 	if err = controller.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WaveComponent")
+		os.Exit(1)
+	}
+
+	sparkPodController := controllers.NewSparkPodReconciler(
+		mgr.GetClient(),
+		clientSet,
+		sparkapi.GetManager,
+		ctrl.Log.WithName("controllers").WithName("SparkPod"),
+		mgr.GetScheme())
+
+	if err = sparkPodController.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SparkPod")
 		os.Exit(1)
 	}
 
