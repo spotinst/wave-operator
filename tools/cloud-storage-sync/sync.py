@@ -41,8 +41,10 @@ provider = CredentialProvider()
 
 # use "copy", not "sync": don't delete files in target directory
 def sync(ev):
-    filename = ev.name
-    print("""got event for file: {} """.format(filename), flush=True)
+    filename = ""
+    if ev is not None:
+        filename = ev.name
+        print("""got event for file: {} """.format(filename), flush=True)
     c = provider.load()
     credentialArg = """--s3-access-key-id {} --s3-secret-access-key {} --s3-session-token {}""".format(c["AccessKeyId"], c["SecretAccessKey"], c["Token"])
     print("""rclone {} copy {} {} """.format(regionArg, sourceDir, targetDir), flush=True)
