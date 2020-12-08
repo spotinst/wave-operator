@@ -41,15 +41,23 @@ provider = CredentialProvider()
 
 # use "copy", not "sync": don't delete files in target directory
 def sync(ev):
+    filename = ""
+    if ev is not None:
+        filename = ev.name
+        print("""got event for file: {} """.format(filename), flush=True)
     c = provider.load()
     credentialArg = """--s3-access-key-id {} --s3-secret-access-key {} --s3-session-token {}""".format(c["AccessKeyId"], c["SecretAccessKey"], c["Token"])
-    print("""rclone {} copy {} {} """.format(regionArg, sourceDir, targetDir), flush=True)
-    os.system("""rclone {} {} copy {} {} --local-no-check-updated""".format(regionArg, credentialArg, sourceDir, targetDir))
+    print("""rclone --exclude '*.inprogress' {} copy {} {} """.format(regionArg, sourceDir, targetDir), flush=True)
+    os.system("""rclone --exclude '*.inprogress' {} {} copy {} {} --local-no-check-updated""".format(regionArg, credentialArg, sourceDir, targetDir))
+    # exit if we got the final spark log file (no .inprogress ending)
+    if filename.startswith("spark-") and not filename.endswith(".inprogress"):
+        print("will exit", flush=True)
+        exit(0)
 
 
 if frequency == "forever":
     manager = pyinotify.WatchManager()
-    mask = pyinotify.IN_DELETE | pyinotify.IN_MODIFY | pyinotify.IN_CREATE
+    mask = pyinotify.IN_DELETE | pyinotify.IN_MODIFY | pyinotify.IN_CREATE | pyinotify.IN_MOVED_TO
     manager.add_watch(sourceDir, rec=True, mask=mask)
     notifier = pyinotify.Notifier(manager, sync)
     notifier.loop()
