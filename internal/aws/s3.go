@@ -38,7 +38,7 @@ func (s *s3Provider) ConfigureHistoryServerStorage() (*cloudstorage.StorageInfo,
 		return nil, err
 	}
 
-	err = writeFile(name, "ABOUT.txt", aboutText)
+	err = writeFile(name, ".ABOUT.txt", aboutText)
 	if err != nil {
 		return nil, err
 	}
