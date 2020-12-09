@@ -66,11 +66,16 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 		Name:      "spark-logs",
 		MountPath: "/var/log/spark",
 	}
-
 	log.Info("pod admission control", "mountPath", volumeMount.MountPath)
 
-	newSpec.Containers = append(newSpec.Containers, corev1.Container{
-		Name:            "storage-sync",
+	// add sync container, idempotent
+	containerSet := map[string]*corev1.Container{}
+	for _, c := range newSpec.Containers {
+		containerSet[c.Name] = &c
+	}
+	storageContainerName := "storage-sync"
+	storageContainer := corev1.Container{
+		Name:            storageContainerName,
 		Image:           "ntfrnzn/cloud-storage-sync",
 		ImagePullPolicy: corev1.PullAlways,
 		Command:         []string{"/tini"},
@@ -83,8 +88,17 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 				},
 			},
 		},
-	})
+	}
+	containerSet[storageContainer.Name] = &storageContainer
+	newContainers := make([]corev1.Container, len(containerSet))
+	i := 0
+	for _, c := range containerSet {
+		newContainers[i] = *c
+		i++
+	}
+	newSpec.Containers = newContainers
 
+	// mount shared volume to all
 	for i := range newSpec.Containers {
 		if newSpec.Containers[i].VolumeMounts == nil {
 			newSpec.Containers[i].VolumeMounts = []corev1.VolumeMount{}

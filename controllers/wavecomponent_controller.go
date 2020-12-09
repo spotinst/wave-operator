@@ -373,6 +373,7 @@ func (r *WaveComponentReconciler) install(ctx context.Context, log logr.Logger, 
 
 	helmError := i.Install(string(comp.Spec.Name), comp.Spec.URL, comp.Spec.Version, comp.Spec.ValuesConfiguration)
 	if helmError != nil {
+		log.Error(helmError, "helm installation failed")
 		return ctrl.Result{}, helmError
 	}
 	return ctrl.Result{
