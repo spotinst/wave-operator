@@ -76,6 +76,7 @@ func TestIdempotency(t *testing.T) {
 	req = getAdmissionRequest(t, newPod)
 	r, err = MutatePod(&util.FakeStorageProvider{}, log, req)
 	assert.NoError(t, err)
+	assert.Equal(t, "[]", string(r.Patch))
 
 	obj2, err := ApplyJsonPatch(r.Patch, newPod)
 	assert.NoError(t, err)
