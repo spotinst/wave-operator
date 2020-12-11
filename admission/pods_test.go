@@ -5,6 +5,7 @@ import (
 
 	"github.com/spotinst/wave-operator/internal/util"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -58,6 +59,34 @@ func TestMutateSimplePod(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(newPod.Spec.Containers))
 	assert.Equal(t, ondemandAffinity, newPod.Spec.Affinity)
+	assert.Equal(t, 1, len(newPod.Spec.Volumes))
+	assert.Equal(t, "spark-logs", newPod.Spec.Volumes[0].Name)
+}
+
+func TestIdempotency(t *testing.T) {
+	req := getAdmissionRequest(t, simplePod)
+	r, err := MutatePod(&util.FakeStorageProvider{}, log, req)
+	require.NoError(t, err)
+
+	obj, err := ApplyJsonPatch(r.Patch, simplePod)
+	require.NoError(t, err)
+	newPod, ok := obj.(*(corev1.Pod))
+	require.True(t, ok)
+
+	req = getAdmissionRequest(t, newPod)
+	r, err = MutatePod(&util.FakeStorageProvider{}, log, req)
+	assert.NoError(t, err)
+	assert.Equal(t, "[]", string(r.Patch))
+
+	obj2, err := ApplyJsonPatch(r.Patch, newPod)
+	assert.NoError(t, err)
+	pod2, ok := obj2.(*(corev1.Pod))
+	require.True(t, ok)
+
+	assert.Equal(t, 2, len(pod2.Spec.Containers))
+	assert.Equal(t, ondemandAffinity, pod2.Spec.Affinity)
+	assert.Equal(t, 1, len(newPod.Spec.Volumes))
+	assert.Equal(t, "spark-logs", newPod.Spec.Volumes[0].Name)
 }
 
 func TestMutatePodBadStorage(t *testing.T) {

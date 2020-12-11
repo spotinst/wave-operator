@@ -28,6 +28,16 @@ var (
 			},
 		},
 	}
+	volume = corev1.Volume{
+		Name: "spark-logs",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	}
+	volumeMount = corev1.VolumeMount{
+		Name:      volume.Name,
+		MountPath: "/var/log/spark",
+	}
 )
 
 func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
@@ -59,25 +69,14 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 
 	modObj := sourceObj.DeepCopy()
 	newSpec := modObj.Spec
-
 	newSpec.Affinity = ondemandAffinity
 
-	volumeMount := corev1.VolumeMount{
-		Name:      "spark-logs",
-		MountPath: "/var/log/spark",
-	}
 	log.Info("pod admission control", "mountPath", volumeMount.MountPath)
 
-	// add sync container, idempotent
-	containerSet := map[string]*corev1.Container{}
-	for _, c := range newSpec.Containers {
-		containerSet[c.Name] = &c
-	}
-	storageContainerName := "storage-sync"
 	storageContainer := corev1.Container{
-		Name:            storageContainerName,
-		Image:           "ntfrnzn/cloud-storage-sync",
-		ImagePullPolicy: corev1.PullAlways,
+		Name:            "storage-sync",
+		Image:           "public.ecr.aws/l8m2k1n1/netapp/cloud-storage-sync",
+		ImagePullPolicy: corev1.PullIfNotPresent,
 		Command:         []string{"/tini"},
 		Args:            []string{"--", "python3", "sync.py", volumeMount.MountPath, "spark:" + storageInfo.Name},
 		Env:             []corev1.EnvVar{{Name: "S3_REGION", Value: storageInfo.Region}},
@@ -89,28 +88,44 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 			},
 		},
 	}
-	containerSet[storageContainer.Name] = &storageContainer
-	newContainers := make([]corev1.Container, len(containerSet))
-	i := 0
-	for _, c := range containerSet {
-		newContainers[i] = *c
-		i++
+
+	exists := false
+	for _, c := range newSpec.Containers {
+		if c.Name == storageContainer.Name {
+			exists = true
+			break
+		}
 	}
-	newSpec.Containers = newContainers
+	if !exists {
+		newSpec.Containers = append(newSpec.Containers, storageContainer)
+	}
 
 	// mount shared volume to all
 	for i := range newSpec.Containers {
 		if newSpec.Containers[i].VolumeMounts == nil {
 			newSpec.Containers[i].VolumeMounts = []corev1.VolumeMount{}
 		}
-		newSpec.Containers[i].VolumeMounts = append(newSpec.Containers[i].VolumeMounts, volumeMount)
+		exists := false
+		for _, v := range newSpec.Containers[i].VolumeMounts {
+			if v.Name == volumeMount.Name {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			newSpec.Containers[i].VolumeMounts = append(newSpec.Containers[i].VolumeMounts, volumeMount)
+		}
 	}
-	newSpec.Volumes = append(newSpec.Volumes, corev1.Volume{
-		Name: "spark-logs",
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
-		},
-	})
+	exists = false
+	for _, v := range newSpec.Volumes {
+		if v.Name == volume.Name {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		newSpec.Volumes = append(newSpec.Volumes, volume)
+	}
 
 	modObj.Spec = newSpec
 	patchBytes, err := GetJsonPatch(sourceObj, modObj)

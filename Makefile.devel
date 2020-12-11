@@ -1,7 +1,9 @@
 
 
 # Image URL to use all building/pushing image targets
-IMG ?= ntfrnzn/waveoperator:latest
+REGISTRY = public.ecr.aws/l8m2k1n1/netapp/wave-operator
+IMG ?= ${REGISTRY}:${VERSION}
+LATEST = ${REGISTRY}:latest
 
 CRD_OPTIONS ?= "crd:crdVersions=v1,preserveUnknownFields=false"
 
@@ -72,12 +74,14 @@ generate: controller-gen  ## Generate code
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 
-docker-build: test  ## Build the docker image
+docker-build: test version ## Build the docker image
 	docker build . -t ${IMG}
+	docker tag ${IMG} ${LATEST}
 
 
 docker-push:  ## Push the docker image
 	docker push ${IMG}
+	docker push ${LATEST}
 
 
 # download controller-gen if necessary

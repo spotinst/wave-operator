@@ -1,13 +1,19 @@
 .DEFAULT_GOAL := help
 
+VERSION = v0.2.0
+
 # Image URL to use all building/pushing image targets
-IMG ?= ntfrnzn/cloud-storage-sync:latest
+REGISTRY = public.ecr.aws/l8m2k1n1/netapp/cloud-storage-sync
+IMG ?= ${REGISTRY}:${VERSION}
+LATEST = ${REGISTRY}:latest
 
 docker-build:   ## Build the docker image
 	docker build . -t ${IMG}
+	docker tag ${IMG} ${LATEST}
 
 docker-push:  ## Push the docker image
 	docker push ${IMG}
+	docker push ${LATEST}
 
 .PHONY: help
 help: ## Display this help
