@@ -27,3 +27,8 @@ type Stage struct {
 	OutputBytes     int64 `json:"outputBytes"`
 	ExecutorCpuTime int64 `json:"executorCpuTime"`
 }
+
+type Executor struct {
+	Id      string `json:"id"`
+	AddTime string `json:"addTime"`
+}

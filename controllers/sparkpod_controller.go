@@ -422,10 +422,16 @@ func newPodCR(pod *corev1.Pod) v1alpha1.Pod {
 	podCr.Name = pod.Name
 	podCr.Phase = pod.Status.Phase
 	podCr.Statuses = pod.Status.ContainerStatuses
-	podCr.Deleted = !pod.DeletionTimestamp.IsZero()
+	podCr.CreationTimestamp = pod.CreationTimestamp
+	podCr.DeletionTimestamp = pod.DeletionTimestamp
+	podCr.Labels = pod.Labels
 
 	if podCr.Statuses == nil {
 		podCr.Statuses = make([]corev1.ContainerStatus, 0)
+	}
+
+	if podCr.Labels == nil {
+		podCr.Labels = make(map[string]string, 0)
 	}
 
 	return podCr
@@ -466,6 +472,17 @@ func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	}
 
 	deepCopy.Status.Data.RunStatistics.Attempts = attempts
+
+	executors := make([]v1alpha1.Executor, 0, len(sparkApiInfo.Executors))
+	for _, apiExecutor := range sparkApiInfo.Executors {
+		executor := v1alpha1.Executor{
+			Id:      apiExecutor.Id,
+			AddTime: apiExecutor.AddTime,
+		}
+		executors = append(executors, executor)
+	}
+
+	deepCopy.Status.Data.RunStatistics.Executors = executors
 }
 
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
@@ -519,6 +536,7 @@ func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, dr
 
 	cr.Status.Data.Executors = make([]v1alpha1.Pod, 0)
 	cr.Status.Data.RunStatistics.Attempts = make([]v1alpha1.Attempt, 0)
+	cr.Status.Data.RunStatistics.Executors = make([]v1alpha1.Executor, 0)
 	cr.Status.Data.SparkProperties = make(map[string]string)
 
 	err = r.Create(ctx, cr)

@@ -126,6 +126,42 @@ func TestGetEnvironment(t *testing.T) {
 
 }
 
+func TestGetExecutors(t *testing.T) {
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	t.Run("whenError", func(tt *testing.T) {
+
+		m := mock_transport.NewMockClient(ctrl)
+		m.EXPECT().Get("api/v1/applications/spark-123/executors").Return(nil, fmt.Errorf("test error")).Times(1)
+
+		client := &client{m}
+
+		res, err := client.GetExecutors("spark-123")
+		assert.Error(tt, err)
+		assert.Contains(tt, err.Error(), "test error")
+		assert.Nil(tt, res)
+	})
+
+	t.Run("whenSuccessful", func(tt *testing.T) {
+
+		m := mock_transport.NewMockClient(ctrl)
+		m.EXPECT().Get("api/v1/applications/spark-123/executors").Return(getExecutorsResponse(), nil).Times(1)
+
+		client := &client{m}
+
+		res, err := client.GetExecutors("spark-123")
+		assert.NoError(tt, err)
+		assert.Equal(tt, 3, len(res))
+		for _, exec := range res {
+			id := exec.Id
+			assert.True(tt, id == "driver" || id == "1" || id == "2")
+			assert.NotEmpty(tt, exec.AddTime)
+		}
+	})
+}
+
 func getApplicationResponse() []byte {
 	return []byte(`{
     "id": "spark-123",
@@ -245,4 +281,99 @@ func getEnvironmentResponse() []byte {
         ]
     ]
 }`)
+}
+
+func getExecutorsResponse() []byte {
+	return []byte(`[
+    {
+        "id": "driver",
+        "hostPort": "spark-submit-pi-stock-image-19039476618a605f-driver-svc.spark-jobs.svc:7079",
+        "isActive": true,
+        "rddBlocks": 0,
+        "memoryUsed": 0,
+        "diskUsed": 0,
+        "totalCores": 0,
+        "maxTasks": 0,
+        "activeTasks": 0,
+        "failedTasks": 0,
+        "completedTasks": 0,
+        "totalTasks": 0,
+        "totalDuration": 0,
+        "totalGCTime": 0,
+        "totalInputBytes": 0,
+        "totalShuffleRead": 0,
+        "totalShuffleWrite": 0,
+        "isBlacklisted": false,
+        "maxMemory": 434031820,
+        "addTime": "2020-12-14T14:07:17.142GMT",
+        "executorLogs": {},
+        "memoryMetrics": {
+            "usedOnHeapStorageMemory": 0,
+            "usedOffHeapStorageMemory": 0,
+            "totalOnHeapStorageMemory": 434031820,
+            "totalOffHeapStorageMemory": 0
+        },
+        "blacklistedInStages": []
+    },
+    {
+        "id": "2",
+        "hostPort": "192.168.94.79:35783",
+        "isActive": true,
+        "rddBlocks": 0,
+        "memoryUsed": 0,
+        "diskUsed": 0,
+        "totalCores": 1,
+        "maxTasks": 1,
+        "activeTasks": 0,
+        "failedTasks": 0,
+        "completedTasks": 4800,
+        "totalTasks": 4800,
+        "totalDuration": 77100,
+        "totalGCTime": 359,
+        "totalInputBytes": 0,
+        "totalShuffleRead": 0,
+        "totalShuffleWrite": 0,
+        "isBlacklisted": false,
+        "maxMemory": 122644070,
+        "addTime": "2020-12-14T14:10:57.908GMT",
+        "executorLogs": {},
+        "memoryMetrics": {
+            "usedOnHeapStorageMemory": 0,
+            "usedOffHeapStorageMemory": 0,
+            "totalOnHeapStorageMemory": 122644070,
+            "totalOffHeapStorageMemory": 0
+        },
+        "blacklistedInStages": []
+    },
+    {
+        "id": "1",
+        "hostPort": "192.168.93.178:44351",
+        "isActive": true,
+        "rddBlocks": 0,
+        "memoryUsed": 0,
+        "diskUsed": 0,
+        "totalCores": 1,
+        "maxTasks": 1,
+        "activeTasks": 0,
+        "failedTasks": 0,
+        "completedTasks": 15200,
+        "totalTasks": 15200,
+        "totalDuration": 180279,
+        "totalGCTime": 627,
+        "totalInputBytes": 0,
+        "totalShuffleRead": 0,
+        "totalShuffleWrite": 0,
+        "isBlacklisted": false,
+        "maxMemory": 122644070,
+        "addTime": "2020-12-14T14:09:24.372GMT",
+        "executorLogs": {},
+        "memoryMetrics": {
+            "usedOnHeapStorageMemory": 0,
+            "usedOffHeapStorageMemory": 0,
+            "totalOnHeapStorageMemory": 122644070,
+            "totalOffHeapStorageMemory": 0
+        },
+        "blacklistedInStages": []
+    }
+]`)
 }

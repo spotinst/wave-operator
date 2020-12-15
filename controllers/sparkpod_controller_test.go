@@ -202,7 +202,7 @@ func TestReconcile_driver_whenSparkApiCommunicationFails(t *testing.T) {
 	createdCr := &v1alpha1.SparkApplication{}
 	err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppId, Namespace: pod.Namespace}, createdCr)
 	require.NoError(t, err)
-	verifyCrPod(t, pod, createdCr.Status.Data.Driver, false)
+	verifyCrPod(t, pod, createdCr.Status.Data.Driver)
 }
 
 func TestReconcile_driver_whenSuccessful(t *testing.T) {
@@ -258,7 +258,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	assert.Equal(t, pod.Name, createdCr.Spec.ApplicationName)
 	assert.Equal(t, v1alpha1.SparkHeritageSubmit, createdCr.Spec.Heritage)
 	assert.Equal(t, sparkAppId, createdCr.Spec.ApplicationId)
-	verifyCrPod(t, pod, createdCr.Status.Data.Driver, false)
+	verifyCrPod(t, pod, createdCr.Status.Data.Driver)
 
 	// Third reconcile - owner reference added
 	res, err = controller.Reconcile(ctx, req)
@@ -279,7 +279,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppId, Namespace: pod.Namespace}, createdCr)
 	require.NoError(t, err)
 
-	verifyCrPod(t, pod, createdCr.Status.Data.Driver, false)
+	verifyCrPod(t, pod, createdCr.Status.Data.Driver)
 	assert.Equal(t, getTestApplicationInfo().ApplicationName, createdCr.Spec.ApplicationName)
 	assert.Equal(t, sparkAppId, createdCr.Spec.ApplicationId)
 	assert.Equal(t, getTestApplicationInfo().SparkProperties, createdCr.Status.Data.SparkProperties)
@@ -287,6 +287,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	assert.Equal(t, getTestApplicationInfo().TotalInputBytes, createdCr.Status.Data.RunStatistics.TotalInputBytes)
 	assert.Equal(t, getTestApplicationInfo().TotalExecutorCpuTime, createdCr.Status.Data.RunStatistics.TotalExecutorCpuTime)
 	verifyCrAttempts(t, getTestApplicationInfo().Attempts, createdCr.Status.Data.RunStatistics.Attempts)
+	verifyCrExecutors(t, getTestApplicationInfo().Executors, createdCr.Status.Data.RunStatistics.Executors)
 }
 
 func TestReconcile_driver_whenPodDeletionTimeoutPassed(t *testing.T) {
@@ -361,7 +362,7 @@ func TestReconcile_executor_whenSuccessful(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(patchedCr.Status.Data.Executors))
 	executor := patchedCr.Status.Data.Executors[0]
-	verifyCrPod(t, exec1, executor, false)
+	verifyCrPod(t, exec1, executor)
 
 	// Executor 2
 
@@ -376,7 +377,7 @@ func TestReconcile_executor_whenSuccessful(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(patchedCr.Status.Data.Executors))
 	executor = patchedCr.Status.Data.Executors[1]
-	verifyCrPod(t, exec2, executor, false)
+	verifyCrPod(t, exec2, executor)
 
 	// Update executor 1
 
@@ -392,12 +393,18 @@ func TestReconcile_executor_whenSuccessful(t *testing.T) {
 	_, err = controller.Reconcile(ctx, req)
 	require.NoError(t, err)
 
+	// Fetch the updated pod so timestamps match
+	updatedExec1 := &corev1.Pod{}
+	err = ctrlClient.Get(ctx, client.ObjectKey{Namespace: exec1.Namespace, Name: exec1.Name}, updatedExec1)
+	require.NoError(t, err)
+	assert.False(t, updatedExec1.DeletionTimestamp.IsZero())
+
 	patchedCr = &v1alpha1.SparkApplication{}
 	err = ctrlClient.Get(ctx, client.ObjectKey{Name: applicationId, Namespace: ns}, patchedCr)
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(patchedCr.Status.Data.Executors))
 	executor = patchedCr.Status.Data.Executors[0]
-	verifyCrPod(t, exec1, executor, true)
+	verifyCrPod(t, updatedExec1, executor)
 }
 
 func TestReconcile_executor_whenCrDoesntExist(t *testing.T) {
@@ -687,12 +694,19 @@ func getTestLogger() logr.Logger {
 	return zap.New(zap.UseDevMode(true))
 }
 
-func verifyCrPod(t *testing.T, pod *corev1.Pod, crPod v1alpha1.Pod, deleted bool) {
+func verifyCrPod(t *testing.T, pod *corev1.Pod, crPod v1alpha1.Pod) {
 	assert.Equal(t, pod.Name, crPod.Name)
 	assert.Equal(t, pod.Namespace, crPod.Namespace)
 	assert.Equal(t, string(pod.UID), crPod.UID)
 	assert.Equal(t, pod.Status.Phase, crPod.Phase)
-	assert.Equal(t, deleted, crPod.Deleted)
+	assert.Equal(t, pod.CreationTimestamp, crPod.CreationTimestamp)
+	assert.Equal(t, pod.DeletionTimestamp, crPod.DeletionTimestamp)
+
+	assert.Equal(t, len(pod.Labels), len(crPod.Labels))
+	for k, v := range pod.Labels {
+		assert.Equal(t, crPod.Labels[k], v)
+	}
+
 	assert.Equal(t, len(pod.Status.ContainerStatuses), len(crPod.Statuses))
 
 	for _, cs := range pod.Status.ContainerStatuses {
@@ -712,6 +726,22 @@ func verifyCrPod(t *testing.T, pod *corev1.Pod, crPod v1alpha1.Pod, deleted bool
 			}
 		}
 		assert.True(t, foundCs)
+	}
+}
+
+func verifyCrExecutors(t *testing.T, executors []sparkapiclient.Executor, crExecutors []v1alpha1.Executor) {
+	assert.Equal(t, len(executors), len(crExecutors))
+
+	for _, expectedExecutor := range executors {
+		foundExecutor := false
+		for _, actualExecutor := range crExecutors {
+			foundExecutor = actualExecutor.Id == expectedExecutor.Id &&
+				actualExecutor.AddTime == expectedExecutor.AddTime
+			if foundExecutor {
+				break
+			}
+		}
+		assert.True(t, foundExecutor)
 	}
 }
 
@@ -758,9 +788,10 @@ func getMinimalTestCr(namespace string, applicationId string) *v1alpha1.SparkApp
 }
 
 func getTestPod(namespace string, name string, uid string, role string, applicationId string, deleted bool) *corev1.Pod {
-	var deletionTimestamp metav1.Time
+	var deletionTimestamp *metav1.Time
 	if deleted {
-		deletionTimestamp = metav1.Unix(int64(1234), int64(1000))
+		ts := metav1.Unix(int64(1234), int64(1000))
+		deletionTimestamp = &ts
 	}
 	return &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{},
@@ -768,10 +799,12 @@ func getTestPod(namespace string, name string, uid string, role string, applicat
 			Name:              name,
 			Namespace:         namespace,
 			UID:               types.UID(uid),
-			DeletionTimestamp: &deletionTimestamp,
+			CreationTimestamp: metav1.Unix(int64(1000), 0),
+			DeletionTimestamp: deletionTimestamp,
 			Labels: map[string]string{
-				SparkAppLabel:  applicationId,
-				SparkRoleLabel: role,
+				SparkAppLabel:   applicationId,
+				SparkRoleLabel:  role,
+				"my-test-label": "some-value",
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -838,6 +871,20 @@ func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 				SparkUser:        "the second spark user",
 				Completed:        true,
 				AppSparkVersion:  "v7.0.0",
+			},
+		},
+		Executors: []sparkapiclient.Executor{
+			{
+				Id:      "driver",
+				AddTime: "2020-12-14T14:07:27.142GMT",
+			},
+			{
+				Id:      "1",
+				AddTime: "2020-12-14T15:17:37.142GMT",
+			},
+			{
+				Id:      "2",
+				AddTime: "2020-12-14T16:27:47.142GMT",
 			},
 		},
 	}

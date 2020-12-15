@@ -20,6 +20,7 @@ type Client interface {
 	GetApplication(applicationId string) (*Application, error)
 	GetEnvironment(applicationId string) (*Environment, error)
 	GetStages(applicationId string) ([]Stage, error)
+	GetExecutors(applicationId string) ([]Executor, error)
 }
 
 type client struct {
@@ -93,6 +94,23 @@ func (c client) GetStages(applicationId string) ([]Stage, error) {
 	return stages, nil
 }
 
+func (c client) GetExecutors(applicationId string) ([]Executor, error) {
+
+	path := c.getExecutorsURLPath(applicationId)
+	resp, err := c.transportClient.Get(path)
+	if err != nil {
+		return nil, err
+	}
+
+	executors := make([]Executor, 0)
+	err = json.Unmarshal(resp, &executors)
+	if err != nil {
+		return nil, err
+	}
+
+	return executors, nil
+}
+
 func (c client) getEnvironmentURLPath(applicationId string) string {
 	return fmt.Sprintf("%s/applications/%s/environment", apiVersionUrl, applicationId)
 }
@@ -103,4 +121,8 @@ func (c client) getApplicationURLPath(applicationId string) string {
 
 func (c client) getStagesURLPath(applicationId string) string {
 	return fmt.Sprintf("%s/applications/%s/stages", apiVersionUrl, applicationId)
+}
+
+func (c client) getExecutorsURLPath(applicationId string) string {
+	return fmt.Sprintf("%s/applications/%s/executors", apiVersionUrl, applicationId)
 }
