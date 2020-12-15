@@ -11,7 +11,7 @@ RUN go mod download
 
 # Copy the go source
 COPY main.go main.go
-COPY VERSION VERSION
+COPY VERSION_NUMBER VERSION_NUMBER
 COPY admission/ admission/
 COPY api/ api/
 COPY catalog/ catalog/
@@ -22,7 +22,7 @@ COPY internal/ internal/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build \
- -ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=$(cat VERSION) -X github.com/spotinst/wave-operator/internal/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+ -ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=$(cat VERSION_NUMBER) -X github.com/spotinst/wave-operator/internal/version.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
  -a -o manager main.go
 
 # Use distroless as minimal base image to package the manager binary
