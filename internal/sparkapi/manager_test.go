@@ -76,6 +76,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationId).Return(nil, fmt.Errorf("test error")).Times(1)
 		m.EXPECT().GetStages(applicationId).Return(getStagesResponse(), nil).Times(0)
+		m.EXPECT().GetExecutors(applicationId).Return(getExecutorsResponse(), nil).Times(0)
 
 		manager := &manager{
 			client: m,
@@ -94,6 +95,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationId).Return(getStagesResponse(), nil).Times(1)
+		m.EXPECT().GetExecutors(applicationId).Return(getExecutorsResponse(), nil).Times(1)
 
 		manager := &manager{
 			client: m,
@@ -116,6 +118,11 @@ func TestGetApplicationInfo(t *testing.T) {
 		assert.Equal(tt, 2, len(res.Attempts))
 		assert.Equal(tt, getApplicationResponse().Attempts[0], res.Attempts[0])
 		assert.Equal(tt, getApplicationResponse().Attempts[1], res.Attempts[1])
+
+		assert.Equal(tt, 3, len(res.Executors))
+		assert.Equal(tt, getExecutorsResponse()[0], res.Executors[0])
+		assert.Equal(tt, getExecutorsResponse()[1], res.Executors[1])
+		assert.Equal(tt, getExecutorsResponse()[2], res.Executors[2])
 	})
 
 }
@@ -182,6 +189,23 @@ func getEnvironmentResponse() *sparkapiclient.Environment {
 			{
 				"prop3", "val3", "thisShouldBeIgnored",
 			},
+		},
+	}
+}
+
+func getExecutorsResponse() []sparkapiclient.Executor {
+	return []sparkapiclient.Executor{
+		{
+			Id:      "driver",
+			AddTime: "2020-12-14T14:07:27.142GMT",
+		},
+		{
+			Id:      "1",
+			AddTime: "2020-12-14T15:17:37.142GMT",
+		},
+		{
+			Id:      "2",
+			AddTime: "2020-12-14T16:27:47.142GMT",
 		},
 	}
 }

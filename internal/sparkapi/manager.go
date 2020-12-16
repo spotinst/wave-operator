@@ -37,6 +37,7 @@ type ApplicationInfo struct {
 	TotalOutputBytes     int64
 	TotalExecutorCpuTime int64
 	Attempts             []sparkapiclient.Attempt
+	Executors            []sparkapiclient.Executor
 }
 
 var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (Manager, error) {
@@ -123,6 +124,13 @@ func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, err
 	applicationInfo.TotalOutputBytes = totalOutputBytes
 	applicationInfo.TotalInputBytes = totalInputBytes
 	applicationInfo.TotalExecutorCpuTime = totalExecutorCpuTime
+
+	executors, err := m.client.GetExecutors(applicationId)
+	if err != nil {
+		return nil, fmt.Errorf("could not get executors, %w", err)
+	}
+
+	applicationInfo.Executors = executors
 
 	return applicationInfo, nil
 }
