@@ -31,9 +31,10 @@ const (
 
 	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
 
-	apiVersion           = "wave.spot.io/v1alpha1"
-	sparkApplicationKind = "SparkApplication"
-	waveKindLabel        = "wave.spot.io/kind"
+	apiVersion             = "wave.spot.io/v1alpha1"
+	sparkApplicationKind   = "SparkApplication"
+	waveKindLabel          = "wave.spot.io/kind"
+	waveApplicationIdLabel = "wave.spot.io/application-id"
 
 	requeueAfterTimeout = 10 * time.Second
 	podDeletionTimeout  = 5 * time.Minute
@@ -517,7 +518,8 @@ func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, dr
 	cr := &v1alpha1.SparkApplication{}
 
 	cr.Labels = map[string]string{
-		waveKindLabel: sparkApplicationKind, // Facilitates cost calculations
+		waveKindLabel:          sparkApplicationKind, // Facilitates cost calculations
+		waveApplicationIdLabel: applicationId,        // Facilitates cost calculations
 	}
 
 	cr.Name = applicationId
