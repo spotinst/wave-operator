@@ -58,6 +58,7 @@ func TestMutateSimplePod(t *testing.T) {
 	newPod, ok := obj.(*(corev1.Pod))
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(newPod.Spec.Containers))
+	assert.Equal(t, "storage-sync", newPod.Spec.Containers[0].Name)
 	assert.Equal(t, ondemandAffinity, newPod.Spec.Affinity)
 	assert.Equal(t, 1, len(newPod.Spec.Volumes))
 	assert.Equal(t, "spark-logs", newPod.Spec.Volumes[0].Name)
