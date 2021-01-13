@@ -18,8 +18,7 @@ import (
 )
 
 const (
-	SparkOperatorChartName   = "sparkoperator"
-	SparkOperatorReleaseName = "wave-sparkoperator"
+	SparkOperatorReleaseName = "wave-spark-operator"
 )
 
 func GetSparkOperatorConditions(config *rest.Config, client client.Client, log logr.Logger) ([]*v1alpha1.WaveComponentCondition, error) {
