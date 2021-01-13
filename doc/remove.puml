@@ -1,0 +1,50 @@
+@startuml
+
+left to right direction
+
+actor admin
+
+rectangle kubernetes_cluster {
+    control kubernetes_controller
+    control wave_operator
+    storage wave_component
+    storage wave_environment
+
+    entity cert_manager
+    entity spark_component
+
+    control manager_job
+
+    'can these roles be merged?
+    collections operator_role
+    collections deletion_role
+}
+
+cloud spot {
+    interface spot_api
+    rectangle spot_ui
+}
+
+cloud aws_apis  {
+    interface eks
+}
+
+admin --> spot_ui : delete wave
+spot_ui -> spot_api
+
+spot_api -> kubernetes_controller
+kubernetes_controller -> manager_job : create
+
+manager_job -> cert_manager: helm|delete
+manager_job -- deletion_role : use
+manager_job -> wave_operator : helm|delete
+manager_job --o wave_component : delete
+manager_job --o wave_environment : read,delete
+
+wave_operator -- operator_role : use
+wave_operator --o wave_component : watch
+wave_operator --> spark_component: helm|delete
+
+
+
+@enduml

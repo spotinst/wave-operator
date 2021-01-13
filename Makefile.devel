@@ -37,6 +37,13 @@ manager: generate fmt vet  ## Build manager binary
  	 -ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=${VERSION} -X github.com/spotinst/wave-operator/internal/version.BuildDate=${BUILD_DATE}" \
      -o bin/manager main.go
 
+tide: generate box fmt vet  ## Build tide binary
+	go build \
+	-ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=${VERSION} -X github.com/spotinst/wave-operator/internal/version.BuildDate=${BUILD_DATE}" \
+	-o bin/tide cmd/tide/main.go
+
+box: ## generate embedded wavecomponenets and crd files
+	@$(GO) generate github.com/spotinst/wave-operator/internal/tide/...
 
 run: generate fmt vet manifests  ## Run against the configured Kubernetes cluster in ~/.kube/config
 	go run \

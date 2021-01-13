@@ -12,6 +12,7 @@ import (
 var (
 	ondemandAffinity = &corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{
+			// TODO make this required
 			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
 				{
 					Weight: 1,
