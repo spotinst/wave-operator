@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 )
 
 const (
@@ -187,11 +186,6 @@ func (m *manager) loadWaveComponents() ([]*v1alpha1.WaveComponent, error) {
 func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool) (*v1alpha1.WaveEnvironment, error) {
 	ctx := context.TODO()
 
-	certManagerExists, err := m.checkCertManagerPreinstallation()
-	if err != nil {
-		return nil, fmt.Errorf("can't determine state of certificate manager before installation, %w", err)
-	}
-
 	kc, err := m.getKubernetesClient()
 	if err != nil {
 		return nil, err
@@ -204,6 +198,11 @@ func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool)
 	_, err = kc.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return nil, err
+	}
+
+	certManagerExists, err := m.checkCertManagerPreinstallation()
+	if err != nil {
+		return nil, fmt.Errorf("can't determine state of certificate manager before installation, %w", err)
 	}
 
 	crd, err := m.loadCrd("/wave.spot.io_waveenvironments.yaml")
@@ -404,34 +403,6 @@ func (m *manager) installCertManager(ctx context.Context) error {
 		return true, nil
 	})
 	return err
-}
-
-func (m *manager) checkCertManagerPreinstallation() (bool, error) {
-	ctx := context.TODO()
-	config, err := m.kubeClientGetter.ToRESTConfig()
-	if err != nil {
-		return false, err
-	}
-	extClient, err := apiextensionsclient.NewForConfig(config)
-	if err != nil {
-		return false, err
-	}
-	_, err = extClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, "certificates.cert-manager.io", metav1.GetOptions{})
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	_, err = extClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, "issuers.cert-manager.io", metav1.GetOptions{})
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	// TODO create test issuer and certificate and wait for it to be populated
-	return true, nil
 }
 
 func (m *manager) installWaveOperator(ctx context.Context) error {

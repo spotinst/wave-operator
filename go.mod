@@ -3,12 +3,13 @@ module github.com/spotinst/wave-operator
 go 1.13
 
 require (
-	github.com/aws/aws-sdk-go v1.27.0
+	github.com/aws/aws-sdk-go v1.34.30
 	github.com/evanphx/json-patch/v5 v5.1.0
 	github.com/go-logr/logr v0.3.0
 	github.com/go-logr/zapr v0.3.0 // indirect
 	github.com/golang/mock v1.4.4
 	github.com/google/go-cmp v0.5.2
+	github.com/jetstack/cert-manager v1.1.0
 	github.com/magiconair/properties v1.8.1
 	github.com/mattbaird/jsonpatch v0.0.0-20200820163806-098863c1fc24
 	github.com/mattn/go-colorable v0.1.2 // indirect
