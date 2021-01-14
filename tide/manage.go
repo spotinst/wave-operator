@@ -13,8 +13,8 @@ import (
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
-	"github.com/spotinst/wave-operator/internal/tide/box"
 	"github.com/spotinst/wave-operator/internal/version"
+	"github.com/spotinst/wave-operator/tide/box"
 	v1 "k8s.io/api/core/v1"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"

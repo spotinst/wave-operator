@@ -19,7 +19,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/spotinst/wave-operator/internal/tide"
+	"github.com/spotinst/wave-operator/tide"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
