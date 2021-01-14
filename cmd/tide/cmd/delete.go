@@ -50,8 +50,7 @@ func init() {
 func delete(cmd *cobra.Command, args []string) {
 
 	logger := zap.New(zap.UseDevMode(true))
-	logger.Info("recede called")
-	logger.Info("removing wave")
+	logger.Info("recede: removing wave")
 	manager, err := tide.NewManager(logger)
 	if err != nil {
 		logger.Error(err, "creating manager failed")

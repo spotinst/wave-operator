@@ -124,8 +124,8 @@ var _ = BeforeSuite(func(done Done) {
 	err = sparkPodController.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
-	// there should be no preexisting helm release
-	helm := controller.getInstaller(Wave, controller.getClient, log)
+	// there should be no preexisting helm release; do not use "wave" prefix
+	helm := controller.getInstaller("", controller.getClient, log)
 	rel, err := helm.Get(helm.GetReleaseName(string(v1alpha1.SparkHistoryChartName)))
 	Expect(rel).To(BeNil())
 	Expect(err).ToNot(BeNil())

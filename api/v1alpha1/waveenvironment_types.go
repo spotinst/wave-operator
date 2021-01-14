@@ -7,19 +7,19 @@ import (
 type WaveEnvironmentSpec struct {
 
 	// cluster id
-	OceanClusterId string `json:"cceanClusterId,omitempty"`
+	OceanClusterId string `json:"oceanClusterId"`
 
 	// version of Wave Operator
-	OperatorVersion string `json:"operatorVersion,omitempty"`
+	OperatorVersion string `json:"operatorVersion"`
 
 	// whether Cert Manager was installed when creating Wave
-	CertManagerDeployed bool `json:"certManagerDeployed,omitempty"`
+	CertManagerDeployed bool `json:"certManagerDeployed"`
 
 	// whether the K8s cluster was provisioned when creating Wave
-	K8sClusterProvisioned bool `json:"k8sClusterProvisioned,omitempty"`
+	K8sClusterProvisioned bool `json:"k8sClusterProvisioned"`
 
 	// whether the Ocean cluster was provisioned when create Wave
-	OceanClusterProvisioned bool `json:"oceanClusterProvisioned,omitempty"`
+	OceanClusterProvisioned bool `json:"oceanClusterProvisioned"`
 }
 
 type WaveEnvironmentStatus struct {

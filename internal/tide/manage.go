@@ -16,7 +16,7 @@ import (
 	"github.com/spotinst/wave-operator/internal/tide/box"
 	"github.com/spotinst/wave-operator/internal/version"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +31,9 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrlrt "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 )
 
 const (
@@ -55,10 +58,10 @@ func init() {
 }
 
 type Manager interface {
-	SetConfiguration(k8sProvisioned, oceanClusterProvisioned, certManagerDeployed bool) error
+	SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool) (*v1alpha1.WaveEnvironment, error)
 	GetConfiguration() (*v1alpha1.WaveEnvironment, error)
 
-	Create() error
+	Create(env *v1alpha1.WaveEnvironment) error
 	Delete() error
 }
 
@@ -140,7 +143,7 @@ func (m *manager) loadCrd(name string) (*apiextensions.CustomResourceDefinition,
 	serializer := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 	_, _, err := serializer.Decode(b, &schema.GroupVersionKind{
 		Group:   "apiextensions.k8s.io",
-		Version: "v1",
+		Version: runtime.APIVersionInternal,
 		Kind:    "CustomResourceDefinition",
 	}, crd)
 	if err != nil {
@@ -154,9 +157,13 @@ func (m *manager) loadWaveComponents() ([]*v1alpha1.WaveComponent, error) {
 	boxed := box.Boxed.List()
 	var manifests []string
 	for _, n := range boxed {
-		if strings.HasPrefix("/v1alpha1_wavecomponent", n) {
+		// m.log.Info("reading box", "item", n)
+		if strings.HasPrefix(n, "/v1alpha1_wavecomponent") {
 			manifests = append(manifests, n)
 		}
+	}
+	if len(manifests) == 0 {
+		return nil, fmt.Errorf("No wave component manifests found")
 	}
 	waveComponents := make([]*v1alpha1.WaveComponent, len(manifests))
 
@@ -177,23 +184,49 @@ func (m *manager) loadWaveComponents() ([]*v1alpha1.WaveComponent, error) {
 	return waveComponents, nil
 }
 
-func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned, certManagerDeployed bool) error {
+func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool) (*v1alpha1.WaveEnvironment, error) {
+	ctx := context.TODO()
+
+	certManagerExists, err := m.checkCertManagerPreinstallation()
+	if err != nil {
+		return nil, fmt.Errorf("can't determine state of certificate manager before installation, %w", err)
+	}
+
+	kc, err := m.getKubernetesClient()
+	if err != nil {
+		return nil, err
+	}
+	ns := &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: catalog.SystemNamespace,
+		},
+	}
+	_, err = kc.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return nil, err
+	}
+
 	crd, err := m.loadCrd("/wave.spot.io_waveenvironments.yaml")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ucrd := &unstructured.Unstructured{}
-	if err := scheme.Convert(crd, ucrd, nil); err != nil {
-		return err
+	gv := schema.GroupVersion{
+		Group:   "apiextensions.k8s.io",
+		Version: runtime.APIVersionInternal,
 	}
-	client, err := m.getControllerRuntimeClient()
+	if err := scheme.Convert(crd, ucrd, gv); err != nil {
+		return nil, fmt.Errorf("failed to convert, %w", err)
+	}
+	rc, err := m.getControllerRuntimeClient()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	ctx := context.TODO()
-	err = client.Create(ctx, crd)
-	if !k8serrors.IsAlreadyExists(err) {
-		return err
+
+	err = rc.Create(ctx, crd, &ctrlrt.CreateOptions{})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return nil, fmt.Errorf("failed to create crd, %w", err)
+
 	}
 
 	env := &v1alpha1.WaveEnvironment{
@@ -204,17 +237,18 @@ func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned, cert
 		Spec: v1alpha1.WaveEnvironmentSpec{
 			OceanClusterId:          m.clusterID,
 			OperatorVersion:         version.BuildVersion,
-			CertManagerDeployed:     certManagerDeployed,
+			CertManagerDeployed:     !certManagerExists,
 			K8sClusterProvisioned:   k8sProvisioned,
 			OceanClusterProvisioned: oceanClusterProvisioned,
 		},
 	}
 	uenv := &unstructured.Unstructured{}
 	if err := scheme.Convert(env, uenv, nil); err != nil {
-		return err
+		return nil, err
 	}
 
-	return client.Create(ctx, uenv)
+	err = rc.Create(ctx, uenv)
+	return env, nil
 }
 
 func (m *manager) GetConfiguration() (*v1alpha1.WaveEnvironment, error) {
@@ -232,17 +266,19 @@ func (m *manager) GetConfiguration() (*v1alpha1.WaveEnvironment, error) {
 	return env, nil
 }
 
-func (m *manager) Create() error {
+func (m *manager) Create(env *v1alpha1.WaveEnvironment) error {
+	ctx := context.TODO()
 
 	waveComponents, err := m.loadWaveComponents()
 	if err != nil {
 		return err
 	}
 
-	ctx := context.TODO()
-	err = m.installCertManager(ctx)
-	if err != nil {
-		return err
+	if env.Spec.CertManagerDeployed {
+		err = m.installCertManager(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = m.installWaveOperator(ctx)
@@ -279,12 +315,6 @@ func (m *manager) Delete() error {
 	if err != nil {
 		return fmt.Errorf("kubernetes config error, %w", err)
 	}
-	// x, err := m.kubeClientGetter.ToDiscoveryClient()
-	//
-	// if err != nil {
-	// 	return fmt.Errorf("kubernetes config error, %w", err)
-	// }
-	// x.RESTClient().
 
 	components := &v1alpha1.WaveComponentList{}
 	err = rc.List(ctx, components)
@@ -324,9 +354,16 @@ func (m *manager) Delete() error {
 		return err
 	}
 
-	err = m.deleteCertManager(ctx)
+	env, err := m.GetConfiguration()
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to read wave environment, %w", err)
+	}
+
+	if env.Spec.CertManagerDeployed {
+		err = m.deleteCertManager(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -369,6 +406,34 @@ func (m *manager) installCertManager(ctx context.Context) error {
 	return err
 }
 
+func (m *manager) checkCertManagerPreinstallation() (bool, error) {
+	ctx := context.TODO()
+	config, err := m.kubeClientGetter.ToRESTConfig()
+	if err != nil {
+		return false, err
+	}
+	extClient, err := apiextensionsclient.NewForConfig(config)
+	if err != nil {
+		return false, err
+	}
+	_, err = extClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, "certificates.cert-manager.io", metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	_, err = extClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, "issuers.cert-manager.io", metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	// TODO create test issuer and certificate and wait for it to be populated
+	return true, nil
+}
+
 func (m *manager) installWaveOperator(ctx context.Context) error {
 	kc, err := m.getKubernetesClient()
 	if err != nil {
@@ -381,18 +446,18 @@ func (m *manager) installWaveOperator(ctx context.Context) error {
 		metav1.CreateOptions{},
 	)
 
-	installer := install.GetHelm("spotctl", m.kubeClientGetter, m.log)
+	installer := install.GetHelm("", m.kubeClientGetter, m.log)
 	err = installer.Install(WaveOperatorChart, WaveOperatorRepository, WaveOperatorVersion, "")
 	if err != nil {
 		return fmt.Errorf("cannot install wave operator, %w", err)
 	}
 
 	err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-		dep, err := kc.AppsV1().Deployments(catalog.SystemNamespace).Get(ctx, "spotctl-wave-operator", metav1.GetOptions{})
+		dep, err := kc.AppsV1().Deployments(catalog.SystemNamespace).Get(ctx, "wave-operator", metav1.GetOptions{})
 		if err != nil || dep.Status.AvailableReplicas == 0 {
 			return false, nil
 		}
-		m.log.Info("polled", "deployment", "spotctl-wave-operator", "replicas", dep.Status.AvailableReplicas)
+		m.log.Info("polled", "deployment", "wave-operator", "replicas", dep.Status.AvailableReplicas)
 
 		return true, nil
 	})
@@ -448,7 +513,7 @@ func (m *manager) deleteWaveOperator(ctx context.Context) error {
 		return err
 	}
 
-	installer := install.GetHelm("spotctl", m.kubeClientGetter, m.log)
+	installer := install.GetHelm("", m.kubeClientGetter, m.log)
 	err = installer.Delete(WaveOperatorChart, WaveOperatorRepository, WaveOperatorVersion, "")
 	if err != nil {
 		return fmt.Errorf("cannot delete wave operator, %w", err)

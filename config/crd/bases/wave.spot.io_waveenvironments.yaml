@@ -19,7 +19,7 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: WaveEnvironment is the Schema for the waveenvironments API
+        description: WaveEnvironment is the Schema for the wave environment API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -34,6 +34,30 @@ spec:
           metadata:
             type: object
           spec:
+            properties:
+              certManagerDeployed:
+                description: whether Cert Manager was installed when creating Wave
+                type: boolean
+              k8sClusterProvisioned:
+                description: whether the K8s cluster was provisioned when creating
+                  Wave
+                type: boolean
+              oceanClusterId:
+                description: cluster id
+                type: string
+              oceanClusterProvisioned:
+                description: whether the Ocean cluster was provisioned when create
+                  Wave
+                type: boolean
+              operatorVersion:
+                description: version of Wave Operator
+                type: string
+            required:
+            - certManagerDeployed
+            - k8sClusterProvisioned
+            - oceanClusterId
+            - oceanClusterProvisioned
+            - operatorVersion
             type: object
           status:
             type: object

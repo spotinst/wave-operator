@@ -50,27 +50,25 @@ func init() {
 
 	installCmd.Flags().BoolVar(&k8sClusterCreated, "k8s-cluster-created", false, "indicates the cluster was created specifically for wave")
 	installCmd.Flags().BoolVar(&oceanCreated, "ocean-created", false, "indicates that spot ocean was created for this wave installation")
-	installCmd.Flags().BoolVar(&certManagerDeployed, "cert-manager-deployed", true, "indicates cert-manager was installed as wave dependency")
 }
 
 func install(cmd *cobra.Command, args []string) {
 
 	logger := zap.New(zap.UseDevMode(true))
 
-	logger.Info("advance called")
-	logger.Info("installing wave")
+	logger.Info("advance: installing wave")
 
 	manager, err := tide.NewManager(logger)
 	if err != nil {
 		logger.Error(err, "create manager failed")
 		os.Exit(1)
 	}
-	err = manager.SetConfiguration(k8sClusterCreated, oceanCreated, certManagerDeployed)
+	env, err := manager.SetConfiguration(k8sClusterCreated, oceanCreated)
 	if err != nil {
 		logger.Error(err, "configuration failed")
 		os.Exit(1)
 	}
-	err = manager.Create()
+	err = manager.Create(env)
 	if err != nil {
 		logger.Error(err, "creation failed")
 		os.Exit(1)
