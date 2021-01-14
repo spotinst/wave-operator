@@ -98,7 +98,11 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 		}
 	}
 	if !exists {
-		newSpec.Containers = append(newSpec.Containers, storageContainer)
+		// Add storage sidecar container to front of containers list so it gets started first
+		newContainers := make([]corev1.Container, 0)
+		newContainers = append(newContainers, storageContainer)
+		newContainers = append(newContainers, newSpec.Containers...)
+		newSpec.Containers = newContainers
 	}
 
 	// mount shared volume to all

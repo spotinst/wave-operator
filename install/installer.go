@@ -297,12 +297,13 @@ func (i *HelmInstaller) Delete(chartName string, repository string, version stri
 	}
 
 	getAction := action.NewUninstall(cfg)
-	rel, err := getAction.Run(releaseName)
+	_, err = getAction.Run(releaseName)
 	if err != nil {
 		i.Log.Error(err, fmt.Sprintf("ignoring deletion error, %s", err.Error()))
 	} else {
-		i.Log.Info("removed", "release", rel.Release.Name)
+		i.Log.Info("removed", "release", releaseName)
 	}
+
 	return nil
 }
 
