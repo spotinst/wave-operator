@@ -24,7 +24,7 @@ var inputs = []input{
 		"manifests.go",
 	},
 	{
-		"../../../config/crd/bases",
+		"../../config/crd/bases",
 		"crds.go",
 	},
 }

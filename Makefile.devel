@@ -43,7 +43,7 @@ tide: manifests generate box fmt vet  ## Build tide binary
 	-o bin/tide cmd/tide/main.go
 
 box: ## generate embedded wavecomponents and crd files
-	@$(GO) generate github.com/spotinst/wave-operator/internal/tide/...
+	@$(GO) generate github.com/spotinst/wave-operator/tide/...
 
 run: generate fmt vet manifests  ## Run against the configured Kubernetes cluster in ~/.kube/config
 	go run \

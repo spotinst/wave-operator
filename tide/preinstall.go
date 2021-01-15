@@ -107,8 +107,8 @@ func (m *manager) testCertManager() (bool, error) {
 		}
 		for _, c := range obj.Status.Conditions {
 			if c.Type == "Ready" && c.Status == cmmeta.ConditionTrue {
-				return true, nil
 				m.log.Info("cert manager pre-check successful", "cert", obj.Name, "message", c.Message)
+				return true, nil
 			}
 		}
 		return false, nil
