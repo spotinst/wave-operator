@@ -190,10 +190,15 @@ func (i *HelmInstaller) Upgrade(chartName string, repository string, version str
 	settings := &cli.EnvSettings{}
 	cache, err := ioutil.TempDir(os.TempDir(), "wavecache-")
 	if err != nil {
-		return fmt.Errorf("unable to create cache directory, %s", err)
+		return fmt.Errorf("unable to create cache directory, %w", err)
 	}
-	defer os.RemoveAll(cache)
-	settings.RepositoryCache = os.TempDir()
+	defer func() {
+		err := os.RemoveAll(cache)
+		if err != nil {
+			i.Log.Error(err, "could not delete cache directory", "cacheDir", cache)
+		}
+	}()
+	settings.RepositoryCache = cache
 
 	cp, err := upgradeAction.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
@@ -251,12 +256,12 @@ func (i *HelmInstaller) Install(chartName string, repository string, version str
 	settings := &cli.EnvSettings{}
 	cache, err := ioutil.TempDir(os.TempDir(), "wavecache-")
 	if err != nil {
-		return fmt.Errorf("unable to create cache directory, %s", err)
+		return fmt.Errorf("unable to create cache directory, %w", err)
 	}
 	defer func() {
 		err := os.RemoveAll(cache)
 		if err != nil {
-			i.Log.Error(err, "could not delete wave cache directory", "cacheDir", cache)
+			i.Log.Error(err, "could not delete cache directory", "cacheDir", cache)
 		}
 	}()
 	settings.RepositoryCache = cache
