@@ -253,9 +253,17 @@ func (i *HelmInstaller) Install(chartName string, repository string, version str
 	if err != nil {
 		return fmt.Errorf("unable to create cache directory, %s", err)
 	}
-	defer os.RemoveAll(cache)
-	settings.RepositoryCache = os.TempDir()
+	defer func() {
+		err := os.RemoveAll(cache)
+		if err != nil {
+			i.Log.Error(err, "could not delete wave cache directory", "cacheDir", cache)
+		}
+	}()
+	settings.RepositoryCache = cache
 
+	// Note:
+	// This will check for the existence of a file called 'chartName' in the current directory.
+	// If it exists, it will assume that is the chart and it won't download the chart.
 	cp, err := installAction.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
 		return fmt.Errorf("failed to locate chart %s, %w", chartName, err)
