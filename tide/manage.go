@@ -27,7 +27,6 @@ import (
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
-	"github.com/spotinst/wave-operator/internal/version"
 	"github.com/spotinst/wave-operator/tide/box"
 )
 
@@ -242,7 +241,7 @@ func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool)
 		},
 		Spec: v1alpha1.WaveEnvironmentSpec{
 			EnvironmentNamespace:    catalog.SystemNamespace,
-			OperatorVersion:         version.BuildVersion, // TODO This does not work when importing as a library to spotctl
+			OperatorVersion:         WaveOperatorVersion, // TODO Make dynamic
 			CertManagerDeployed:     !certManagerExists,
 			K8sClusterProvisioned:   k8sProvisioned,
 			OceanClusterProvisioned: oceanClusterProvisioned,
