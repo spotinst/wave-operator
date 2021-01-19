@@ -7,13 +7,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/spotinst/wave-operator/api/v1alpha1"
-	"github.com/spotinst/wave-operator/catalog"
-	"github.com/spotinst/wave-operator/install"
-	"github.com/spotinst/wave-operator/internal/version"
-	"github.com/spotinst/wave-operator/tide/box"
 	v1 "k8s.io/api/core/v1"
-
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +24,11 @@ import (
 	ctrlrt "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/version"
+	"github.com/spotinst/wave-operator/tide/box"
 )
 
 const (
@@ -44,6 +43,10 @@ const (
 	CertManagerRepository = "https://charts.jetstack.io"
 	CertManagerVersion    = "v1.1.0"
 	CertManagerValues     = "installCRDs: true"
+
+	spotConfigMapNamespace        = metav1.NamespaceSystem
+	spotConfigMapName             = "spotinst-kubernetes-cluster-controller-config"
+	clusterIdentifierConfigMapKey = "spotinst.cluster-identifier"
 )
 
 var (
@@ -66,33 +69,36 @@ type Manager interface {
 }
 
 type manager struct {
-	clusterID        string
-	log              logr.Logger
-	kubeClientGetter genericclioptions.RESTClientGetter
+	clusterIdentifier string
+	log               logr.Logger
+	kubeClientGetter  genericclioptions.RESTClientGetter
 }
 
 func NewManager(log logr.Logger) (Manager, error) {
+
+	ctx := context.TODO()
+
 	conf, err := config.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("cannot get cluster configuration, %w", err)
 	}
 
-	ctx := context.TODO()
 	kc, err := kubernetes.NewForConfig(conf)
 	if err != nil {
 		return nil, fmt.Errorf("cannot connect to cluster, %w", err)
 	}
-	cm, err := kc.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(ctx, "spotinst-kubernetes-cluster-controller-config", metav1.GetOptions{})
+
+	cm, err := kc.CoreV1().ConfigMaps(spotConfigMapNamespace).Get(ctx, spotConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error in ocean configuration, %w", err)
 	}
 
-	// TODO This is not the Ocean ID
-	clusterID := cm.Data["spotinst.cluster-identifier"]
-	if clusterID == "" {
-		return nil, fmt.Errorf("ocean configuration has no cluster ID")
+	clusterIdentifier := cm.Data[clusterIdentifierConfigMapKey]
+	if clusterIdentifier == "" {
+		return nil, fmt.Errorf("ocean configuration has no cluster identifier")
 	}
-	log.Info("Reading ocean configuration", "id", clusterID)
+	log.Info("Reading ocean configuration", "clusterIdentifier", clusterIdentifier)
+
 	kubeConfig := genericclioptions.NewConfigFlags(false)
 	kubeConfig.APIServer = &conf.Host
 	kubeConfig.BearerToken = &conf.BearerToken
@@ -101,9 +107,9 @@ func NewManager(log logr.Logger) (Manager, error) {
 	kubeConfig.Namespace = &ns
 
 	return &manager{
-		clusterID:        clusterID,
-		log:              log,
-		kubeClientGetter: kubeConfig,
+		clusterIdentifier: clusterIdentifier,
+		log:               log,
+		kubeClientGetter:  kubeConfig,
 	}, nil
 }
 
@@ -227,12 +233,11 @@ func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool)
 	err = rc.Create(ctx, crd, &ctrlrt.CreateOptions{})
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return nil, fmt.Errorf("failed to create crd, %w", err)
-
 	}
 
 	env := &v1alpha1.WaveEnvironment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.clusterID,
+			Name:      m.clusterIdentifier,
 			Namespace: catalog.SystemNamespace,
 		},
 		Spec: v1alpha1.WaveEnvironmentSpec{
@@ -267,7 +272,7 @@ func (m *manager) GetConfiguration() (*v1alpha1.WaveEnvironment, error) {
 	}
 	env := &v1alpha1.WaveEnvironment{}
 	ctx := context.TODO()
-	key := ctrlrt.ObjectKey{Name: m.clusterID, Namespace: catalog.SystemNamespace}
+	key := ctrlrt.ObjectKey{Name: m.clusterIdentifier, Namespace: catalog.SystemNamespace}
 	err = client.Get(ctx, key, env)
 	if err != nil {
 		return nil, err
@@ -336,7 +341,9 @@ func (m *manager) Delete() error {
 		}
 	} else {
 		for _, wc := range components.Items {
-			rc.Delete(ctx, &wc)
+			if err := rc.Delete(ctx, &wc); err != nil {
+				m.log.Error(err, "could not delete wave component", wc.Name)
+			}
 		}
 	}
 
