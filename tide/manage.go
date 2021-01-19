@@ -36,6 +36,9 @@ import (
 )
 
 const (
+
+	// TODO Read chart values from external source
+
 	WaveOperatorChart      = "wave-operator"
 	WaveOperatorRepository = "https://charts.spot.io"
 	WaveOperatorVersion    = "0.1.8"
@@ -58,6 +61,7 @@ func init() {
 
 type Manager interface {
 	SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool) (*v1alpha1.WaveEnvironment, error)
+	DeleteConfiguration() error
 	GetConfiguration() (*v1alpha1.WaveEnvironment, error)
 
 	Create(env *v1alpha1.WaveEnvironment) error
@@ -235,7 +239,7 @@ func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool)
 			Namespace: catalog.SystemNamespace,
 		},
 		Spec: v1alpha1.WaveEnvironmentSpec{
-			OceanClusterId:          m.clusterID,
+			EnvironmentNamespace:    catalog.SystemNamespace,
 			OperatorVersion:         version.BuildVersion,
 			CertManagerDeployed:     !certManagerExists,
 			K8sClusterProvisioned:   k8sProvisioned,
@@ -248,6 +252,14 @@ func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool)
 	}
 
 	err = rc.Create(ctx, uenv)
+	if err != nil {
+		if k8serrors.IsAlreadyExists(err) {
+			m.log.Info("WaveEnvironment CR already exists", "message", err.Error())
+		} else {
+			return nil, fmt.Errorf("failed to create wave environment cr, %w", err)
+		}
+	}
+
 	return env, nil
 }
 
@@ -356,13 +368,76 @@ func (m *manager) Delete() error {
 
 	env, err := m.GetConfiguration()
 	if err != nil {
-		return fmt.Errorf("unable to read wave environment, %w", err)
+		crdGone, ok := err.(*apimeta.NoKindMatchError)
+		if ok {
+			m.log.Info("WaveEnvironment CRD is not present", "message", crdGone.Error())
+		} else {
+			if k8serrors.IsNotFound(err) {
+				m.log.Info("WaveEnvironment CR not found", "message", err.Error())
+			} else {
+				return fmt.Errorf("unable to read wave environment, %w", err)
+			}
+		}
+	} else {
+		if env.Spec.CertManagerDeployed {
+			err = m.deleteCertManager(ctx)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
-	if env.Spec.CertManagerDeployed {
-		err = m.deleteCertManager(ctx)
+	return nil
+}
+
+func (m *manager) DeleteConfiguration() error {
+
+	ctx := context.TODO()
+
+	crdPresent := true
+	crPresent := true
+
+	environment, err := m.GetConfiguration()
+	if err != nil {
+		crdGone, ok := err.(*apimeta.NoKindMatchError)
+		if ok {
+			m.log.Info("WaveEnvironment CRD is not present", "message", crdGone.Error())
+			crdPresent = false
+		} else {
+			if k8serrors.IsNotFound(err) {
+				m.log.Info("WaveEnvironment CR not found", "message", err.Error())
+				crPresent = false
+			} else {
+				return fmt.Errorf("unable to read wave environment, %w", err)
+			}
+		}
+	}
+
+	if !crdPresent {
+		return nil
+	}
+
+	rc, err := m.getControllerRuntimeClient()
+	if err != nil {
+		return fmt.Errorf("could not get controller runtime client, %w", err)
+	}
+
+	if crPresent {
+		err = rc.Delete(ctx, environment)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not delete wave environment cr, %w", err)
+		}
+	}
+
+	if crdPresent {
+		crd, err := m.loadCrd("/wave.spot.io_waveenvironments.yaml")
+		if err != nil {
+			return fmt.Errorf("could not load crd, %w", err)
+		}
+
+		err = rc.Delete(ctx, crd)
+		if err != nil {
+			return fmt.Errorf("could not delete crd, %w", err)
 		}
 	}
 

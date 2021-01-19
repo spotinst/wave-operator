@@ -62,4 +62,10 @@ func delete(cmd *cobra.Command, args []string) {
 		logger.Error(err, "deletion failed")
 		os.Exit(1)
 	}
+
+	err = manager.DeleteConfiguration()
+	if err != nil {
+		logger.Error(err, "deletion failed")
+		os.Exit(1)
+	}
 }

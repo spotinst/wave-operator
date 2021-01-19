@@ -38,13 +38,13 @@ spec:
               certManagerDeployed:
                 description: whether Cert Manager was installed when creating Wave
                 type: boolean
+              environmentNamespace:
+                description: environment namespace
+                type: string
               k8sClusterProvisioned:
                 description: whether the K8s cluster was provisioned when creating
                   Wave
                 type: boolean
-              oceanClusterId:
-                description: cluster id
-                type: string
               oceanClusterProvisioned:
                 description: whether the Ocean cluster was provisioned when create
                   Wave
@@ -54,8 +54,8 @@ spec:
                 type: string
             required:
             - certManagerDeployed
+            - environmentNamespace
             - k8sClusterProvisioned
-            - oceanClusterId
             - oceanClusterProvisioned
             - operatorVersion
             type: object
