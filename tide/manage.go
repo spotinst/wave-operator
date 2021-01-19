@@ -242,7 +242,7 @@ func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool)
 		},
 		Spec: v1alpha1.WaveEnvironmentSpec{
 			EnvironmentNamespace:    catalog.SystemNamespace,
-			OperatorVersion:         version.BuildVersion,
+			OperatorVersion:         version.BuildVersion, // TODO This does not work when importing as a library to spotctl
 			CertManagerDeployed:     !certManagerExists,
 			K8sClusterProvisioned:   k8sProvisioned,
 			OceanClusterProvisioned: oceanClusterProvisioned,
