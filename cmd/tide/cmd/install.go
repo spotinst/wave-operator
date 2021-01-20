@@ -63,15 +63,24 @@ func install(cmd *cobra.Command, args []string) {
 		logger.Error(err, "create manager failed")
 		os.Exit(1)
 	}
+
+	err = manager.CreateTideRBAC()
+	if err != nil {
+		logger.Error(err, "could not create tide rbac objects")
+		os.Exit(1)
+	}
+
 	env, err := manager.SetConfiguration(k8sClusterCreated, oceanCreated)
 	if err != nil {
 		logger.Error(err, "configuration failed")
 		os.Exit(1)
 	}
+
 	err = manager.Create(env)
 	if err != nil {
 		logger.Error(err, "creation failed")
 		os.Exit(1)
 	}
-	logger.Info("wave operator is now managing components")
+
+	logger.Info("Wave operator is now managing components")
 }

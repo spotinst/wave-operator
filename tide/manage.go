@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -18,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer/yaml"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -28,6 +30,7 @@ import (
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/tide/box"
+	tideconfig "github.com/spotinst/wave-operator/tide/config"
 )
 
 const (
@@ -65,6 +68,9 @@ type Manager interface {
 
 	Create(env *v1alpha1.WaveEnvironment) error
 	Delete() error
+
+	CreateTideRBAC() error
+	DeleteTideRBAC() error
 }
 
 type manager struct {
@@ -193,6 +199,8 @@ func (m *manager) loadWaveComponents() ([]*v1alpha1.WaveComponent, error) {
 func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool) (*v1alpha1.WaveEnvironment, error) {
 	ctx := context.TODO()
 
+	m.log.Info("Configuring Wave")
+
 	kc, err := m.getKubernetesClient()
 	if err != nil {
 		return nil, err
@@ -281,6 +289,8 @@ func (m *manager) GetConfiguration() (*v1alpha1.WaveEnvironment, error) {
 
 func (m *manager) Create(env *v1alpha1.WaveEnvironment) error {
 	ctx := context.TODO()
+
+	m.log.Info("Installing Wave")
 
 	waveComponents, err := m.loadWaveComponents()
 	if err != nil {
@@ -562,4 +572,86 @@ func (m *manager) deleteCertManager(ctx context.Context) error {
 		return true, nil
 	})
 	return err
+}
+
+func (m *manager) CreateTideRBAC() error {
+
+	ctx := context.TODO()
+	namespace := catalog.SystemNamespace
+
+	kubeClient, err := m.getKubernetesClient()
+	if err != nil {
+		return fmt.Errorf("could not create kubernetes client, %w", err)
+	}
+
+	sa, crb, err := loadTideRBAC(namespace)
+	if err != nil {
+		return fmt.Errorf("could not load tide RBAC objects, %w", err)
+	}
+
+	m.log.Info("Creating tide RBAC objects")
+
+	_, err = kubeClient.CoreV1().ServiceAccounts(namespace).Create(ctx, sa, metav1.CreateOptions{})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create tide service account, %w", err)
+	}
+
+	_, err = kubeClient.RbacV1().ClusterRoleBindings().Create(ctx, crb, metav1.CreateOptions{})
+	if err != nil && !k8serrors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create tide cluster role binding, %w", err)
+	}
+
+	return nil
+}
+
+func (m *manager) DeleteTideRBAC() error {
+
+	ctx := context.TODO()
+	namespace := catalog.SystemNamespace
+
+	kubeClient, err := m.getKubernetesClient()
+	if err != nil {
+		return fmt.Errorf("could not create kubernetes client, %w", err)
+	}
+
+	sa, crb, err := loadTideRBAC(namespace)
+	if err != nil {
+		return fmt.Errorf("could not load tide RBAC objects, %w", err)
+	}
+
+	m.log.Info("Deleting tide RBAC objects")
+
+	err = kubeClient.CoreV1().ServiceAccounts(namespace).Delete(ctx, sa.Name, metav1.DeleteOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("could not delete tide service account, %w", err)
+	}
+
+	err = kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, crb.Name, metav1.DeleteOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("could not delete tide cluster role binding, %w", err)
+	}
+
+	return nil
+}
+
+func loadTideRBAC(namespace string) (*v1.ServiceAccount, *rbacv1.ClusterRoleBinding, error) {
+
+	manifests, err := tideconfig.GetRBACManifests(namespace)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not get manifests, %w", err)
+	}
+
+	sa := &v1.ServiceAccount{}
+	err = yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(manifests.ServiceAccount), len(manifests.ServiceAccount)).Decode(sa)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not decode service account yaml, %w", err)
+	}
+
+	crb := &rbacv1.ClusterRoleBinding{}
+	err = yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(manifests.ClusterRoleBinding), len(manifests.ClusterRoleBinding)).Decode(crb)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not decode cluster role binding yaml, %w", err)
+	}
+
+	return sa, crb, nil
 }

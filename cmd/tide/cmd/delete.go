@@ -65,7 +65,15 @@ func delete(cmd *cobra.Command, args []string) {
 
 	err = manager.DeleteConfiguration()
 	if err != nil {
-		logger.Error(err, "deletion failed")
+		logger.Error(err, "could not delete wave configuration")
 		os.Exit(1)
 	}
+
+	err = manager.DeleteTideRBAC()
+	if err != nil {
+		// Best effort (deletion job deletes its own service account and cluster role binding)
+		logger.Error(err, "could not delete tide rbac objects")
+	}
+
+	logger.Info("Wave has been removed")
 }
