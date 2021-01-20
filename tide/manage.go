@@ -614,19 +614,14 @@ func (m *manager) DeleteTideRBAC() error {
 		return fmt.Errorf("could not create kubernetes client, %w", err)
 	}
 
-	sa, crb, err := loadTideRBAC(namespace)
-	if err != nil {
-		return fmt.Errorf("could not load tide RBAC objects, %w", err)
-	}
-
 	m.log.Info("Deleting tide RBAC objects")
 
-	err = kubeClient.CoreV1().ServiceAccounts(namespace).Delete(ctx, sa.Name, metav1.DeleteOptions{})
+	err = kubeClient.CoreV1().ServiceAccounts(namespace).Delete(ctx, tideconfig.ServiceAccountName, metav1.DeleteOptions{})
 	if err != nil && !k8serrors.IsNotFound(err) {
 		return fmt.Errorf("could not delete tide service account, %w", err)
 	}
 
-	err = kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, crb.Name, metav1.DeleteOptions{})
+	err = kubeClient.RbacV1().ClusterRoleBindings().Delete(ctx, tideconfig.RoleBindingName, metav1.DeleteOptions{})
 	if err != nil && !k8serrors.IsNotFound(err) {
 		return fmt.Errorf("could not delete tide cluster role binding, %w", err)
 	}
