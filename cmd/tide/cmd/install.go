@@ -64,15 +64,15 @@ func install(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	err = manager.CreateTideRBAC()
-	if err != nil {
-		logger.Error(err, "could not create tide rbac objects")
-		os.Exit(1)
-	}
-
 	env, err := manager.SetConfiguration(k8sClusterCreated, oceanCreated)
 	if err != nil {
 		logger.Error(err, "configuration failed")
+		os.Exit(1)
+	}
+
+	err = manager.CreateTideRBAC()
+	if err != nil {
+		logger.Error(err, "could not create tide rbac objects")
 		os.Exit(1)
 	}
 
