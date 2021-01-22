@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: delete-wave
+  namespace: spot-system
+spec:
+  template:
+    spec:
+      containers:
+        - image: thorsteinnth/tide:latest
+          name: tide
+          args:
+            - recede
+          resources: {}
+          imagePullPolicy: Always
+      serviceAccountName: tide
+      restartPolicy: Never
