@@ -13,10 +13,9 @@ var (
 	ondemandAffinity = &corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{
 			// TODO make this required
-			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
-				{
-					Weight: 1,
-					Preference: corev1.NodeSelectorTerm{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
 						MatchExpressions: []corev1.NodeSelectorRequirement{
 							{
 								Key:      "spotinst.io/node-lifecycle",
