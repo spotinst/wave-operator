@@ -5,6 +5,10 @@ REGISTRY = public.ecr.aws/l8m2k1n1/netapp/wave-operator
 IMG ?= ${REGISTRY}:${VERSION}
 LATEST = ${REGISTRY}:latest
 
+TIDE_REGISTRY = public.ecr.aws/l8m2k1n1/netapp/tide
+TIDE_IMG ?= ${TIDE_REGISTRY}:${VERSION}
+TIDE_LATEST = ${TIDE_REGISTRY}:latest
+
 CRD_OPTIONS ?= "crd:crdVersions=v1,preserveUnknownFields=false"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -37,6 +41,13 @@ manager: generate fmt vet  ## Build manager binary
  	 -ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=${VERSION} -X github.com/spotinst/wave-operator/internal/version.BuildDate=${BUILD_DATE}" \
      -o bin/manager main.go
 
+tide: manifests generate box fmt vet  ## Build tide binary
+	go build \
+	-ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=${VERSION} -X github.com/spotinst/wave-operator/internal/version.BuildDate=${BUILD_DATE}" \
+	-o bin/tide cmd/tide/main.go
+
+box: ## generate embedded wavecomponents and crd files
+	@$(GO) generate github.com/spotinst/wave-operator/tide/...
 
 run: generate fmt vet manifests  ## Run against the configured Kubernetes cluster in ~/.kube/config
 	go run \
@@ -58,8 +69,8 @@ deploy: manifests  ## Deploy controller in the configured Kubernetes cluster in 
 
 
 manifests: controller-gen  ## Generate manifests e.g. CRD, RBAC etc.
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-	# $(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./..." output:crd:artifacts:config=helm/wave-operator/templates/
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./api/..." output:crd:artifacts:config=config/crd/bases
+	# $(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./api/..." output:crd:artifacts:config=helm/wave-operator/templates/
 
 
 fmt:  ## Run go fmt against code
@@ -82,6 +93,16 @@ docker-build: test version ## Build the docker image
 docker-push:  ## Push the docker image
 	docker push ${IMG}
 	docker push ${LATEST}
+
+
+docker-build-tide: test version ## Build the tide docker image
+	docker build --file Dockerfile.tide . -t ${TIDE_IMG}
+	docker tag ${TIDE_IMG} ${TIDE_LATEST}
+
+
+docker-push-tide:  ## Push the tide docker image
+	docker push ${TIDE_IMG}
+	docker push ${TIDE_LATEST}
 
 
 # download controller-gen if necessary
