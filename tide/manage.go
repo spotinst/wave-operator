@@ -63,7 +63,7 @@ func init() {
 
 type Manager interface {
 	SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool) (*v1alpha1.WaveEnvironment, error)
-	DeleteConfiguration() error
+	DeleteConfiguration(deleteEnvironmentCrd bool) error
 	GetConfiguration() (*v1alpha1.WaveEnvironment, error)
 
 	Create(env *v1alpha1.WaveEnvironment) error
@@ -334,6 +334,8 @@ func (m *manager) Delete() error {
 
 	ctx := context.TODO()
 
+	m.log.Info("Deleting Wave")
+
 	rc, err := m.getControllerRuntimeClient()
 	if err != nil {
 		return fmt.Errorf("kubernetes config error, %w", err)
@@ -403,7 +405,9 @@ func (m *manager) Delete() error {
 	return nil
 }
 
-func (m *manager) DeleteConfiguration() error {
+func (m *manager) DeleteConfiguration(deleteEnvironmentCrd bool) error {
+
+	m.log.Info("Deleting configuration", "deleteEnvironmentCrd", deleteEnvironmentCrd)
 
 	ctx := context.TODO()
 
@@ -442,7 +446,7 @@ func (m *manager) DeleteConfiguration() error {
 		}
 	}
 
-	if crdPresent {
+	if crdPresent && deleteEnvironmentCrd {
 		crd, err := m.loadCrd("/wave.spot.io_waveenvironments.yaml")
 		if err != nil {
 			return fmt.Errorf("could not load crd, %w", err)

@@ -41,10 +41,16 @@ var deleteCmd = &cobra.Command{
 	Run: delete,
 }
 
+var (
+	deleteEnvironmentCrd bool
+	deleteTideRBAC       bool
+)
+
 func init() {
 	rootCmd.AddCommand(deleteCmd)
 
-	deleteCmd.Flags().BoolP("preserve-cert-manager", "p", false, "leaves cert-manager in place")
+	deleteCmd.Flags().BoolVar(&deleteEnvironmentCrd, "delete-environment-crd", false, "should the Wave Environment CRD be deleted")
+	deleteCmd.Flags().BoolVar(&deleteTideRBAC, "delete-tide-rbac", false, "should the Tide RBAC objects be deleted")
 }
 
 func delete(cmd *cobra.Command, args []string) {
@@ -63,16 +69,18 @@ func delete(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	err = manager.DeleteConfiguration()
+	err = manager.DeleteConfiguration(deleteEnvironmentCrd)
 	if err != nil {
 		logger.Error(err, "could not delete wave configuration")
 		os.Exit(1)
 	}
 
-	err = manager.DeleteTideRBAC()
-	if err != nil {
-		// Best effort (deletion job deletes its own service account and cluster role binding)
-		logger.Error(err, "could not delete tide rbac objects")
+	if deleteTideRBAC {
+		err = manager.DeleteTideRBAC()
+		if err != nil {
+			// Best effort (deletion job deletes its own service account and cluster role binding)
+			logger.Error(err, "could not delete tide rbac objects")
+		}
 	}
 
 	logger.Info("Wave has been removed")
