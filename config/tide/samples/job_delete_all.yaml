@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: delete-wave-all
+  namespace: spot-system
+spec:
+  template:
+    spec:
+      containers:
+        - image: public.ecr.aws/l8m2k1n1/netapp/tide:latest
+          name: tide
+          args:
+            - recede
+            - --delete-environment-crd
+            - --delete-tide-rbac
+          resources: {}
+          imagePullPolicy: Always
+      serviceAccountName: tide
+      restartPolicy: Never

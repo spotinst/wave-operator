@@ -7,7 +7,7 @@ spec:
   template:
     spec:
       containers:
-        - image: thorsteinnth/tide:latest
+        - image: public.ecr.aws/l8m2k1n1/netapp/tide:latest
           name: tide
           args:
             - recede

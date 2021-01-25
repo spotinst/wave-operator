@@ -5,6 +5,10 @@ REGISTRY = public.ecr.aws/l8m2k1n1/netapp/wave-operator
 IMG ?= ${REGISTRY}:${VERSION}
 LATEST = ${REGISTRY}:latest
 
+TIDE_REGISTRY = public.ecr.aws/l8m2k1n1/netapp/tide
+TIDE_IMG ?= ${TIDE_REGISTRY}:${VERSION}
+TIDE_LATEST = ${TIDE_REGISTRY}:latest
+
 CRD_OPTIONS ?= "crd:crdVersions=v1,preserveUnknownFields=false"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -89,6 +93,16 @@ docker-build: test version ## Build the docker image
 docker-push:  ## Push the docker image
 	docker push ${IMG}
 	docker push ${LATEST}
+
+
+docker-build-tide: test version ## Build the tide docker image
+	docker build --file Dockerfile.tide . -t ${TIDE_IMG}
+	docker tag ${TIDE_IMG} ${TIDE_LATEST}
+
+
+docker-push-tide:  ## Push the tide docker image
+	docker push ${TIDE_IMG}
+	docker push ${TIDE_LATEST}
 
 
 # download controller-gen if necessary
