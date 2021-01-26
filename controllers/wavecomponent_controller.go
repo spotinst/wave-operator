@@ -304,7 +304,7 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 	deepCopy := comp.DeepCopy()
 	changed := false
 
-	conditions, err := r.GetCurrentConditions(comp)
+	conditions, err := r.GetCurrentConditions(comp, i)
 	if err != nil {
 		log.Error(err, "cannot get current conditions")
 		return ctrl.Result{}, err
@@ -316,7 +316,7 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 		}
 	}
 
-	properties, err := r.GetCurrentProperties(deepCopy)
+	properties, err := r.GetCurrentProperties(deepCopy, i)
 	if err != nil {
 		log.Error(err, "cannot get current properties")
 		return ctrl.Result{}, err
@@ -491,7 +491,7 @@ func (r *WaveComponentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // GetCurrentCondition examines the current environment and returns a condition for the component
-func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveComponent) ([]*v1alpha1.WaveComponentCondition, error) {
+func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveComponent, installer install.Installer) ([]*v1alpha1.WaveComponentCondition, error) {
 
 	var conditionOK = components.NewWaveComponentCondition(
 		v1alpha1.WaveComponentAvailable,
@@ -506,9 +506,11 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 		"",
 	)
 
+	releaseName := installer.GetReleaseName(string(comp.Spec.Name))
+
 	switch comp.Spec.Name {
 	case v1alpha1.SparkHistoryChartName:
-		return components.GetSparkHistoryConditions(r.Client, r.Log)
+		return components.GetSparkHistoryConditions(r.Client, releaseName)
 	case v1alpha1.EnterpriseGatewayChartName:
 		restconfig, _ := r.getClient.ToRESTConfig()
 		return components.GetEnterpriseGatewayConditions(restconfig, r.Client, r.Log)
@@ -518,9 +520,9 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 			conditionError.Message = err.Error()
 			return []*v1alpha1.WaveComponentCondition{conditionError}, err
 		}
-		return components.GetSparkOperatorConditions(config, r.Client, r.Log)
+		return components.GetSparkOperatorConditions(config, r.Client, releaseName)
 	case v1alpha1.WaveIngressChartName:
-		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil
+		return []*v1alpha1.WaveComponentCondition{conditionOK}, nil // TODO Check conditions?
 	default:
 		// (a) check helm
 		// (b) return not installed
@@ -535,10 +537,11 @@ func (r *WaveComponentReconciler) GetCurrentConditions(comp *v1alpha1.WaveCompon
 	}
 }
 
-func (r *WaveComponentReconciler) GetCurrentProperties(comp *v1alpha1.WaveComponent) (map[string]string, error) {
+func (r *WaveComponentReconciler) GetCurrentProperties(comp *v1alpha1.WaveComponent, installer install.Installer) (map[string]string, error) {
+	releaseName := installer.GetReleaseName(string(comp.Spec.Name))
 	switch comp.Spec.Name {
 	case v1alpha1.SparkHistoryChartName:
-		return components.GetSparkHistoryProperties(comp, r.Client, r.Log)
+		return components.GetSparkHistoryProperties(comp, r.Client, r.Log, releaseName)
 	case v1alpha1.EnterpriseGatewayChartName:
 		return components.GetEnterpriseGatewayProperties(comp, r.Client, r.Log)
 	case v1alpha1.SparkOperatorChartName:

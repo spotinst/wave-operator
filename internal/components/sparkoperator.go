@@ -17,11 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	SparkOperatorReleaseName = "wave-spark-operator"
-)
-
-func GetSparkOperatorConditions(config *rest.Config, client client.Client, log logr.Logger) ([]*v1alpha1.WaveComponentCondition, error) {
+func GetSparkOperatorConditions(config *rest.Config, client client.Client, releaseName string) ([]*v1alpha1.WaveComponentCondition, error) {
 
 	conditions := []*v1alpha1.WaveComponentCondition{}
 	ctx := context.TODO()
@@ -50,7 +46,7 @@ func GetSparkOperatorConditions(config *rest.Config, client client.Client, log l
 	}
 
 	deployment := &appsv1.Deployment{}
-	err = client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: SparkOperatorReleaseName}, deployment)
+	err = client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: releaseName}, deployment)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			conditions = append(conditions,
