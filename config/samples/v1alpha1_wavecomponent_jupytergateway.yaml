@@ -2,6 +2,7 @@ apiVersion: wave.spot.io/v1alpha1
 kind: WaveComponent
 metadata:
   name: enterprise-gateway
+  namespace: spot-system
 spec:
   type: helm
   name: enterprise-gateway

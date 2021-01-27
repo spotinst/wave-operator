@@ -21,7 +21,6 @@ import (
 const (
 	EnterpriseGatewayChartName   = "enterprise-gateway"
 	EnterpriseGatewayIngressName = "enterprise-gateway-ingress"
-	EnterpriseGatewayReleaseName = "wave-enterprise-gateway"
 )
 
 func GetEnterpriseGatewayConditions(config *rest.Config, client client.Client, log logr.Logger) ([]*v1alpha1.WaveComponentCondition, error) {
