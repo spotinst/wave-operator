@@ -166,7 +166,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				log.Info("Ignoring garbage collection event")
 				return ctrl.Result{}, nil
 			} else if sparkRole == DriverRole {
-				err := r.createNewSparkApplicationCr(ctx, p, sparkApplicationId)
+				err := r.createNewSparkApplicationCr(ctx, p, sparkApplicationId, log)
 				if err != nil {
 					log.Error(err, "could not create spark application cr")
 					return ctrl.Result{}, err
@@ -263,8 +263,8 @@ func (r *SparkPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, cr *v1alpha1.SparkApplication, log logr.Logger) error {
 	deepCopy := cr.DeepCopy()
 
-	driverPodCr := newPodCR(pod)
-	deepCopy.Status.Data.Driver = driverPodCr
+	updatedDriverPodCr := newPodCR(pod, &deepCopy.Status.Data.Driver, log)
+	deepCopy.Status.Data.Driver = updatedDriverPodCr
 
 	// Fetch information from Spark API
 	// Let's update the driver pod information even though the Spark API call fails
@@ -403,12 +403,13 @@ func (r *SparkPodReconciler) handleExecutor(ctx context.Context, pod *corev1.Pod
 
 	if foundIdx == -1 {
 		// Create new executor entry
-		newExecutor := newPodCR(pod)
+		newExecutor := newPodCR(pod, nil, log)
 		newExecutors := append(deepCopy.Status.Data.Executors, newExecutor)
 		deepCopy.Status.Data.Executors = newExecutors
 	} else {
 		// Update existing executor entry
-		updatedExecutor := newPodCR(pod)
+		existingExecutor := &deepCopy.Status.Data.Executors[foundIdx]
+		updatedExecutor := newPodCR(pod, existingExecutor, log)
 		deepCopy.Status.Data.Executors[foundIdx] = updatedExecutor
 	}
 
@@ -420,14 +421,22 @@ func (r *SparkPodReconciler) handleExecutor(ctx context.Context, pod *corev1.Pod
 	return nil
 }
 
-func newPodCR(pod *corev1.Pod) v1alpha1.Pod {
+func newPodCR(pod *corev1.Pod, existingPodCr *v1alpha1.Pod, log logr.Logger) v1alpha1.Pod {
 	podCr := v1alpha1.Pod{}
 
 	podCr.UID = string(pod.UID)
 	podCr.Namespace = pod.Namespace
 	podCr.Name = pod.Name
-	podCr.Phase = pod.Status.Phase
-	podCr.Statuses = pod.Status.ContainerStatuses
+
+	if shouldUpdatePodCrPhaseAndStatuses(pod, existingPodCr) {
+		podCr.Phase = pod.Status.Phase
+		podCr.Statuses = pod.Status.ContainerStatuses
+	} else {
+		log.Info("Will not update pod CR phase and container statuses")
+		podCr.Phase = existingPodCr.Phase
+		podCr.Statuses = existingPodCr.Statuses
+	}
+
 	podCr.CreationTimestamp = pod.CreationTimestamp
 	podCr.DeletionTimestamp = pod.DeletionTimestamp
 	podCr.Labels = pod.Labels
@@ -441,6 +450,21 @@ func newPodCR(pod *corev1.Pod) v1alpha1.Pod {
 	}
 
 	return podCr
+}
+
+// When a pod is deleted, we may get an event for the pod where it has gone back to pending state,
+// with container statuses ContainerCreating.
+// If we see this, let's not update the pod phase and container statuses
+func shouldUpdatePodCrPhaseAndStatuses(pod *corev1.Pod, existingCr *v1alpha1.Pod) bool {
+	if existingCr == nil {
+		return true
+	}
+	if !pod.ObjectMeta.DeletionTimestamp.IsZero() && pod.Status.Phase == corev1.PodPending {
+		if existingCr.Phase != "" && existingCr.Phase != corev1.PodPending {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationId string, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
@@ -519,7 +543,7 @@ func (r *SparkPodReconciler) getSparkApplicationCr(ctx context.Context, namespac
 	return &app, nil
 }
 
-func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, driverPod *corev1.Pod, applicationId string) error {
+func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, driverPod *corev1.Pod, applicationId string, log logr.Logger) error {
 	cr := &v1alpha1.SparkApplication{}
 
 	cr.Labels = map[string]string{
@@ -539,7 +563,7 @@ func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, dr
 	}
 	cr.Spec.Heritage = heritage
 
-	cr.Status.Data.Driver = newPodCR(driverPod)
+	cr.Status.Data.Driver = newPodCR(driverPod, nil, log)
 
 	cr.Status.Data.Executors = make([]v1alpha1.Pod, 0)
 	cr.Status.Data.RunStatistics.Attempts = make([]v1alpha1.Attempt, 0)
