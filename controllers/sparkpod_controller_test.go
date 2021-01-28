@@ -691,6 +691,108 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 
 }
 
+func TestReconcile_deletedPod_revertedToPending(t *testing.T) {
+	ctx := context.TODO()
+
+	applicationId := "spark-123"
+	ns := "test-ns"
+
+	pod := getTestPod(ns, "driver", "123890", DriverRole, applicationId, true)
+	pod.Finalizers = []string{sparkApplicationFinalizerName}
+	// Override deletion timestamp
+	ts := metav1.Now()
+	pod.DeletionTimestamp = &ts
+
+	cr := getMinimalTestCr(ns, applicationId)
+
+	// Set owner reference on pod
+	controllerOwner := false
+	blockOwnerDeletion := true
+	crOwnerRef := metav1.OwnerReference{
+		APIVersion:         apiVersion,
+		Kind:               sparkApplicationKind,
+		Name:               cr.Name,
+		UID:                cr.UID,
+		Controller:         &controllerOwner,
+		BlockOwnerDeletion: &blockOwnerDeletion,
+	}
+	pod.OwnerReferences = []metav1.OwnerReference{crOwnerRef}
+
+	driverCr := v1alpha1.Pod{
+		Name:      "driver",
+		Namespace: ns,
+		UID:       "123890",
+		Phase:     corev1.PodRunning, // The pod was previously running
+		Statuses: []corev1.ContainerStatus{
+			{
+				Name: "should not be overwritten",
+			},
+		},
+	}
+	cr.Status.Data.Driver = driverCr
+
+	// Mock Spark API manager
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := mock_sparkapi.NewMockManager(ctrl)
+	m.EXPECT().GetApplicationInfo(applicationId).Return(getTestApplicationInfo(), nil).Times(2)
+	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
+		return m, nil
+	}
+
+	clientSet := k8sfake.NewSimpleClientset()
+
+	t.Run("whenPodDeleted_revertedToPending_shouldNotUpdatePhaseAndStatus", func(tt *testing.T) {
+		// Pod is pending, and deleted
+		pod.Status.Phase = corev1.PodPending
+
+		ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
+
+		controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+
+		req := ctrlrt.Request{
+			NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+		}
+		_, err := controller.Reconcile(ctx, req)
+		require.NoError(t, err)
+
+		updatedCr := &v1alpha1.SparkApplication{}
+		err = ctrlClient.Get(ctx, client.ObjectKey{Name: applicationId, Namespace: pod.Namespace}, updatedCr)
+		require.NoError(t, err)
+
+		// Most fields should have been updated
+		assert.NotNil(t, updatedCr.Status.Data.Driver.DeletionTimestamp)
+
+		// Phase and statuses should not have been updated
+		assert.Equal(t, driverCr.Phase, updatedCr.Status.Data.Driver.Phase)
+		assert.Equal(t, driverCr.Statuses, updatedCr.Status.Data.Driver.Statuses)
+	})
+
+	t.Run("whenPodDeleted_notRevertedToPending_shouldUpdatePhaseAndStatus", func(tt *testing.T) {
+		// Pod is succeeded, and deleted
+		pod.Status.Phase = corev1.PodSucceeded
+
+		ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
+
+		controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+
+		req := ctrlrt.Request{
+			NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+		}
+		_, err := controller.Reconcile(ctx, req)
+		require.NoError(t, err)
+
+		updatedCr := &v1alpha1.SparkApplication{}
+		err = ctrlClient.Get(ctx, client.ObjectKey{Name: applicationId, Namespace: pod.Namespace}, updatedCr)
+		require.NoError(t, err)
+
+		// All fields should have been updated
+		assert.NotNil(t, updatedCr.Status.Data.Driver.DeletionTimestamp)
+		assert.Equal(t, pod.Status.Phase, updatedCr.Status.Data.Driver.Phase)
+		assert.Equal(t, pod.Status.ContainerStatuses, updatedCr.Status.Data.Driver.Statuses)
+	})
+}
+
 func getTestLogger() logr.Logger {
 	return zap.New(zap.UseDevMode(true))
 }
