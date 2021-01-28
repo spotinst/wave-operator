@@ -205,11 +205,16 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			// Check for expected Spark API communication errors
 			if sparkapi.IsApplicationNotFoundError(err) ||
 				sparkapi.IsServiceUnavailableError(err) {
-				log.Info(fmt.Sprintf("Spark API error: %s", err.Error()))
+				// Let's requeue after a set amount of time, don't want exponential backoff
+				log.Info(fmt.Sprintf("Spark API error, will requeue: %s", err.Error()))
+				return ctrl.Result{
+					Requeue:      true,
+					RequeueAfter: requeueAfterTimeout,
+				}, nil
 			} else {
 				log.Error(err, "error handling driver pod")
+				return ctrl.Result{}, err
 			}
-			return ctrl.Result{}, err
 		}
 
 		// Requeue running drivers

@@ -83,7 +83,12 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 		Lifecycle: &corev1.Lifecycle{
 			PreStop: &corev1.Handler{
 				Exec: &corev1.ExecAction{
-					Command: []string{"python3", "sync.py", volumeMount.MountPath, "spark:" + storageInfo.Name, "once"},
+					// If a driver pod is deleted while running, the driver container and the storage-sync container
+					// are killed in parallel. There is no guarantee that the driver container writes the final log file
+					// before the storage-sync container's preStop hook executes.
+					// Let's just sync "forever", until we either see the final log file and exit successfully,
+					// or the pod's grace period passes.
+					Command: []string{"python3", "sync.py", volumeMount.MountPath, "spark:" + storageInfo.Name, "forever"},
 				},
 			},
 		},
