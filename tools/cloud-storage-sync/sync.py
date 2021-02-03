@@ -37,28 +37,52 @@ if region is not None:
     regionArg = """--s3-region {}""".format(region)
 
 provider = CredentialProvider()
+movedFromEvents = {}
 
 
 # use "copy", not "sync": don't delete files in target directory
 def sync(ev):
-    filename = ""
-    if ev is not None:
-        filename = ev.name
-        print("""got event for file: {} """.format(filename), flush=True)
     c = provider.load()
     credentialArg = """--s3-access-key-id {} --s3-secret-access-key {} --s3-session-token {}""".format(c["AccessKeyId"], c["SecretAccessKey"], c["Token"])
-    print("""rclone --exclude '*.inprogress' {} copy {} {} """.format(regionArg, sourceDir, targetDir), flush=True)
-    os.system("""rclone --exclude '*.inprogress' {} {} copy {} {} --local-no-check-updated""".format(regionArg, credentialArg, sourceDir, targetDir))
+
+    filename = ""
+    if ev is not None:
+        print("""got event: {} """.format(ev), flush=True)
+        if ev.mask == pyinotify.IN_MOVED_FROM:
+            movedFromEvents[ev.cookie] = ev
+            return
+        if ev.mask == pyinotify.IN_MOVED_TO:
+            movedFromEvent = movedFromEvents.get(ev.cookie)
+            if movedFromEvent is not None:
+                renameOnRemote(credentialArg, movedFromEvent.pathname, ev.pathname)
+                print("will exit after rename", flush=True)
+                exit(0)
+            else:
+                print("""could not find MOVED_FROM event for MOVED_TO event: {}""".format(ev))
+            return
+        filename = ev.name
+
+    print("""rclone {} copy {} {} --local-no-check-updated --progress""".format(regionArg, sourceDir, targetDir), flush=True)
+    os.system("""rclone {} {} copy {} {} --local-no-check-updated --progress""".format(regionArg, credentialArg, sourceDir, targetDir))
+
     # exit if we got the final spark log file (no .inprogress ending)
     if filename.startswith("spark-") and not filename.endswith(".inprogress"):
         print("will exit", flush=True)
         exit(0)
 
 
+def renameOnRemote(credentialArg, localOldPath, localNewPath):
+    remoteOldPath = targetDir + localOldPath[len(sourceDir):]
+    remoteNewPath = targetDir + localNewPath[len(sourceDir):]
+    print("""rclone {} moveto {} {} --progress""".format(regionArg, remoteOldPath, remoteNewPath), flush=True)
+    os.system("""rclone {} {} moveto {} {} --progress""".format(regionArg, credentialArg, remoteOldPath, remoteNewPath))
+
+
 if frequency == "forever":
     manager = pyinotify.WatchManager()
-    mask = pyinotify.IN_DELETE | pyinotify.IN_MODIFY | pyinotify.IN_CREATE | pyinotify.IN_MOVED_TO
-    manager.add_watch(sourceDir, rec=True, mask=mask)
+    mask = pyinotify.IN_DELETE | pyinotify.IN_MODIFY | pyinotify.IN_CREATE | pyinotify.IN_MOVED_TO | pyinotify.IN_MOVED_FROM
+    # auto_add to automatically add watch on created sub folders
+    manager.add_watch(sourceDir, rec=True, auto_add=True, mask=mask)
     notifier = pyinotify.Notifier(manager, sync)
     notifier.loop()
 else:
