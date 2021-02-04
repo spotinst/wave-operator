@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-VERSION = v0.2.0
+VERSION = v0.3.0
 
 # Image URL to use all building/pushing image targets
 REGISTRY = public.ecr.aws/l8m2k1n1/netapp/cloud-storage-sync
