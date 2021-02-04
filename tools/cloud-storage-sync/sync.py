@@ -62,6 +62,12 @@ def sync():
         return False
 
 
+# Spark event logs V1 are written to a file called spark-XXX.inprogress while the application is in progress.
+# The file gets renamed to spark-XXX once the application terminates.
+# rclone sends the entire file to S3 if it has changed (as opposed to only the file diff),
+# so we sync the file to S3 only when the application has terminated and we see the final log file.
+# The file is stored in the root of the event log directory, so we use "rclone copy" instead of "rclone sync"
+# to avoid deleting other files already in the S3 bucket.
 def sync_v1(files):
     print("Syncing V1 event logs ...", flush=True)
     is_final = any(is_final_v1(f) for f in files)
@@ -83,6 +89,13 @@ def sync_v1(files):
         return False
 
 
+# Spark event logs V2 (rolling log files) are written into a folder called eventlog_v2_XXX.
+# While the application is still running, the folder contains an empty file called appstatus_spark-XXX.inprogress.
+# When the application terminates, this file gets renamed to remove the .inprogress ending.
+# The event log files are called events_N_spark-XXX, where N is the number of the log file.
+# Once a log file N reaches a given size, Spark will start writing to a new log file N+1.
+# We only sync the log files that we know have been finalized, since rclone will always send the
+# entire file to S3 if it has changed (as opposed to only the file diff).
 def sync_v2(files):
     print("Syncing V2 event logs ...", flush=True)
 
