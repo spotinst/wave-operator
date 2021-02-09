@@ -7,6 +7,10 @@ spec:
   name: ingress-nginx
   url: https://kubernetes.github.io/ingress-nginx
   state: present
-  version: 3.7.1
-  valuesConfiguration: ""
+  version: 3.23.0
+  valuesConfiguration: |
+    controller:
+      name: controller
+      config:
+        hsts: "false"
 

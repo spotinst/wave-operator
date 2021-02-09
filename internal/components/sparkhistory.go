@@ -2,6 +2,7 @@ package components
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
@@ -76,8 +77,12 @@ func GetSparkHistoryConditions(client client.Client, releaseName string) ([]*v1a
 func GetSparkHistoryProperties(c *v1alpha1.WaveComponent, client client.Client, log logr.Logger, releaseName string) (map[string]string, error) {
 	ctx := context.TODO()
 	props := map[string]string{}
+
+	// TODO this is wrong in many ways
 	if c.Spec.Version == "1.4.0" {
 		props["SparkVersion"] = "2.4.0"
+	} else {
+		props["SparkVersion"] = "3.0.1"
 	}
 
 	config := &v1.ConfigMap{}
@@ -91,5 +96,39 @@ func GetSparkHistoryProperties(c *v1alpha1.WaveComponent, client client.Client, 
 	} else {
 		props["LogDirectory"] = config.Data["logDirectory"]
 	}
+
+	user, pass, err := getUserPasswordFrom(c)
+	if err != nil {
+		props["User"] = user
+		props["Password"] = pass
+	}
 	return props, nil
+}
+
+func getUserPasswordFrom(c *v1alpha1.WaveComponent) (string, string, error) {
+	var vals map[string]interface{}
+	err := yaml.Unmarshal([]byte(c.Spec.ValuesConfiguration), &vals)
+	if err != nil {
+		return "", "", err
+	}
+	if vals["ingress"] == nil {
+		return "", "", nil
+	}
+	i, ok := vals["ingress"].(map[string]interface{})
+	if !ok {
+		return "", "", fmt.Errorf("ingress cannot be interpreted, %v", vals["ingress"])
+	}
+	iEnabled := i["enabled"].(bool)
+	if !iEnabled {
+		return "", "", nil
+	}
+	ba, ok := i["basicAuth"].(map[string]interface{})
+	if !ok {
+		return "", "", fmt.Errorf("basicAuth cannot be interpreted")
+	}
+	baEnabled := ba["enabled"].(bool)
+	if !baEnabled {
+		return "", "", nil
+	}
+	return ba["username"].(string), ba["password"].(string), nil
 }
