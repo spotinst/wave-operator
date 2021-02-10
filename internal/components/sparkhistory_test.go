@@ -90,4 +90,48 @@ func TestExtractUserAndPassword(t *testing.T) {
 	assert.Equal(t, "", user)
 	assert.Equal(t, "", pass)
 
+	fullValues := `
+    image:
+      repository: public.ecr.aws/l8m2k1n1/netapp/spark-history-server
+      tag: v3.0.1
+    s3:
+      enableS3: true
+      enableIAM: true
+      logDirectory: s3a://spark-history/
+    gcs:
+      enableGCS: false
+    pvc:
+      enablePVC: false
+    wasbs:
+      enableWASBS: false
+    ingress:
+      enabled: true
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+        cert-manager.io/cluster-issuer: wave-issuer
+        nginx.ingress.kubernetes.io/auth-type: basic
+        nginx.ingress.kubernetes.io/auth-secret: spark-history-basic-auth
+        nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - Spark History Server'
+      path: /
+      hosts:
+      - ""
+      tls:
+      - secretName: spark-history-server-tls
+        hosts:
+        - spark-history-server.wave.spot.io
+      basicAuth:
+        enabled: true
+        secretName: spark-history-basic-auth
+        username: spark
+        password: history`
+
+	c = &v1alpha1.WaveComponent{
+		Spec: v1alpha1.WaveComponentSpec{
+			ValuesConfiguration: fullValues,
+		},
+	}
+	user, pass, err = getUserPasswordFrom(c)
+	assert.NoError(t, err)
+	assert.Equal(t, "spark", user)
+	assert.Equal(t, "history", pass)
 }

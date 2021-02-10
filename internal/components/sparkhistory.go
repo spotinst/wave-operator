@@ -11,9 +11,14 @@ import (
 	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/extensions/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	SparkHistoryIngressName = "spark-history-server"
 )
 
 func ConfigureHistoryServer(comp *v1alpha1.WaveComponent, storageProvider cloudstorage.CloudStorageProvider) (bool, error) {
@@ -99,8 +104,17 @@ func GetSparkHistoryProperties(c *v1alpha1.WaveComponent, client client.Client, 
 
 	user, pass, err := getUserPasswordFrom(c)
 	if err != nil {
+		log.Info("failed to get user and password", "error", err.Error())
+	} else {
 		props["User"] = user
 		props["Password"] = pass
+	}
+
+	ep, err := getSparkHistoryEndpoint(ctx, client, log)
+	if err != nil {
+		log.Info("failed to get user and password", "error", err.Error())
+	} else {
+		props["Endpoint"] = ep
 	}
 	return props, nil
 }
@@ -131,4 +145,17 @@ func getUserPasswordFrom(c *v1alpha1.WaveComponent) (string, string, error) {
 		return "", "", nil
 	}
 	return ba["username"].(string), ba["password"].(string), nil
+}
+
+func getSparkHistoryEndpoint(ctx context.Context, c client.Client, log logr.Logger) (string, error) {
+	ingress := &v1beta1.Ingress{}
+	err := c.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: SparkHistoryIngressName}, ingress)
+	if err != nil {
+		return "", err
+	} else {
+		if ingress.Status.LoadBalancer.Ingress != nil && len(ingress.Status.LoadBalancer.Ingress) > 0 {
+			return ingress.Status.LoadBalancer.Ingress[0].Hostname + "/", nil
+		}
+	}
+	return "", fmt.Errorf("ingress hostname is not set")
 }
