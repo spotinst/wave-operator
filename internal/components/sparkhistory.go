@@ -14,6 +14,7 @@ import (
 	"k8s.io/api/extensions/v1beta1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -26,7 +27,11 @@ func ConfigureHistoryServer(comp *v1alpha1.WaveComponent, storageProvider clouds
 	if err != nil {
 		return false, err
 	}
-	newVals, err := configureS3BucketValues(info, comp.Spec.ValuesConfiguration)
+	newVals, err := configureS3BucketValues(info, []byte(comp.Spec.ValuesConfiguration))
+	if err != nil {
+		return false, err
+	}
+	newVals, err = configureIngressLogin(info, newVals)
 	if err != nil {
 		return false, err
 	}
@@ -34,9 +39,41 @@ func ConfigureHistoryServer(comp *v1alpha1.WaveComponent, storageProvider clouds
 	return true, nil
 }
 
-func configureS3BucketValues(b *cloudstorage.StorageInfo, valuesConfiguration string) ([]byte, error) {
+func configureIngressLogin(b *cloudstorage.StorageInfo, valuesConfiguration []byte) ([]byte, error) {
+	var hi historyIngress
+	err := yaml.Unmarshal(valuesConfiguration, &hi)
+	if err != nil {
+		return nil, err
+	}
+	if !hi.Ingress.Enabled || !hi.Ingress.BasicAuth.Enabled {
+		return valuesConfiguration, nil
+	}
+	// extract & set values
+	var vals map[string]interface{}
+	err = yaml.Unmarshal(valuesConfiguration, &vals)
+	if err != nil {
+		return nil, err
+	}
+	if vals == nil {
+		vals = map[string]interface{}{}
+	}
+	if vals["ingress"] == nil {
+		return valuesConfiguration, nil
+	}
+	ingressOpts := vals["ingress"].(map[string]interface{})
+	ba := ingressOpts["basicAuth"].(map[string]interface{})
+	if ba["password"] == nil || ba["password"] == "" {
+		ba["password"] = rand.String(8)
+	}
+	ingressOpts["basicAuth"] = ba
+	vals["ingress"] = ingressOpts
+
+	return yaml.Marshal(vals)
+}
+
+func configureS3BucketValues(b *cloudstorage.StorageInfo, valuesConfiguration []byte) ([]byte, error) {
 	var newVals map[string]interface{}
-	err := yaml.Unmarshal([]byte(valuesConfiguration), &newVals)
+	err := yaml.Unmarshal(valuesConfiguration, &newVals)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +90,7 @@ func configureS3BucketValues(b *cloudstorage.StorageInfo, valuesConfiguration st
 
 func GetSparkHistoryConditions(client client.Client, releaseName string) ([]*v1alpha1.WaveComponentCondition, error) {
 
-	conditions := []*v1alpha1.WaveComponentCondition{}
+	conditions := make([]*v1alpha1.WaveComponentCondition, 0)
 	ctx := context.TODO()
 
 	deployment := &appsv1.Deployment{}
@@ -102,49 +139,54 @@ func GetSparkHistoryProperties(c *v1alpha1.WaveComponent, client client.Client, 
 		props["LogDirectory"] = config.Data["logDirectory"]
 	}
 
-	user, pass, err := getUserPasswordFrom(c)
+	var hi historyIngress
+	err = yaml.Unmarshal([]byte(c.Spec.ValuesConfiguration), &hi)
 	if err != nil {
-		log.Info("failed to get user and password", "error", err.Error())
-	} else {
-		props["User"] = user
-		props["Password"] = pass
+		return nil, err
+	}
+	if !hi.Ingress.Enabled {
+		return props, nil
 	}
 
 	ep, err := getSparkHistoryEndpoint(ctx, client, log)
 	if err != nil {
-		log.Info("failed to get user and password", "error", err.Error())
-	} else {
-		props["Endpoint"] = ep
+		return nil, fmt.Errorf("failed to get history server endpoint, %w", err)
 	}
+	props["Endpoint"] = ep
+	if !hi.Ingress.BasicAuth.Enabled {
+		return props, nil
+	}
+
+	user, pass, err := getUserPasswordFrom(c)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user and password, %w", err)
+	}
+	props["User"] = user
+	props["Password"] = pass
+
 	return props, nil
 }
 
+type historyIngress struct {
+	Ingress ingress `yaml:"ingress"`
+}
+type ingress struct {
+	Enabled   bool      `yaml:"enabled"`
+	BasicAuth basicAuth `yaml:"basicAuth"`
+}
+type basicAuth struct {
+	Enabled  bool   `yaml:"enabled"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
 func getUserPasswordFrom(c *v1alpha1.WaveComponent) (string, string, error) {
-	var vals map[string]interface{}
-	err := yaml.Unmarshal([]byte(c.Spec.ValuesConfiguration), &vals)
+	var hi historyIngress
+	err := yaml.Unmarshal([]byte(c.Spec.ValuesConfiguration), &hi)
 	if err != nil {
 		return "", "", err
 	}
-	if vals["ingress"] == nil {
-		return "", "", nil
-	}
-	i, ok := vals["ingress"].(map[string]interface{})
-	if !ok {
-		return "", "", fmt.Errorf("ingress cannot be interpreted, %v", vals["ingress"])
-	}
-	iEnabled := i["enabled"].(bool)
-	if !iEnabled {
-		return "", "", nil
-	}
-	ba, ok := i["basicAuth"].(map[string]interface{})
-	if !ok {
-		return "", "", fmt.Errorf("basicAuth cannot be interpreted")
-	}
-	baEnabled := ba["enabled"].(bool)
-	if !baEnabled {
-		return "", "", nil
-	}
-	return ba["username"].(string), ba["password"].(string), nil
+	return hi.Ingress.BasicAuth.Username, hi.Ingress.BasicAuth.Password, nil
 }
 
 func getSparkHistoryEndpoint(ctx context.Context, c client.Client, log logr.Logger) (string, error) {
