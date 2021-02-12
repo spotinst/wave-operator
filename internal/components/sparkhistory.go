@@ -43,7 +43,7 @@ func configureIngressLogin(b *cloudstorage.StorageInfo, valuesConfiguration []by
 	var hi historyIngress
 	err := yaml.Unmarshal(valuesConfiguration, &hi)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid yaml specification for ingress, %w", err)
 	}
 	if !hi.Ingress.Enabled || !hi.Ingress.BasicAuth.Enabled {
 		return valuesConfiguration, nil
@@ -62,6 +62,9 @@ func configureIngressLogin(b *cloudstorage.StorageInfo, valuesConfiguration []by
 	}
 	ingressOpts := vals["ingress"].(map[string]interface{})
 	ba := ingressOpts["basicAuth"].(map[string]interface{})
+	if ba["username"] == nil || ba["username"] == "" {
+		return nil, fmt.Errorf("invalid user specification for ingress login, username is empty")
+	}
 	if ba["password"] == nil || ba["password"] == "" {
 		ba["password"] = rand.String(8)
 	}
@@ -184,7 +187,7 @@ func getUserPasswordFrom(c *v1alpha1.WaveComponent) (string, string, error) {
 	var hi historyIngress
 	err := yaml.Unmarshal([]byte(c.Spec.ValuesConfiguration), &hi)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("invalid yaml specification for ingress, %w", err)
 	}
 	return hi.Ingress.BasicAuth.Username, hi.Ingress.BasicAuth.Password, nil
 }

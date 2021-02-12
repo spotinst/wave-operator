@@ -224,3 +224,29 @@ func TestDontFailOnSetPassword(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotEmpty(t, out)
 }
+
+func TestFailOnSetPassword(t *testing.T) {
+	errorYamls := []string{
+		`
+    : this is garbage and not yaml at all ::: *`,
+		`
+    ingress:
+       enabled: 5`,
+		`
+    ingress:
+      enabled: true
+      basicAuth:
+        enabled: basicAuth`,
+		`
+    ingress:
+      enabled: true
+      basicAuth:
+        enabled: true
+        username:`,
+	}
+
+	for _, v := range errorYamls {
+		_, err := configureIngressLogin(nil, []byte(v))
+		assert.Error(t, err)
+	}
+}
