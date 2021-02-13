@@ -50,6 +50,12 @@ const (
 	spotConfigMapNamespace        = metav1.NamespaceSystem
 	spotConfigMapName             = "spotinst-kubernetes-cluster-controller-config"
 	clusterIdentifierConfigMapKey = "spotinst.cluster-identifier"
+
+	ConfigIsOceanClusterProvisioned = "isOceanClusterProvisioned"
+	ConfigIsK8sProvisioned          = "isK8sProvisioned"
+	ConfigInitialWaveOperatorImage  = "initialWaveOperatorImage"
+
+	AnnotationPrefix = "tide.wave.spot.io"
 )
 
 var (
@@ -63,7 +69,7 @@ func init() {
 }
 
 type Manager interface {
-	SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool) (*v1alpha1.WaveEnvironment, error)
+	SetConfiguration(config map[string]interface{}) (*v1alpha1.WaveEnvironment, error)
 	DeleteConfiguration(deleteEnvironmentCrd bool) error
 	GetConfiguration() (*v1alpha1.WaveEnvironment, error)
 
@@ -117,6 +123,35 @@ func NewManager(log logr.Logger) (Manager, error) {
 		log:               log,
 		kubeClientGetter:  kubeConfig,
 	}, nil
+}
+
+type validatedConfig struct {
+	isOceanClusterProvisioned bool
+	isK8sProvisioned          bool
+	initialWaveOperatorImage  string
+}
+
+func validateConfig(input map[string]interface{}) (*validatedConfig, error) {
+	config := &validatedConfig{}
+	cp, ok := input[ConfigIsOceanClusterProvisioned].(bool)
+	if !ok {
+		return nil, fmt.Errorf("invalid configuration field for %s <<%v>>", ConfigIsOceanClusterProvisioned, input[ConfigIsOceanClusterProvisioned])
+	}
+	config.isOceanClusterProvisioned = cp
+
+	k, ok := input[ConfigIsK8sProvisioned].(bool)
+	if !ok {
+		return nil, fmt.Errorf("invalid configuration field for %s <<%v>>", ConfigIsK8sProvisioned, input[ConfigIsK8sProvisioned])
+	}
+	config.isK8sProvisioned = k
+
+	i, ok := input[ConfigInitialWaveOperatorImage].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid configuration field for %s <<%v>>", ConfigInitialWaveOperatorImage, input[ConfigInitialWaveOperatorImage])
+	}
+	config.initialWaveOperatorImage = i
+
+	return config, nil
 }
 
 func (m *manager) getKubernetesClient() (kubernetes.Interface, error) {
@@ -197,10 +232,14 @@ func (m *manager) loadWaveComponents() ([]*v1alpha1.WaveComponent, error) {
 	return waveComponents, nil
 }
 
-func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool) (*v1alpha1.WaveEnvironment, error) {
+func (m *manager) SetConfiguration(input map[string]interface{}) (*v1alpha1.WaveEnvironment, error) {
 	ctx := context.TODO()
 
 	m.log.Info("Configuring Wave")
+	config, err := validateConfig(input)
+	if err != nil {
+		return nil, fmt.Errorf("invalid input, %w", err)
+	}
 
 	kc, err := m.getKubernetesClient()
 	if err != nil {
@@ -247,15 +286,19 @@ func (m *manager) SetConfiguration(k8sProvisioned, oceanClusterProvisioned bool)
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.clusterIdentifier,
 			Namespace: catalog.SystemNamespace,
+			Annotations: map[string]string{
+				AnnotationPrefix + "/" + ConfigInitialWaveOperatorImage: config.initialWaveOperatorImage,
+			},
 		},
 		Spec: v1alpha1.WaveEnvironmentSpec{
 			EnvironmentNamespace:    catalog.SystemNamespace,
 			OperatorVersion:         WaveOperatorVersion, // TODO Make dynamic
 			CertManagerDeployed:     !certManagerExists,
-			K8sClusterProvisioned:   k8sProvisioned,
-			OceanClusterProvisioned: oceanClusterProvisioned,
+			K8sClusterProvisioned:   config.isK8sProvisioned,
+			OceanClusterProvisioned: config.isOceanClusterProvisioned,
 		},
 	}
+
 	uenv := &unstructured.Unstructured{}
 	if err := scheme.Convert(env, uenv, nil); err != nil {
 		return nil, err

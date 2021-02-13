@@ -43,6 +43,7 @@ var installCmd = &cobra.Command{
 
 var (
 	k8sClusterCreated, oceanCreated, certManagerDeployed bool
+	waveOperatorImage                                    string
 )
 
 func init() {
@@ -50,6 +51,7 @@ func init() {
 
 	installCmd.Flags().BoolVar(&k8sClusterCreated, "k8s-cluster-created", false, "indicates the cluster was created specifically for wave")
 	installCmd.Flags().BoolVar(&oceanCreated, "ocean-created", false, "indicates that spot ocean was created for this wave installation")
+	installCmd.Flags().StringVar(&waveOperatorImage, "wave-image", "", "full container image specification for the wave operator")
 }
 
 func install(cmd *cobra.Command, args []string) {
@@ -64,7 +66,13 @@ func install(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	env, err := manager.SetConfiguration(k8sClusterCreated, oceanCreated)
+	waveConfig := map[string]interface{}{
+		tide.ConfigIsK8sProvisioned:          k8sClusterCreated,
+		tide.ConfigIsOceanClusterProvisioned: oceanCreated,
+		tide.ConfigInitialWaveOperatorImage:  waveOperatorImage,
+	}
+
+	env, err := manager.SetConfiguration(waveConfig)
 	if err != nil {
 		logger.Error(err, "configuration failed")
 		os.Exit(1)
