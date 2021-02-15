@@ -3,10 +3,17 @@ package tide
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/tide/box"
+	tideconfig "github.com/spotinst/wave-operator/tide/config"
+	goyaml "gopkg.in/yaml.v3"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -25,12 +32,6 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrlrt "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-
-	"github.com/spotinst/wave-operator/api/v1alpha1"
-	"github.com/spotinst/wave-operator/catalog"
-	"github.com/spotinst/wave-operator/install"
-	"github.com/spotinst/wave-operator/tide/box"
-	tideconfig "github.com/spotinst/wave-operator/tide/config"
 )
 
 const (
@@ -348,7 +349,7 @@ func (m *manager) Create(env *v1alpha1.WaveEnvironment) error {
 		}
 	}
 
-	err = m.installWaveOperator(ctx)
+	err = m.installWaveOperator(ctx, env.ObjectMeta.Annotations[AnnotationPrefix+"/"+ConfigInitialWaveOperatorImage])
 	if err != nil {
 		return err
 	}
@@ -542,7 +543,7 @@ func (m *manager) installCertManager(ctx context.Context) error {
 	return err
 }
 
-func (m *manager) installWaveOperator(ctx context.Context) error {
+func (m *manager) installWaveOperator(ctx context.Context, waveOperatorImage string) error {
 	kc, err := m.getKubernetesClient()
 	if err != nil {
 		return err
@@ -554,8 +555,13 @@ func (m *manager) installWaveOperator(ctx context.Context) error {
 		metav1.CreateOptions{},
 	)
 
+	values, err := setImageInValues(WaveOperatorValues, waveOperatorImage)
+	if err != nil {
+		return fmt.Errorf("unable to set image %s, %w", waveOperatorImage, err)
+	}
+
 	installer := install.GetHelm("", m.kubeClientGetter, m.log)
-	err = installer.Install(WaveOperatorChart, WaveOperatorRepository, WaveOperatorVersion, WaveOperatorValues)
+	err = installer.Install(WaveOperatorChart, WaveOperatorRepository, WaveOperatorVersion, values)
 	if err != nil {
 		return fmt.Errorf("cannot install wave operator, %w", err)
 	}
@@ -570,6 +576,53 @@ func (m *manager) installWaveOperator(ctx context.Context) error {
 		return true, nil
 	})
 	return err
+}
+
+func setImageInValues(valuesString string, image string) (string, error) {
+	if image == "" {
+		return valuesString, nil
+	}
+	// image:
+	//   repository: public.ecr.aws/l8m2k1n1/netapp/wave-operator
+	//   pullPolicy: IfNotPresent
+	//   # Overrides the image tag whose default is the chart appVersion.
+	//   tag: "0.2.0-a8e1a364"
+
+	vals := map[string]interface{}{}
+	err := goyaml.Unmarshal([]byte(valuesString), &vals)
+	if err != nil {
+		return "", err
+	}
+	spec := strings.Split(image, ":")
+	if len(spec) > 2 {
+		return "", fmt.Errorf("invalid image specification, %s", image)
+	}
+	tag := "latest"
+	repo := spec[0]
+	if len(spec) > 1 {
+		tag = spec[1]
+	}
+	if repo == "" || tag == "" {
+		return "", fmt.Errorf("bad image spec %s", image)
+	}
+
+	imageSpec := map[string]interface{}{}
+	var ok bool
+	i := vals["image"]
+	if i != nil {
+		imageSpec, ok = i.(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("invalid yaml image spec, %s, %v", reflect.TypeOf(i), i)
+		}
+	}
+	imageSpec["repository"] = repo
+	imageSpec["tag"] = tag
+	imageSpec["pullPolicy"] = "IfNotPresent"
+
+	vals["image"] = imageSpec
+
+	b, err := goyaml.Marshal(vals)
+	return string(b), err
 }
 
 func (m *manager) deleteWaveOperator(ctx context.Context) error {
