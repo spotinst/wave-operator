@@ -4,6 +4,7 @@ import sys
 import os
 import requests
 import time
+import const
 from os.path import isdir, join
 
 source_dir = sys.argv[1]
@@ -165,9 +166,18 @@ def get_active_log_file_index(files):
     return max(indices)
 
 
+def check_stop_condition():
+    files = os.listdir()  # List files in current working dir
+    return any(f == const.STOP_MARKER_FILE for f in files)
+
+
 if frequency == "forever":
     print("""Running sync every {} seconds""".format(SYNC_INTERVAL_SECONDS), flush=True)
     while True:
+        should_stop = check_stop_condition()
+        if should_stop is True:
+            print("Hit stop condition, will exit", flush=True)
+            exit(0)
         done = sync()
         if done is True:
             print("Sync done, will exit", flush=True)

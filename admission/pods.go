@@ -2,9 +2,11 @@ package admission
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/go-logr/logr"
 	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/internal/storagesync"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -73,12 +75,13 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 
 	log.Info("pod admission control", "mountPath", volumeMount.MountPath)
 
+	webServerPort := strconv.Itoa(int(storagesync.Port))
 	storageContainer := corev1.Container{
-		Name:            "storage-sync",
-		Image:           "public.ecr.aws/l8m2k1n1/netapp/cloud-storage-sync:v0.3.0",
+		Name:            storagesync.ContainerName,
+		Image:           "public.ecr.aws/l8m2k1n1/netapp/cloud-storage-sync:v0.3.1",
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		Command:         []string{"/tini"},
-		Args:            []string{"--", "python3", "sync.py", volumeMount.MountPath, "spark:" + storageInfo.Name},
+		Args:            []string{"--", "./run.sh", volumeMount.MountPath, "spark:" + storageInfo.Name, "forever", webServerPort},
 		Env:             []corev1.EnvVar{{Name: "S3_REGION", Value: storageInfo.Region}},
 		Lifecycle: &corev1.Lifecycle{
 			PreStop: &corev1.Handler{
@@ -88,8 +91,13 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 					// before the storage-sync container's preStop hook executes.
 					// Let's just sync "forever", until we either see the final log file and exit successfully,
 					// or the pod's grace period passes.
-					Command: []string{"python3", "sync.py", volumeMount.MountPath, "spark:" + storageInfo.Name, "forever"},
+					Command: []string{"./run.sh", volumeMount.MountPath, "spark:" + storageInfo.Name, "forever"},
 				},
+			},
+		},
+		Ports: []corev1.ContainerPort{
+			{
+				ContainerPort: storagesync.Port,
 			},
 		},
 	}
