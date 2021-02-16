@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	EnterpriseGatewayChartName   = "enterprise-gateway"
-	EnterpriseGatewayIngressName = "enterprise-gateway-ingress"
+	EnterpriseGatewayChartName      = "enterprise-gateway"
+	EnterpriseGatewayIngressName    = "enterprise-gateway-ingress"
+	EnterpriseGatewayAuthSecretName = "enterprise-gateway-auth"
 )
 
 func GetEnterpriseGatewayConditions(config *rest.Config, client client.Client, log logr.Logger) ([]*v1alpha1.WaveComponentCondition, error) {
@@ -63,9 +64,9 @@ func GetEnterpriseGatewayConditions(config *rest.Config, client client.Client, l
 	return conditions, nil
 }
 
-func getEnterpriseGatewayEndpoint(ctx context.Context, client client.Client, log logr.Logger) (string, error) {
+func getEnterpriseGatewayEndpoint(ctx context.Context, c client.Client, log logr.Logger) (string, error) {
 	ingress := &v1beta1.Ingress{}
-	err := client.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: EnterpriseGatewayIngressName}, ingress)
+	err := c.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: EnterpriseGatewayIngressName}, ingress)
 	if err != nil {
 		return "", err
 	} else {
@@ -83,5 +84,28 @@ func GetEnterpriseGatewayProperties(c *v1alpha1.WaveComponent, client client.Cli
 	if err == nil {
 		props["Endpoint"] = endpoint
 	}
+	token, err := getEnterpriseGatewayToken(ctx, client, log)
+	if err == nil {
+		props["Token"] = token
+	}
 	return props, nil
+}
+
+func getEnterpriseGatewayToken(ctx context.Context, c client.Client, log logr.Logger) (string, error) {
+	secret := &v1.Secret{}
+
+	objName := types.NamespacedName{Namespace: catalog.SystemNamespace, Name: EnterpriseGatewayAuthSecretName}
+	err := c.Get(ctx, objName, secret)
+	if err != nil {
+		return "", err
+	} else {
+		if secret.Data != nil {
+			token := string(secret.Data["token"])
+			if token == "" {
+				log.Error(fmt.Errorf("token is empty in secret %s", objName), "")
+			}
+			return token, nil
+		}
+	}
+	return "", nil
 }

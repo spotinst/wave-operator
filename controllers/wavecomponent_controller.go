@@ -230,6 +230,8 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 	switch inst.Status {
 	case install.Failed:
 		// mark as failed, and return (a change in values should trigger an upgrade)
+		// failure may be caused by (a) misconfiguration of (b) and intermittent condition.
+		// intermittency should be retried.
 		deepCopy := comp.DeepCopy()
 		condition := components.NewWaveComponentCondition(
 			v1alpha1.WaveComponentFailure,
@@ -244,7 +246,7 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 				return ctrl.Result{}, err
 			}
 		}
-		return ctrl.Result{}, err
+		return r.delete(ctx, log, comp) // delete the installation and allow for reinstall afterward TODO back off
 	case install.Progressing:
 		// progressing, requeue
 		deepCopy := comp.DeepCopy()

@@ -7,8 +7,9 @@ spec:
   name: enterprise-gateway
   url: https://charts.spot.io
   state: present
-  version: 2.3.1
+  version: 2.4.0
   valuesConfiguration: |
+    image: public.ecr.aws/l8m2k1n1/netapp/enterprise-gateway:dev
     ingress:
       enabled: true
       hostName: ""
@@ -16,11 +17,15 @@ spec:
         enabled: false
       nginx:
         enabled: true
+        tls:
+          enabled: true
+          hostname: gateway.wave.spot.io
         path: /gateway/?(.*)
         annotations:
           kubernetes.io/ingress.class: "nginx"
           nginx.ingress.kubernetes.io/rewrite-target: /$1
           nginx.ingress.kubernetes.io/ssl-redirect: "false"
           nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+          cert-manager.io/cluster-issuer: wave-issuer
     kernel:
       kernelNamespace: jupyter-notebooks

@@ -12,7 +12,6 @@ require (
 	github.com/jetstack/cert-manager v1.1.0
 	github.com/magiconair/properties v1.8.1
 	github.com/mattbaird/jsonpatch v0.0.0-20200820163806-098863c1fc24
-	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.2
