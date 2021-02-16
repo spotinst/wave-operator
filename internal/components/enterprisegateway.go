@@ -94,12 +94,17 @@ func GetEnterpriseGatewayProperties(c *v1alpha1.WaveComponent, client client.Cli
 func getEnterpriseGatewayToken(ctx context.Context, c client.Client, log logr.Logger) (string, error) {
 	secret := &v1.Secret{}
 
-	err := c.Get(ctx, types.NamespacedName{Namespace: catalog.SystemNamespace, Name: EnterpriseGatewayAuthSecretName}, secret)
+	objName := types.NamespacedName{Namespace: catalog.SystemNamespace, Name: EnterpriseGatewayAuthSecretName}
+	err := c.Get(ctx, objName, secret)
 	if err != nil {
 		return "", err
 	} else {
 		if secret.Data != nil {
-			return string(secret.Data["token"]), nil
+			token := string(secret.Data["token"])
+			if token == "" {
+				log.Error(fmt.Errorf("token is empty in secret %s", objName), "")
+			}
+			return token, nil
 		}
 	}
 	return "", nil
