@@ -158,6 +158,22 @@ func TestGetAllExecutors(t *testing.T) {
 			id := exec.Id
 			assert.True(tt, id == "driver" || id == "1" || id == "2")
 			assert.NotEmpty(tt, exec.AddTime)
+
+			if id == "1" {
+				assert.False(tt, exec.IsActive)
+				assert.NotEmpty(tt, exec.RemoveTime)
+				assert.NotEmpty(tt, exec.RemoveReason)
+			} else {
+				assert.True(tt, exec.IsActive)
+				assert.Empty(tt, exec.RemoveTime)
+				assert.Empty(tt, exec.RemoveReason)
+			}
+
+			if id == "2" {
+				assert.Nil(tt, exec.PeakMemoryMetrics)
+			} else {
+				assert.NotNil(tt, exec.PeakMemoryMetrics)
+			}
 		}
 	})
 }
@@ -284,96 +300,144 @@ func getEnvironmentResponse() []byte {
 }
 
 func getExecutorsResponse() []byte {
-	return []byte(`[
-    {
-        "id": "driver",
-        "hostPort": "spark-submit-pi-stock-image-19039476618a605f-driver-svc.spark-jobs.svc:7079",
-        "isActive": true,
-        "rddBlocks": 0,
-        "memoryUsed": 0,
-        "diskUsed": 0,
-        "totalCores": 0,
-        "maxTasks": 0,
-        "activeTasks": 0,
-        "failedTasks": 0,
-        "completedTasks": 0,
-        "totalTasks": 0,
-        "totalDuration": 0,
-        "totalGCTime": 0,
-        "totalInputBytes": 0,
-        "totalShuffleRead": 0,
-        "totalShuffleWrite": 0,
-        "isBlacklisted": false,
-        "maxMemory": 434031820,
-        "addTime": "2020-12-14T14:07:17.142GMT",
-        "executorLogs": {},
-        "memoryMetrics": {
-            "usedOnHeapStorageMemory": 0,
-            "usedOffHeapStorageMemory": 0,
-            "totalOnHeapStorageMemory": 434031820,
-            "totalOffHeapStorageMemory": 0
-        },
-        "blacklistedInStages": []
-    },
-    {
-        "id": "2",
-        "hostPort": "192.168.94.79:35783",
-        "isActive": true,
-        "rddBlocks": 0,
-        "memoryUsed": 0,
-        "diskUsed": 0,
-        "totalCores": 1,
-        "maxTasks": 1,
-        "activeTasks": 0,
-        "failedTasks": 0,
-        "completedTasks": 4800,
-        "totalTasks": 4800,
-        "totalDuration": 77100,
-        "totalGCTime": 359,
-        "totalInputBytes": 0,
-        "totalShuffleRead": 0,
-        "totalShuffleWrite": 0,
-        "isBlacklisted": false,
-        "maxMemory": 122644070,
-        "addTime": "2020-12-14T14:10:57.908GMT",
-        "executorLogs": {},
-        "memoryMetrics": {
-            "usedOnHeapStorageMemory": 0,
-            "usedOffHeapStorageMemory": 0,
-            "totalOnHeapStorageMemory": 122644070,
-            "totalOffHeapStorageMemory": 0
-        },
-        "blacklistedInStages": []
-    },
-    {
-        "id": "1",
-        "hostPort": "192.168.93.178:44351",
-        "isActive": true,
-        "rddBlocks": 0,
-        "memoryUsed": 0,
-        "diskUsed": 0,
-        "totalCores": 1,
-        "maxTasks": 1,
-        "activeTasks": 0,
-        "failedTasks": 0,
-        "completedTasks": 15200,
-        "totalTasks": 15200,
-        "totalDuration": 180279,
-        "totalGCTime": 627,
-        "totalInputBytes": 0,
-        "totalShuffleRead": 0,
-        "totalShuffleWrite": 0,
-        "isBlacklisted": false,
-        "maxMemory": 122644070,
-        "addTime": "2020-12-14T14:09:24.372GMT",
-        "executorLogs": {},
-        "memoryMetrics": {
-            "usedOnHeapStorageMemory": 0,
-            "usedOffHeapStorageMemory": 0,
-            "totalOnHeapStorageMemory": 122644070,
-            "totalOffHeapStorageMemory": 0
-        },
-        "blacklistedInStages": []
-    }
-]`)
+	return []byte(`[ {
+  "id" : "1",
+  "hostPort" : "192.168.95.154:33465",
+  "isActive" : false,
+  "rddBlocks" : 0,
+  "memoryUsed" : 332440,
+  "diskUsed" : 0,
+  "totalCores" : 1,
+  "maxTasks" : 1,
+  "activeTasks" : 2,
+  "failedTasks" : 0,
+  "completedTasks" : 336912,
+  "totalTasks" : 336914,
+  "totalDuration" : 7307466,
+  "totalGCTime" : 84747,
+  "totalInputBytes" : 0,
+  "totalShuffleRead" : 3608932,
+  "totalShuffleWrite" : 1818286,
+  "isBlacklisted" : false,
+  "maxMemory" : 122644070,
+  "addTime" : "2021-02-17T12:16:25.750GMT",
+  "removeTime" : "2021-02-17T12:16:25.750GMT",
+  "removeReason" : "removed by driver",
+  "executorLogs" : { },
+  "memoryMetrics" : {
+    "usedOnHeapStorageMemory" : 332440,
+    "usedOffHeapStorageMemory" : 0,
+    "totalOnHeapStorageMemory" : 122644070,
+    "totalOffHeapStorageMemory" : 0
+  },
+  "blacklistedInStages" : [ ],
+  "peakMemoryMetrics" : {
+    "JVMHeapMemory" : 496777336,
+    "JVMOffHeapMemory" : 113661040,
+    "OnHeapExecutionMemory" : 8650752,
+    "OffHeapExecutionMemory" : 0,
+    "OnHeapStorageMemory" : 25279425,
+    "OffHeapStorageMemory" : 0,
+    "OnHeapUnifiedMemory" : 33930177,
+    "OffHeapUnifiedMemory" : 0,
+    "DirectPoolMemory" : 24832,
+    "MappedPoolMemory" : 0,
+    "ProcessTreeJVMVMemory" : 0,
+    "ProcessTreeJVMRSSMemory" : 0,
+    "ProcessTreePythonVMemory" : 0,
+    "ProcessTreePythonRSSMemory" : 0,
+    "ProcessTreeOtherVMemory" : 0,
+    "ProcessTreeOtherRSSMemory" : 0,
+    "MinorGCCount" : 23489,
+    "MinorGCTime" : 92228,
+    "MajorGCCount" : 5,
+    "MajorGCTime" : 457
+  },
+  "attributes" : { },
+  "resources" : { }
+}, {
+  "id" : "2",
+  "hostPort" : "192.168.69.190:45371",
+  "isActive" : true,
+  "rddBlocks" : 0,
+  "memoryUsed" : 0,
+  "diskUsed" : 0,
+  "totalCores" : 1,
+  "maxTasks" : 1,
+  "activeTasks" : 0,
+  "failedTasks" : 0,
+  "completedTasks" : 1660,
+  "totalTasks" : 1660,
+  "totalDuration" : 29593,
+  "totalGCTime" : 372,
+  "totalInputBytes" : 0,
+  "totalShuffleRead" : 0,
+  "totalShuffleWrite" : 1793162,
+  "isBlacklisted" : false,
+  "maxMemory" : 122644070,
+  "addTime" : "2021-02-17T12:18:34.533GMT",
+  "executorLogs" : { },
+  "memoryMetrics" : {
+    "usedOnHeapStorageMemory" : 0,
+    "usedOffHeapStorageMemory" : 0,
+    "totalOnHeapStorageMemory" : 122644070,
+    "totalOffHeapStorageMemory" : 0
+  },
+  "blacklistedInStages" : [ ],
+  "attributes" : { },
+  "resources" : { }
+}, {
+  "id" : "driver",
+  "hostPort" : "spark-ea65c077afeb5011-driver-svc.spark-jobs.svc:7079",
+  "isActive" : true,
+  "rddBlocks" : 0,
+  "memoryUsed" : 408249,
+  "diskUsed" : 0,
+  "totalCores" : 0,
+  "maxTasks" : 0,
+  "activeTasks" : 0,
+  "failedTasks" : 0,
+  "completedTasks" : 0,
+  "totalTasks" : 0,
+  "totalDuration" : 0,
+  "totalGCTime" : 0,
+  "totalInputBytes" : 0,
+  "totalShuffleRead" : 0,
+  "totalShuffleWrite" : 0,
+  "isBlacklisted" : false,
+  "maxMemory" : 122644070,
+  "addTime" : "2021-02-17T12:16:20.254GMT",
+  "executorLogs" : { },
+  "memoryMetrics" : {
+    "usedOnHeapStorageMemory" : 408249,
+    "usedOffHeapStorageMemory" : 0,
+    "totalOnHeapStorageMemory" : 122644070,
+    "totalOffHeapStorageMemory" : 0
+  },
+  "blacklistedInStages" : [ ],
+  "peakMemoryMetrics" : {
+    "JVMHeapMemory" : 258348320,
+    "JVMOffHeapMemory" : 210167256,
+    "OnHeapExecutionMemory" : 0,
+    "OffHeapExecutionMemory" : 0,
+    "OnHeapStorageMemory" : 18955457,
+    "OffHeapStorageMemory" : 0,
+    "OnHeapUnifiedMemory" : 18955457,
+    "OffHeapUnifiedMemory" : 0,
+    "DirectPoolMemory" : 250566,
+    "MappedPoolMemory" : 0,
+    "ProcessTreeJVMVMemory" : 0,
+    "ProcessTreeJVMRSSMemory" : 0,
+    "ProcessTreePythonVMemory" : 0,
+    "ProcessTreePythonRSSMemory" : 0,
+    "ProcessTreeOtherVMemory" : 0,
+    "ProcessTreeOtherRSSMemory" : 0,
+    "MinorGCCount" : 3831,
+    "MinorGCTime" : 34745,
+    "MajorGCCount" : 15,
+    "MajorGCTime" : 2413
+  },
+  "attributes" : { },
+  "resources" : { }
+} ]`)
 }
