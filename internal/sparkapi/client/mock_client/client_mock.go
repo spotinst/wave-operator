@@ -78,17 +78,17 @@ func (mr *MockClientMockRecorder) GetStages(applicationId interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStages", reflect.TypeOf((*MockClient)(nil).GetStages), applicationId)
 }
 
-// GetExecutors mocks base method
-func (m *MockClient) GetExecutors(applicationId string) ([]client.Executor, error) {
+// GetAllExecutors mocks base method
+func (m *MockClient) GetAllExecutors(applicationId string) ([]client.Executor, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetExecutors", applicationId)
+	ret := m.ctrl.Call(m, "GetAllExecutors", applicationId)
 	ret0, _ := ret[0].([]client.Executor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetExecutors indicates an expected call of GetExecutors
-func (mr *MockClientMockRecorder) GetExecutors(applicationId interface{}) *gomock.Call {
+// GetAllExecutors indicates an expected call of GetAllExecutors
+func (mr *MockClientMockRecorder) GetAllExecutors(applicationId interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExecutors", reflect.TypeOf((*MockClient)(nil).GetExecutors), applicationId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllExecutors", reflect.TypeOf((*MockClient)(nil).GetAllExecutors), applicationId)
 }

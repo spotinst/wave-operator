@@ -76,7 +76,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationId).Return(nil, fmt.Errorf("test error")).Times(1)
 		m.EXPECT().GetStages(applicationId).Return(getStagesResponse(), nil).Times(0)
-		m.EXPECT().GetExecutors(applicationId).Return(getExecutorsResponse(), nil).Times(0)
+		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).Times(0)
 
 		manager := &manager{
 			client: m,
@@ -95,7 +95,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationId).Return(getStagesResponse(), nil).Times(1)
-		m.EXPECT().GetExecutors(applicationId).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).Times(1)
 
 		manager := &manager{
 			client: m,

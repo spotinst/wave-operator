@@ -126,7 +126,7 @@ func TestGetEnvironment(t *testing.T) {
 
 }
 
-func TestGetExecutors(t *testing.T) {
+func TestGetAllExecutors(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -134,11 +134,11 @@ func TestGetExecutors(t *testing.T) {
 	t.Run("whenError", func(tt *testing.T) {
 
 		m := mock_transport.NewMockClient(ctrl)
-		m.EXPECT().Get("api/v1/applications/spark-123/executors").Return(nil, fmt.Errorf("test error")).Times(1)
+		m.EXPECT().Get("api/v1/applications/spark-123/allexecutors").Return(nil, fmt.Errorf("test error")).Times(1)
 
 		client := &client{m}
 
-		res, err := client.GetExecutors("spark-123")
+		res, err := client.GetAllExecutors("spark-123")
 		assert.Error(tt, err)
 		assert.Contains(tt, err.Error(), "test error")
 		assert.Nil(tt, res)
@@ -147,11 +147,11 @@ func TestGetExecutors(t *testing.T) {
 	t.Run("whenSuccessful", func(tt *testing.T) {
 
 		m := mock_transport.NewMockClient(ctrl)
-		m.EXPECT().Get("api/v1/applications/spark-123/executors").Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().Get("api/v1/applications/spark-123/allexecutors").Return(getExecutorsResponse(), nil).Times(1)
 
 		client := &client{m}
 
-		res, err := client.GetExecutors("spark-123")
+		res, err := client.GetAllExecutors("spark-123")
 		assert.NoError(tt, err)
 		assert.Equal(tt, 3, len(res))
 		for _, exec := range res {
