@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	Port          int32  = 8888
+	Port          int32  = 23174
 	ContainerName string = "storage-sync"
-	syncTimeout          = 3 * time.Minute
+	syncTimeout          = 1 * time.Minute
 )
 
 func ShouldStopSync(pod *corev1.Pod) bool {
@@ -42,7 +42,7 @@ func ShouldStopSync(pod *corev1.Pod) bool {
 
 	if storageSyncRunning && driverFailed {
 		// Let's allow the storage sync container a bit of time
-		// before we kill it, in case it is able to finish on its own
+		// before we tell it to stop, in case it is able to finish on its own
 		currentTime := time.Now().Unix()
 		timeoutTime := driverFailureTime.Add(syncTimeout).Unix()
 		if currentTime >= timeoutTime {
