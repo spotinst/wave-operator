@@ -839,7 +839,10 @@ func verifyCrExecutors(t *testing.T, executors []sparkapiclient.Executor, crExec
 		foundExecutor := false
 		for _, actualExecutor := range crExecutors {
 			foundExecutor = actualExecutor.Id == expectedExecutor.Id &&
-				actualExecutor.AddTime == expectedExecutor.AddTime
+				actualExecutor.AddTime == expectedExecutor.AddTime &&
+				actualExecutor.IsActive == expectedExecutor.IsActive &&
+				actualExecutor.RemoveTime == expectedExecutor.RemoveTime &&
+				actualExecutor.FailedTasks == expectedExecutor.FailedTasks
 			if foundExecutor {
 				break
 			}
@@ -978,16 +981,22 @@ func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 		},
 		Executors: []sparkapiclient.Executor{
 			{
-				Id:      "driver",
-				AddTime: "2020-12-14T14:07:27.142GMT",
+				Id:       "driver",
+				AddTime:  "2020-12-14T14:07:27.142GMT",
+				IsActive: true,
 			},
 			{
-				Id:      "1",
-				AddTime: "2020-12-14T15:17:37.142GMT",
+				Id:          "1",
+				AddTime:     "2020-12-14T15:17:37.142GMT",
+				RemoveTime:  "2021-12-14T15:17:37.142GMT",
+				FailedTasks: 9999,
+				IsActive:    false,
 			},
 			{
-				Id:      "2",
-				AddTime: "2020-12-14T16:27:47.142GMT",
+				Id:          "2",
+				AddTime:     "2020-12-14T16:27:47.142GMT",
+				FailedTasks: 90,
+				IsActive:    true,
 			},
 		},
 	}
