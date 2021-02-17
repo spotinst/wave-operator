@@ -78,7 +78,7 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 	webServerPort := strconv.Itoa(int(storagesync.Port))
 	storageContainer := corev1.Container{
 		Name:            storagesync.ContainerName,
-		Image:           "public.ecr.aws/l8m2k1n1/netapp/cloud-storage-sync:v0.3.1",
+		Image:           "public.ecr.aws/l8m2k1n1/netapp/cloud-storage-sync:v0.4.0",
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		Command:         []string{"/tini"},
 		Args:            []string{"--", "./run.sh", volumeMount.MountPath, "spark:" + storageInfo.Name, "forever", webServerPort},
