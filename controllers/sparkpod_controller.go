@@ -264,8 +264,8 @@ func (r *SparkPodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, cr *v1alpha1.SparkApplication, log logr.Logger) error {
 
 	if storagesync.ShouldStopSync(pod) {
-		log.Info("Stopping storage sync")
 		// Stop storage sync, best effort
+		log.Info("Stopping storage sync")
 		err := storagesync.StopSync(pod)
 		if err != nil {
 			log.Error(err, "could not stop storage sync")

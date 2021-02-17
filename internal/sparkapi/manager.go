@@ -125,7 +125,7 @@ func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, err
 	applicationInfo.TotalInputBytes = totalInputBytes
 	applicationInfo.TotalExecutorCpuTime = totalExecutorCpuTime
 
-	executors, err := m.client.GetExecutors(applicationId)
+	executors, err := m.client.GetAllExecutors(applicationId)
 	if err != nil {
 		return nil, fmt.Errorf("could not get executors, %w", err)
 	}
