@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	sparkDriverContainerName       = "spark-kubernetes-driver"
+	SparkDriverContainerName       = "spark-kubernetes-driver"
 	appNameLabel                   = "app.kubernetes.io/name"
 	historyServerAppNameLabelValue = "spark-history-server"
 )
@@ -189,7 +189,7 @@ func isSparkDriverRunning(driverPod *corev1.Pod) bool {
 	}
 
 	for _, containerStatus := range driverPod.Status.ContainerStatuses {
-		if containerStatus.Name == sparkDriverContainerName && containerStatus.Ready {
+		if containerStatus.Name == SparkDriverContainerName && containerStatus.Ready {
 			return true
 		}
 	}

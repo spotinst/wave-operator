@@ -230,7 +230,7 @@ func newRunningDriverPod() *corev1.Pod {
 			Phase: corev1.PodRunning,
 			ContainerStatuses: []corev1.ContainerStatus{
 				{
-					Name:  sparkDriverContainerName,
+					Name:  SparkDriverContainerName,
 					Ready: true,
 				},
 			},
