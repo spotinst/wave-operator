@@ -517,8 +517,33 @@ func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	executors := make([]v1alpha1.Executor, 0, len(sparkApiInfo.Executors))
 	for _, apiExecutor := range sparkApiInfo.Executors {
 		executor := v1alpha1.Executor{
-			Id:      apiExecutor.Id,
-			AddTime: apiExecutor.AddTime,
+			Id:                apiExecutor.Id,
+			IsActive:          apiExecutor.IsActive,
+			AddTime:           apiExecutor.AddTime,
+			RemoveTime:        apiExecutor.RemoveTime,
+			RemoveReason:      apiExecutor.RemoveReason,
+			RddBlocks:         apiExecutor.RddBlocks,
+			MemoryUsed:        apiExecutor.MemoryUsed,
+			DiskUsed:          apiExecutor.DiskUsed,
+			TotalCores:        apiExecutor.TotalCores,
+			MaxTasks:          apiExecutor.MaxTasks,
+			ActiveTasks:       apiExecutor.ActiveTasks,
+			FailedTasks:       apiExecutor.FailedTasks,
+			CompletedTasks:    apiExecutor.CompletedTasks,
+			TotalTasks:        apiExecutor.TotalTasks,
+			TotalDuration:     apiExecutor.TotalDuration,
+			TotalGCTime:       apiExecutor.TotalGCTime,
+			TotalInputBytes:   apiExecutor.TotalInputBytes,
+			TotalShuffleRead:  apiExecutor.TotalShuffleRead,
+			TotalShuffleWrite: apiExecutor.TotalShuffleWrite,
+			IsBlacklisted:     apiExecutor.IsBlacklisted,
+			MaxMemory:         apiExecutor.MaxMemory,
+			MemoryMetrics: v1alpha1.ExecutorMemoryMetrics{
+				UsedOnHeapStorageMemory:   apiExecutor.MemoryMetrics.UsedOnHeapStorageMemory,
+				UsedOffHeapStorageMemory:  apiExecutor.MemoryMetrics.UsedOffHeapStorageMemory,
+				TotalOnHeapStorageMemory:  apiExecutor.MemoryMetrics.TotalOnHeapStorageMemory,
+				TotalOffHeapStorageMemory: apiExecutor.MemoryMetrics.TotalOffHeapStorageMemory,
+			},
 		}
 		executors = append(executors, executor)
 	}
