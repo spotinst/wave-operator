@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -36,6 +37,8 @@ const (
 	sparkApplicationKind   = "SparkApplication"
 	waveKindLabel          = "wave.spot.io/kind"
 	waveApplicationIdLabel = "wave.spot.io/application-id"
+
+	maxProcessedStageIdAnnotation = "wave.spot.io/maxProcessedStageId"
 
 	requeueAfterTimeout = 10 * time.Second
 	podDeletionTimeout  = 5 * time.Minute
@@ -280,8 +283,13 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 	// Fetch information from Spark API
 	// Let's update the driver pod information even though the Spark API call fails
 
+	maxProcessedStageId, err := getMaxProcessedStageId(deepCopy)
+	if err != nil {
+		return fmt.Errorf("could not get max processed stage ID, %w", err)
+	}
+
 	var sparkApiError error
-	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationId, log)
+	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationId, maxProcessedStageId, log)
 	if err != nil {
 		sparkApiError = fmt.Errorf("could not get spark api application information, %w", err)
 	} else {
@@ -478,14 +486,14 @@ func shouldUpdatePodCrPhaseAndStatuses(pod *corev1.Pod, existingCr *v1alpha1.Pod
 	return true
 }
 
-func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationId string, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
+func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationId string, maxProcessedStageId int, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
 
 	manager, err := r.getSparkApiManager(clientSet, driverPod, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api manager, %w", err)
 	}
 
-	applicationInfo, err := manager.GetApplicationInfo(applicationId)
+	applicationInfo, err := manager.GetApplicationInfo(applicationId, maxProcessedStageId, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api application info, %w", err)
 	}
@@ -494,11 +502,16 @@ func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Int
 }
 
 func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo) {
+
 	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
-	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime = sparkApiInfo.TotalExecutorCpuTime
-	deepCopy.Status.Data.RunStatistics.TotalInputBytes = sparkApiInfo.TotalInputBytes
-	deepCopy.Status.Data.RunStatistics.TotalOutputBytes = sparkApiInfo.TotalOutputBytes
+
+	// TODO use uint64
+	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime += sparkApiInfo.TotalNewExecutorCpuTime
+	deepCopy.Status.Data.RunStatistics.TotalInputBytes += sparkApiInfo.TotalNewInputBytes
+	deepCopy.Status.Data.RunStatistics.TotalOutputBytes += sparkApiInfo.TotalNewOutputBytes
+
+	setMaxProcessedStageId(deepCopy, sparkApiInfo.MaxProcessedStageId)
 
 	attempts := make([]v1alpha1.Attempt, 0, len(sparkApiInfo.Attempts))
 	for _, apiAttempt := range sparkApiInfo.Attempts {
@@ -612,4 +625,28 @@ func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, dr
 	}
 
 	return nil
+}
+
+func getMaxProcessedStageId(cr *v1alpha1.SparkApplication) (int, error) {
+	if cr.Annotations == nil {
+		// We haven't processed any stages yet
+		return -1, nil
+	}
+	val := cr.Annotations[maxProcessedStageIdAnnotation]
+	if val == "" {
+		// We haven't processed any stages yet
+		return -1, nil
+	}
+	maxProcessedStageId, err := strconv.Atoi(val)
+	if err != nil {
+		return -1, fmt.Errorf("could not parse max processed stage ID: %q, %w", val, err)
+	}
+	return maxProcessedStageId, nil
+}
+
+func setMaxProcessedStageId(cr *v1alpha1.SparkApplication, maxProcessedStageId int) {
+	if cr.Annotations == nil {
+		cr.Annotations = make(map[string]string)
+	}
+	cr.Annotations[maxProcessedStageIdAnnotation] = strconv.Itoa(maxProcessedStageId)
 }

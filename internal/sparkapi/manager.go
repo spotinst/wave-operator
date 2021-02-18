@@ -22,7 +22,7 @@ const (
 )
 
 type Manager interface {
-	GetApplicationInfo(applicationId string) (*ApplicationInfo, error)
+	GetApplicationInfo(applicationId string, maxProcessedStageId int, log logr.Logger) (*ApplicationInfo, error)
 }
 
 type manager struct {
@@ -31,13 +31,14 @@ type manager struct {
 }
 
 type ApplicationInfo struct {
-	ApplicationName      string
-	SparkProperties      map[string]string
-	TotalInputBytes      int64
-	TotalOutputBytes     int64
-	TotalExecutorCpuTime int64
-	Attempts             []sparkapiclient.Attempt
-	Executors            []sparkapiclient.Executor
+	MaxProcessedStageId     int
+	ApplicationName         string
+	SparkProperties         map[string]string
+	TotalNewInputBytes      int64
+	TotalNewOutputBytes     int64
+	TotalNewExecutorCpuTime int64
+	Attempts                []sparkapiclient.Attempt
+	Executors               []sparkapiclient.Executor
 }
 
 var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (Manager, error) {
@@ -74,7 +75,7 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 	return nil, fmt.Errorf("could not get spark api client")
 }
 
-func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, error) {
+func (m manager) GetApplicationInfo(applicationId string, maxProcessedStageId int, log logr.Logger) (*ApplicationInfo, error) {
 
 	applicationInfo := &ApplicationInfo{}
 
@@ -111,21 +112,70 @@ func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, err
 		return nil, fmt.Errorf("stages are nil")
 	}
 
-	var totalExecutorCpuTime int64
-	var totalInputBytes int64
-	var totalOutputBytes int64
+	// TODO Use proper metrics, not the REST API
+	// The REST API only gives us the last ~1000 stages by default.
+	// Let's only aggregate stage metrics from the stages we have not processed yet
 
-	// TODO This does not work. We only get the latest 1000 stages from the API by default.
-	// TODO Use proper metrics.
-	for _, stage := range stages {
-		totalExecutorCpuTime += stage.ExecutorCpuTime
-		totalInputBytes += stage.InputBytes
-		totalOutputBytes += stage.OutputBytes
+	var totalNewExecutorCpuTime int64
+	var totalNewInputBytes int64
+	var totalNewOutputBytes int64
+
+	stageWindowMaxId := -1
+	stageWindowMinId := -1
+	if len(stages) > 0 {
+		stageWindowMinId = stages[0].StageId
+	}
+	var foundOldMaxProcessedStageId bool
+	if maxProcessedStageId == -1 {
+		// We haven't seen any stages before, so nothing to find
+		foundOldMaxProcessedStageId = true
 	}
 
-	applicationInfo.TotalOutputBytes = totalOutputBytes
-	applicationInfo.TotalInputBytes = totalInputBytes
-	applicationInfo.TotalExecutorCpuTime = totalExecutorCpuTime
+	newMaxProcessedStageId := maxProcessedStageId
+
+	for _, stage := range stages {
+
+		// Figure out the current stage window (logging purposes only)
+		if stage.StageId < stageWindowMinId {
+			stageWindowMinId = stage.StageId
+		}
+		if stage.StageId > stageWindowMaxId {
+			stageWindowMaxId = stage.StageId
+		}
+
+		// Verify that we still see the old stage we
+		// processed previously in our stage window
+		if stage.StageId == maxProcessedStageId {
+			foundOldMaxProcessedStageId = true
+		}
+
+		// Ignore active stages in aggregation
+		if stage.Status == "ACTIVE" {
+			continue
+		}
+
+		// Only aggregate info from stages we haven't seen before
+		if stage.StageId > maxProcessedStageId {
+			totalNewExecutorCpuTime += stage.ExecutorCpuTime
+			totalNewInputBytes += stage.InputBytes
+			totalNewOutputBytes += stage.OutputBytes
+
+			// Remember new max processed stage ID
+			if stage.StageId > newMaxProcessedStageId {
+				newMaxProcessedStageId = stage.StageId
+			}
+		}
+	}
+
+	log.Info("Finished processing stage window", "stageCount", len(stages),
+		"minStageId", stageWindowMinId, "maxStageId", stageWindowMaxId,
+		"oldMaxProcessedStageId", maxProcessedStageId, "newMaxProcessedStageId", newMaxProcessedStageId,
+		"foundOldMaxProcessedStageId", foundOldMaxProcessedStageId)
+
+	applicationInfo.TotalNewOutputBytes = totalNewOutputBytes
+	applicationInfo.TotalNewInputBytes = totalNewInputBytes
+	applicationInfo.TotalNewExecutorCpuTime = totalNewExecutorCpuTime
+	applicationInfo.MaxProcessedStageId = newMaxProcessedStageId
 
 	executors, err := m.client.GetAllExecutors(applicationId)
 	if err != nil {

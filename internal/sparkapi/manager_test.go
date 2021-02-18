@@ -65,6 +65,8 @@ func TestGetSparkApiClient(t *testing.T) {
 
 func TestGetApplicationInfo(t *testing.T) {
 
+	logger := getTestLogger()
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -83,7 +85,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		_, err := manager.GetApplicationInfo(applicationId)
+		_, err := manager.GetApplicationInfo(applicationId, -1, logger)
 		assert.Error(tt, err)
 		assert.Contains(tt, err.Error(), "test error")
 
@@ -102,14 +104,14 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationId)
+		res, err := manager.GetApplicationInfo(applicationId, -1, logger)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, "my-test-application", res.ApplicationName)
 
-		assert.Equal(tt, int64(900), res.TotalExecutorCpuTime)
-		assert.Equal(tt, int64(500), res.TotalInputBytes)
-		assert.Equal(tt, int64(700), res.TotalOutputBytes)
+		assert.Equal(tt, int64(900), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(500), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(700), res.TotalNewOutputBytes)
 
 		assert.Equal(tt, 2, len(res.SparkProperties))
 		assert.Equal(tt, "val1", res.SparkProperties["prop1"])
@@ -123,6 +125,111 @@ func TestGetApplicationInfo(t *testing.T) {
 		assert.Equal(tt, getExecutorsResponse()[0], res.Executors[0])
 		assert.Equal(tt, getExecutorsResponse()[1], res.Executors[1])
 		assert.Equal(tt, getExecutorsResponse()[2], res.Executors[2])
+	})
+
+}
+
+func TestStageAggregation(t *testing.T) {
+
+	logger := getTestLogger()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	applicationId := "spark-123"
+
+	stagesResponse := []sparkapiclient.Stage{
+		{
+			Status:          "COMPLETED",
+			StageId:         0,
+			AttemptId:       2,
+			InputBytes:      100,
+			OutputBytes:     100,
+			ExecutorCpuTime: 100,
+		},
+		{
+			Status:          "COMPLETED",
+			StageId:         1,
+			AttemptId:       2,
+			InputBytes:      100,
+			OutputBytes:     100,
+			ExecutorCpuTime: 100,
+		},
+		{
+			Status:          "COMPLETED",
+			StageId:         2,
+			AttemptId:       2,
+			InputBytes:      100,
+			OutputBytes:     100,
+			ExecutorCpuTime: 100,
+		},
+		{
+			Status:          "ACTIVE",
+			StageId:         3,
+			AttemptId:       2,
+			InputBytes:      100,
+			OutputBytes:     100,
+			ExecutorCpuTime: 100,
+		},
+	}
+
+	m := mock_client.NewMockClient(ctrl)
+	m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
+	m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
+	m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
+
+	manager := &manager{
+		client: m,
+		logger: getTestLogger(),
+	}
+
+	t.Run("whenSuccessful", func(tt *testing.T) {
+
+		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
+
+		// No stage seen previously
+		res, err := manager.GetApplicationInfo(applicationId, -1, logger)
+		assert.NoError(tt, err)
+		assert.Equal(tt, int64(300), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(300), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(300), res.TotalNewOutputBytes)
+		assert.Equal(tt, 2, res.MaxProcessedStageId)
+
+		// 1 stage seen previously
+		res, err = manager.GetApplicationInfo(applicationId, 0, logger)
+		assert.NoError(tt, err)
+		assert.Equal(tt, int64(200), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(200), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(200), res.TotalNewOutputBytes)
+		assert.Equal(tt, 2, res.MaxProcessedStageId)
+
+		// 2 stages seen previously
+		res, err = manager.GetApplicationInfo(applicationId, 1, logger)
+		assert.NoError(tt, err)
+		assert.Equal(tt, int64(100), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(100), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(100), res.TotalNewOutputBytes)
+		assert.Equal(tt, 2, res.MaxProcessedStageId)
+
+		// 3 stages seen previously, fourth stage still active
+		res, err = manager.GetApplicationInfo(applicationId, 2, logger)
+		assert.NoError(tt, err)
+		assert.Equal(tt, int64(0), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(0), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(0), res.TotalNewOutputBytes)
+		assert.Equal(tt, 2, res.MaxProcessedStageId)
+
+		// Final stage finishes
+		stagesResponse[len(stagesResponse)-1].Status = "COMPLETED"
+		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
+
+		// 3 stages seen previously, fourth stage still active
+		res, err = manager.GetApplicationInfo(applicationId, 2, logger)
+		assert.NoError(tt, err)
+		assert.Equal(tt, int64(100), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(100), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(100), res.TotalNewOutputBytes)
+		assert.Equal(tt, 3, res.MaxProcessedStageId)
 	})
 
 }

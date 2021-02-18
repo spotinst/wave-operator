@@ -21,11 +21,12 @@ type Attempt struct {
 }
 
 type Stage struct {
-	StageId         int   `json:"stageId"`
-	AttemptId       int   `json:"attemptId"`
-	InputBytes      int64 `json:"inputBytes"`
-	OutputBytes     int64 `json:"outputBytes"`
-	ExecutorCpuTime int64 `json:"executorCpuTime"`
+	Status          string `json:"status"`
+	StageId         int    `json:"stageId"`
+	AttemptId       int    `json:"attemptId"`
+	InputBytes      int64  `json:"inputBytes"`
+	OutputBytes     int64  `json:"outputBytes"`
+	ExecutorCpuTime int64  `json:"executorCpuTime"`
 }
 
 type Executor struct {
