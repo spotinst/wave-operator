@@ -145,15 +145,11 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, maxProcessedStageId in
 	var totalNewInputBytes int64
 	var totalNewOutputBytes int64
 
+	var foundOldMaxProcessedStageId bool
 	stageWindowMaxId := -1
 	stageWindowMinId := -1
 	if len(stages) > 0 {
 		stageWindowMinId = stages[0].StageId
-	}
-	var foundOldMaxProcessedStageId bool
-	if maxProcessedStageId == -1 {
-		// We haven't seen any stages before, so nothing to find
-		foundOldMaxProcessedStageId = true
 	}
 
 	newMaxProcessedStageId := maxProcessedStageId
