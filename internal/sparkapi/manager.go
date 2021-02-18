@@ -115,6 +115,8 @@ func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, err
 	var totalInputBytes int64
 	var totalOutputBytes int64
 
+	// TODO This does not work. We only get the latest 1000 stages from the API by default.
+	// TODO Use proper metrics.
 	for _, stage := range stages {
 		totalExecutorCpuTime += stage.ExecutorCpuTime
 		totalInputBytes += stage.InputBytes
