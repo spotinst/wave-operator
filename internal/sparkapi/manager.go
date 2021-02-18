@@ -135,7 +135,7 @@ type stageWindowAggregationResult struct {
 	newMaxProcessedStageId  int
 }
 
-func aggregateStagesWindow(stages []sparkapiclient.Stage, maxProcessedStageId int, log logr.Logger) stageWindowAggregationResult {
+func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId int, log logr.Logger) stageWindowAggregationResult {
 
 	// TODO Use proper metrics, not the REST API
 	// The REST API only gives us the last ~1000 stages by default.
@@ -152,7 +152,7 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, maxProcessedStageId in
 		stageWindowMinId = stages[0].StageId
 	}
 
-	newMaxProcessedStageId := maxProcessedStageId
+	newMaxProcessedStageId := oldMaxProcessedStageId
 
 	for _, stage := range stages {
 
@@ -166,17 +166,17 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, maxProcessedStageId in
 
 		// Verify that we still see the old stage we
 		// processed previously in our stage window
-		if stage.StageId == maxProcessedStageId {
+		if stage.StageId == oldMaxProcessedStageId {
 			foundOldMaxProcessedStageId = true
 		}
 
-		// Ignore active stages in aggregation
+		// Don't include active stages in the aggregation
 		if stage.Status == "ACTIVE" {
 			continue
 		}
 
 		// Only aggregate info from stages we haven't seen before
-		if stage.StageId > maxProcessedStageId {
+		if stage.StageId > oldMaxProcessedStageId {
 			totalNewExecutorCpuTime += stage.ExecutorCpuTime
 			totalNewInputBytes += stage.InputBytes
 			totalNewOutputBytes += stage.OutputBytes
@@ -190,7 +190,7 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, maxProcessedStageId in
 
 	log.Info("Finished processing stage window", "stageCount", len(stages),
 		"minStageId", stageWindowMinId, "maxStageId", stageWindowMaxId,
-		"oldMaxProcessedStageId", maxProcessedStageId, "newMaxProcessedStageId", newMaxProcessedStageId,
+		"oldMaxProcessedStageId", oldMaxProcessedStageId, "newMaxProcessedStageId", newMaxProcessedStageId,
 		"foundOldMaxProcessedStageId", foundOldMaxProcessedStageId)
 
 	return stageWindowAggregationResult{
