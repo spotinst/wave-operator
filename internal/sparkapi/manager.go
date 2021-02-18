@@ -164,8 +164,8 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 			stageWindowMaxId = stage.StageId
 		}
 
-		// Verify that we still see the old stage we
-		// processed previously in our stage window
+		// Verify that we still see the old stage we processed previously in our stage window.
+		// If we don't, it means that we have missed some stages in our aggregation.
 		if stage.StageId == oldMaxProcessedStageId {
 			foundOldMaxProcessedStageId = true
 		}
