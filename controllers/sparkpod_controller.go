@@ -506,7 +506,6 @@ func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
 
-	// TODO use uint64
 	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime += sparkApiInfo.TotalNewExecutorCpuTime
 	deepCopy.Status.Data.RunStatistics.TotalInputBytes += sparkApiInfo.TotalNewInputBytes
 	deepCopy.Status.Data.RunStatistics.TotalOutputBytes += sparkApiInfo.TotalNewOutputBytes
