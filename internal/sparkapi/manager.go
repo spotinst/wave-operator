@@ -112,6 +112,31 @@ func (m manager) GetApplicationInfo(applicationId string, maxProcessedStageId in
 		return nil, fmt.Errorf("stages are nil")
 	}
 
+	stageAggregationResult := aggregateStagesWindow(stages, maxProcessedStageId, log)
+	applicationInfo.TotalNewOutputBytes = stageAggregationResult.totalNewOutputBytes
+	applicationInfo.TotalNewInputBytes = stageAggregationResult.totalNewInputBytes
+	applicationInfo.TotalNewExecutorCpuTime = stageAggregationResult.totalNewExecutorCpuTime
+	applicationInfo.MaxProcessedStageId = stageAggregationResult.newMaxProcessedStageId
+
+	executors, err := m.client.GetAllExecutors(applicationId)
+	if err != nil {
+		return nil, fmt.Errorf("could not get executors, %w", err)
+	}
+
+	applicationInfo.Executors = executors
+
+	return applicationInfo, nil
+}
+
+type stageWindowAggregationResult struct {
+	totalNewOutputBytes     int64
+	totalNewInputBytes      int64
+	totalNewExecutorCpuTime int64
+	newMaxProcessedStageId  int
+}
+
+func aggregateStagesWindow(stages []sparkapiclient.Stage, maxProcessedStageId int, log logr.Logger) stageWindowAggregationResult {
+
 	// TODO Use proper metrics, not the REST API
 	// The REST API only gives us the last ~1000 stages by default.
 	// Let's only aggregate stage metrics from the stages we have not processed yet
@@ -172,19 +197,12 @@ func (m manager) GetApplicationInfo(applicationId string, maxProcessedStageId in
 		"oldMaxProcessedStageId", maxProcessedStageId, "newMaxProcessedStageId", newMaxProcessedStageId,
 		"foundOldMaxProcessedStageId", foundOldMaxProcessedStageId)
 
-	applicationInfo.TotalNewOutputBytes = totalNewOutputBytes
-	applicationInfo.TotalNewInputBytes = totalNewInputBytes
-	applicationInfo.TotalNewExecutorCpuTime = totalNewExecutorCpuTime
-	applicationInfo.MaxProcessedStageId = newMaxProcessedStageId
-
-	executors, err := m.client.GetAllExecutors(applicationId)
-	if err != nil {
-		return nil, fmt.Errorf("could not get executors, %w", err)
+	return stageWindowAggregationResult{
+		totalNewOutputBytes:     totalNewOutputBytes,
+		totalNewInputBytes:      totalNewInputBytes,
+		totalNewExecutorCpuTime: totalNewExecutorCpuTime,
+		newMaxProcessedStageId:  newMaxProcessedStageId,
 	}
-
-	applicationInfo.Executors = executors
-
-	return applicationInfo, nil
 }
 
 func parseSparkProperties(environment *sparkapiclient.Environment, logger logr.Logger) (map[string]string, error) {
