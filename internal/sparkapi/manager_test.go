@@ -305,6 +305,17 @@ func TestStageAggregation(t *testing.T) {
 			},
 			message: "whenStagesCompleteOutOfOrder_6",
 		},
+		{
+			statuses:               []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE"},
+			oldMaxProcessedStageId: 100,
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     0,
+				totalNewInputBytes:      0,
+				totalNewExecutorCpuTime: 0,
+				newMaxProcessedStageId:  100,
+			},
+			message: "whenOnlyOldStagesReceived",
+		},
 	}
 
 	for _, tc := range testCases {
