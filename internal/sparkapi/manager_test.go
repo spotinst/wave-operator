@@ -138,41 +138,6 @@ func TestStageAggregation(t *testing.T) {
 
 	applicationId := "spark-123"
 
-	stagesResponse := []sparkapiclient.Stage{
-		{
-			Status:          "COMPLETED",
-			StageId:         0,
-			AttemptId:       2,
-			InputBytes:      100,
-			OutputBytes:     100,
-			ExecutorCpuTime: 100,
-		},
-		{
-			Status:          "COMPLETED",
-			StageId:         1,
-			AttemptId:       2,
-			InputBytes:      100,
-			OutputBytes:     100,
-			ExecutorCpuTime: 100,
-		},
-		{
-			Status:          "COMPLETED",
-			StageId:         2,
-			AttemptId:       2,
-			InputBytes:      100,
-			OutputBytes:     100,
-			ExecutorCpuTime: 100,
-		},
-		{
-			Status:          "ACTIVE",
-			StageId:         3,
-			AttemptId:       2,
-			InputBytes:      100,
-			OutputBytes:     100,
-			ExecutorCpuTime: 100,
-		},
-	}
-
 	t.Run("whenNoStagesReceived", func(tt *testing.T) {
 
 		m := mock_client.NewMockClient(ctrl)
@@ -195,7 +160,42 @@ func TestStageAggregation(t *testing.T) {
 
 	})
 
-	t.Run("whenSuccessful", func(tt *testing.T) {
+	t.Run("whenStagesCompleteInOrder", func(tt *testing.T) {
+
+		stagesResponse := []sparkapiclient.Stage{
+			{
+				Status:          "COMPLETED",
+				StageId:         0,
+				AttemptId:       2,
+				InputBytes:      100,
+				OutputBytes:     100,
+				ExecutorCpuTime: 100,
+			},
+			{
+				Status:          "COMPLETED",
+				StageId:         1,
+				AttemptId:       2,
+				InputBytes:      100,
+				OutputBytes:     100,
+				ExecutorCpuTime: 100,
+			},
+			{
+				Status:          "COMPLETED",
+				StageId:         2,
+				AttemptId:       2,
+				InputBytes:      100,
+				OutputBytes:     100,
+				ExecutorCpuTime: 100,
+			},
+			{
+				Status:          "ACTIVE",
+				StageId:         3,
+				AttemptId:       2,
+				InputBytes:      100,
+				OutputBytes:     100,
+				ExecutorCpuTime: 100,
+			},
+		}
 
 		m := mock_client.NewMockClient(ctrl)
 		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
@@ -250,6 +250,163 @@ func TestStageAggregation(t *testing.T) {
 		assert.Equal(tt, int64(100), res.TotalNewInputBytes)
 		assert.Equal(tt, int64(100), res.TotalNewOutputBytes)
 		assert.Equal(tt, 3, res.MaxProcessedStageId)
+
+		// No stages seen previously, final stage completed
+		res, err = manager.GetApplicationInfo(applicationId, -1, logger)
+		assert.NoError(tt, err)
+		assert.Equal(tt, int64(400), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(400), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(400), res.TotalNewOutputBytes)
+		assert.Equal(tt, 3, res.MaxProcessedStageId)
+	})
+
+	getStagesResponse := func() []sparkapiclient.Stage {
+		return []sparkapiclient.Stage{
+			{
+				Status:          "COMPLETED",
+				StageId:         0,
+				AttemptId:       2,
+				InputBytes:      100,
+				OutputBytes:     100,
+				ExecutorCpuTime: 100,
+			},
+			{
+				Status:          "COMPLETED",
+				StageId:         1,
+				AttemptId:       2,
+				InputBytes:      100,
+				OutputBytes:     100,
+				ExecutorCpuTime: 100,
+			},
+			{
+				Status:          "ACTIVE",
+				StageId:         2,
+				AttemptId:       2,
+				InputBytes:      100,
+				OutputBytes:     100,
+				ExecutorCpuTime: 100,
+			},
+			{
+				Status:          "SKIPPED",
+				StageId:         3,
+				AttemptId:       2,
+				InputBytes:      100,
+				OutputBytes:     100,
+				ExecutorCpuTime: 100,
+			},
+			{
+				Status:          "ACTIVE",
+				StageId:         4,
+				AttemptId:       2,
+				InputBytes:      100,
+				OutputBytes:     100,
+				ExecutorCpuTime: 100,
+			},
+			{
+				Status:          "COMPLETED",
+				StageId:         5,
+				AttemptId:       2,
+				InputBytes:      100,
+				OutputBytes:     100,
+				ExecutorCpuTime: 100,
+			},
+		}
+	}
+
+	t.Run("whenStagesCompleteOutOfOrder_1", func(tt *testing.T) {
+
+		stagesResponse := getStagesResponse()
+
+		m := mock_client.NewMockClient(ctrl)
+		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
+		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
+		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
+		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
+
+		manager := &manager{
+			client: m,
+			logger: getTestLogger(),
+		}
+
+		res, err := manager.GetApplicationInfo(applicationId, -1, logger)
+		assert.NoError(tt, err)
+		assert.Equal(tt, int64(200), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(200), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(200), res.TotalNewOutputBytes)
+		assert.Equal(tt, 1, res.MaxProcessedStageId)
+
+	})
+
+	t.Run("whenStagesCompleteOutOfOrder_2", func(tt *testing.T) {
+
+		stagesResponse := getStagesResponse()
+
+		m := mock_client.NewMockClient(ctrl)
+		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
+		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
+		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
+		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
+
+		manager := &manager{
+			client: m,
+			logger: getTestLogger(),
+		}
+
+		res, err := manager.GetApplicationInfo(applicationId, 0, logger)
+		assert.NoError(tt, err)
+		assert.Equal(tt, int64(100), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(100), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(100), res.TotalNewOutputBytes)
+		assert.Equal(tt, 1, res.MaxProcessedStageId)
+
+	})
+
+	t.Run("whenStagesCompleteOutOfOrder_3", func(tt *testing.T) {
+
+		stagesResponse := getStagesResponse()
+
+		m := mock_client.NewMockClient(ctrl)
+		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
+		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
+		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
+		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
+
+		manager := &manager{
+			client: m,
+			logger: getTestLogger(),
+		}
+
+		res, err := manager.GetApplicationInfo(applicationId, 1, logger)
+		assert.NoError(tt, err)
+		assert.Equal(tt, int64(0), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(0), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(0), res.TotalNewOutputBytes)
+		assert.Equal(tt, 1, res.MaxProcessedStageId)
+
+	})
+
+	t.Run("whenStagesCompleteOutOfOrder_4", func(tt *testing.T) {
+
+		stagesResponse := getStagesResponse()
+
+		m := mock_client.NewMockClient(ctrl)
+		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
+		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
+		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
+		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
+
+		manager := &manager{
+			client: m,
+			logger: getTestLogger(),
+		}
+
+		res, err := manager.GetApplicationInfo(applicationId, 1, logger)
+		assert.NoError(tt, err)
+		assert.Equal(tt, int64(0), res.TotalNewExecutorCpuTime)
+		assert.Equal(tt, int64(0), res.TotalNewInputBytes)
+		assert.Equal(tt, int64(0), res.TotalNewOutputBytes)
+		assert.Equal(tt, 1, res.MaxProcessedStageId)
+
 	})
 
 }

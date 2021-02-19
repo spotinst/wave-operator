@@ -141,24 +141,44 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 	// The REST API only gives us the last ~1000 stages by default.
 	// Let's only aggregate stage metrics from the stages we have not processed yet
 
+	const STAGE_ACTIVE = "ACTIVE"
+
 	var totalNewExecutorCpuTime int64
 	var totalNewInputBytes int64
 	var totalNewOutputBytes int64
 
 	var foundOldMaxProcessedStageId bool
+
+	// The max and min IDs of the received stages
 	stageWindowMaxId := -1
 	stageWindowMinId := -1
-	if len(stages) > 0 {
-		stageWindowMinId = stages[0].StageId
-	}
 
-	newMaxProcessedStageId := oldMaxProcessedStageId
+	// We can include stages up to this ID - 1 in our aggregation,
+	// all stages up to this number should be finalized (not active)
+	minActiveStageId := -1
 
+	// First pass, analysis
 	for _, stage := range stages {
 
+		// Figure out min stage ID that is still active
+		if stage.Status == STAGE_ACTIVE {
+			if minActiveStageId == -1 {
+				minActiveStageId = stage.StageId
+			}
+			if stage.StageId < minActiveStageId {
+				minActiveStageId = stage.StageId
+			}
+		}
+
 		// Figure out the current stage window (logging purposes only)
+		if stageWindowMinId == -1 {
+			stageWindowMinId = stage.StageId
+		}
 		if stage.StageId < stageWindowMinId {
 			stageWindowMinId = stage.StageId
+		}
+		if stageWindowMaxId == -1 {
+			stageWindowMaxId = stage.StageId
 		}
 		if stage.StageId > stageWindowMaxId {
 			stageWindowMaxId = stage.StageId
@@ -169,27 +189,41 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 		if stage.StageId == oldMaxProcessedStageId {
 			foundOldMaxProcessedStageId = true
 		}
+	}
 
-		// Don't include active stages in the aggregation
-		if stage.Status == "ACTIVE" {
+	// We only want to include stages in (aggregationWindowMin, aggregationWindowMax) (non-inclusive)
+	aggregationWindowMin := oldMaxProcessedStageId // We have already processed stages up to and including oldMaxProcessedStageId
+	aggregationWindowMax := minActiveStageId       // Stages with IDs >= minActiveStageId may still be in progress
+
+	newMaxProcessedStageId := oldMaxProcessedStageId
+
+	// Second pass, aggregation
+	for _, stage := range stages {
+
+		// Only include stages within our aggregation window
+		if stage.StageId <= aggregationWindowMin {
 			continue
 		}
-
-		// Only aggregate info from stages we haven't seen before
-		if stage.StageId > oldMaxProcessedStageId {
-			totalNewExecutorCpuTime += stage.ExecutorCpuTime
-			totalNewInputBytes += stage.InputBytes
-			totalNewOutputBytes += stage.OutputBytes
-
-			// Remember new max processed stage ID
-			if stage.StageId > newMaxProcessedStageId {
-				newMaxProcessedStageId = stage.StageId
+		if aggregationWindowMax != -1 {
+			// We have an upper bound on the aggregation window
+			if stage.StageId >= aggregationWindowMax {
+				continue
 			}
+		}
+
+		totalNewExecutorCpuTime += stage.ExecutorCpuTime
+		totalNewInputBytes += stage.InputBytes
+		totalNewOutputBytes += stage.OutputBytes
+
+		// Remember new max processed stage ID
+		if stage.StageId > newMaxProcessedStageId {
+			newMaxProcessedStageId = stage.StageId
 		}
 	}
 
 	log.Info("Finished processing stage window", "stageCount", len(stages),
 		"minStageId", stageWindowMinId, "maxStageId", stageWindowMaxId,
+		"aggregationWindow", fmt.Sprintf("(%d,%d)", aggregationWindowMin, aggregationWindowMax),
 		"oldMaxProcessedStageId", oldMaxProcessedStageId, "newMaxProcessedStageId", newMaxProcessedStageId,
 		"foundOldMaxProcessedStageId", foundOldMaxProcessedStageId)
 
