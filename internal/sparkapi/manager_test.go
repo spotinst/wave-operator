@@ -330,6 +330,37 @@ func TestStageAggregation(t *testing.T) {
 		assert.Equal(t, int64(3*inputBytesPerStage), res.totalNewInputBytes)
 		assert.Equal(t, int64(3*outputBytesPerStage), res.totalNewOutputBytes)
 	})
+
+	t.Run("whenStagesMissed", func(tt *testing.T) {
+
+		// Should not log error, no stages received
+		aggregateStagesWindow([]sparkapiclient.Stage{}, -1, logger)
+
+		stages := getStages([]string{"COMPLETE", "COMPLETE"})
+
+		// Should not log error, no stages seen before
+		aggregateStagesWindow(stages, -1, logger)
+
+		stages[0].StageId = 4
+		stages[1].StageId = 5
+
+		// Should not log error
+		aggregateStagesWindow(stages, 3, logger)
+		// Should not log error
+		aggregateStagesWindow(stages, 4, logger)
+		// Should not log error, no new stages received
+		aggregateStagesWindow(stages, 5, logger)
+		// Should not log error, no new stages received
+		aggregateStagesWindow(stages, 6, logger)
+		// Should log error, we missed stage 0
+		aggregateStagesWindow(stages, -1, logger)
+		// Should log error, we missed stage 1
+		aggregateStagesWindow(stages, 0, logger)
+		// Should log error, we missed stage 2
+		aggregateStagesWindow(stages, 1, logger)
+		// Should log error, we missed stage 3
+		aggregateStagesWindow(stages, 2, logger)
+	})
 }
 
 func getTestLogger() logr.Logger {

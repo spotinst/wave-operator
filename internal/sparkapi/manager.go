@@ -145,7 +145,12 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 	var totalNewInputBytes int64
 	var totalNewOutputBytes int64
 
-	var foundOldMaxProcessedStageId bool
+	// If the stage window has advanced,
+	// and we don't find this stage ID in the window,
+	// it means we have missed some stages
+	expectedStageId := oldMaxProcessedStageId + 1
+	foundExpectedStageId := false
+	windowHasAdvanced := false
 
 	// The max and min IDs of the received stages
 	stageWindowMaxId := -1
@@ -182,10 +187,12 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 			stageWindowMaxId = stage.StageId
 		}
 
-		// Verify that we still see the old stage we processed previously in our stage window.
-		// If we don't, it means that we have missed some stages in our aggregation.
-		if stage.StageId == oldMaxProcessedStageId {
-			foundOldMaxProcessedStageId = true
+		if stage.StageId > oldMaxProcessedStageId {
+			windowHasAdvanced = true
+		}
+
+		if stage.StageId == expectedStageId {
+			foundExpectedStageId = true
 		}
 	}
 
@@ -223,7 +230,13 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 		"minStageId", stageWindowMinId, "maxStageId", stageWindowMaxId,
 		"aggregationWindow", fmt.Sprintf("(%d,%d)", aggregationWindowMin, aggregationWindowMax),
 		"oldMaxProcessedStageId", oldMaxProcessedStageId, "newMaxProcessedStageId", newMaxProcessedStageId,
-		"foundOldMaxProcessedStageId", foundOldMaxProcessedStageId)
+		"foundExpectedStageId", foundExpectedStageId)
+
+	if !foundExpectedStageId && windowHasAdvanced {
+		// Let's just log an error
+		err := fmt.Errorf("did not find expected stage ID %d in stage window", expectedStageId)
+		log.Error(err, "missing stage metrics")
+	}
 
 	return stageWindowAggregationResult{
 		totalNewOutputBytes:     totalNewOutputBytes,
