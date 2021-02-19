@@ -141,8 +141,6 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 	// The REST API only gives us the last ~1000 stages by default.
 	// Let's only aggregate stage metrics from the stages we have not processed yet
 
-	const STAGE_ACTIVE = "ACTIVE"
-
 	var totalNewExecutorCpuTime int64
 	var totalNewInputBytes int64
 	var totalNewOutputBytes int64
@@ -154,19 +152,19 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 	stageWindowMinId := -1
 
 	// We can include stages up to this ID - 1 in our aggregation,
-	// all stages up to this number should be finalized (not active)
-	minActiveStageId := -1
+	// all stages up to this number should be finalized
+	minNotFinalizedStageId := -1
 
 	// First pass, analysis
 	for _, stage := range stages {
 
 		// Figure out min stage ID that is still active
-		if stage.Status == STAGE_ACTIVE {
-			if minActiveStageId == -1 {
-				minActiveStageId = stage.StageId
+		if !isStageFinalized(stage) {
+			if minNotFinalizedStageId == -1 {
+				minNotFinalizedStageId = stage.StageId
 			}
-			if stage.StageId < minActiveStageId {
-				minActiveStageId = stage.StageId
+			if stage.StageId < minNotFinalizedStageId {
+				minNotFinalizedStageId = stage.StageId
 			}
 		}
 
@@ -193,7 +191,7 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 
 	// We only want to include stages in (aggregationWindowMin, aggregationWindowMax) (non-inclusive)
 	aggregationWindowMin := oldMaxProcessedStageId // We have already processed stages up to and including oldMaxProcessedStageId
-	aggregationWindowMax := minActiveStageId       // Stages with IDs >= minActiveStageId may still be in progress
+	aggregationWindowMax := minNotFinalizedStageId // Stages with IDs >= minNotFinalizedStageId may still be in progress
 
 	newMaxProcessedStageId := oldMaxProcessedStageId
 
@@ -232,6 +230,25 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 		totalNewInputBytes:      totalNewInputBytes,
 		totalNewExecutorCpuTime: totalNewExecutorCpuTime,
 		newMaxProcessedStageId:  newMaxProcessedStageId,
+	}
+}
+
+func isStageFinalized(stage sparkapiclient.Stage) bool {
+	// Stages can have the following statuses:
+	// ACTIVE, COMPLETE, FAILED, PENDING, SKIPPED
+	switch stage.Status {
+	case "ACTIVE":
+		return false
+	case "COMPLETE":
+		return true
+	case "FAILED":
+		return true
+	case "PENDING":
+		return false
+	case "SKIPPED":
+		return true
+	default:
+		return false
 	}
 }
 

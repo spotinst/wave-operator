@@ -174,7 +174,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenNoStagesReceived",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "ACTIVE"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
 			oldMaxProcessedStageId: -1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     3 * outputBytesPerStage,
@@ -185,7 +185,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenStagesCompleteInOrder_1",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "ACTIVE"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
 			oldMaxProcessedStageId: 0,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     2 * outputBytesPerStage,
@@ -196,7 +196,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenStagesCompleteInOrder_2",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "ACTIVE"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
 			oldMaxProcessedStageId: 1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     1 * outputBytesPerStage,
@@ -207,7 +207,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenStagesCompleteInOrder_3",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "ACTIVE"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
 			oldMaxProcessedStageId: 2,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     0,
@@ -218,7 +218,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenStagesCompleteInOrder_4",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "COMPLETED"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
 			oldMaxProcessedStageId: 2,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     1 * outputBytesPerStage,
@@ -229,7 +229,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenStagesCompleteInOrder_5",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "COMPLETED"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
 			oldMaxProcessedStageId: -1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     4 * outputBytesPerStage,
@@ -240,7 +240,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenStagesCompleteInOrder_6",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETED"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
 			oldMaxProcessedStageId: -1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     2 * outputBytesPerStage,
@@ -251,7 +251,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenStagesCompleteOutOfOrder_1",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETED"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
 			oldMaxProcessedStageId: 0,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     1 * outputBytesPerStage,
@@ -262,7 +262,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenStagesCompleteOutOfOrder_2",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETED"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
 			oldMaxProcessedStageId: 1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     0,
@@ -273,7 +273,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenStagesCompleteOutOfOrder_3",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "SKIPPED", "ACTIVE", "COMPLETED"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "ACTIVE", "COMPLETE"},
 			oldMaxProcessedStageId: 1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     2 * outputBytesPerStage,
@@ -284,7 +284,7 @@ func TestStageAggregation(t *testing.T) {
 			message: "whenStagesCompleteOutOfOrder_4",
 		},
 		{
-			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "SKIPPED", "COMPLETED", "COMPLETED"},
+			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "COMPLETE", "COMPLETE"},
 			oldMaxProcessedStageId: 1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     4 * outputBytesPerStage,
@@ -293,6 +293,17 @@ func TestStageAggregation(t *testing.T) {
 				newMaxProcessedStageId:  5,
 			},
 			message: "whenStagesCompleteOutOfOrder_5",
+		},
+		{
+			statuses:               []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE"},
+			oldMaxProcessedStageId: -1,
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     3 * outputBytesPerStage,
+				totalNewInputBytes:      3 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 3 * cpuTimePerStage,
+				newMaxProcessedStageId:  2,
+			},
+			message: "whenStagesCompleteOutOfOrder_6",
 		},
 	}
 
@@ -309,7 +320,7 @@ func TestStageAggregation(t *testing.T) {
 
 	t.Run("whenStagesReceivedOutOfOrder", func(tt *testing.T) {
 
-		stages := getStages([]string{"COMPLETED", "COMPLETED", "COMPLETED", "ACTIVE", "COMPLETED", "ACTIVE"})
+		stages := getStages([]string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE", "COMPLETE", "ACTIVE"})
 		stages[0], stages[3] = stages[3], stages[0]
 		stages[2], stages[5] = stages[5], stages[2]
 
@@ -355,6 +366,7 @@ func getApplicationResponse() *sparkapiclient.Application {
 func getStagesResponse() []sparkapiclient.Stage {
 	return []sparkapiclient.Stage{
 		{
+			Status:          "COMPLETE",
 			StageId:         1,
 			AttemptId:       2,
 			InputBytes:      100,
@@ -362,6 +374,7 @@ func getStagesResponse() []sparkapiclient.Stage {
 			ExecutorCpuTime: 300,
 		},
 		{
+			Status:          "COMPLETE",
 			StageId:         2,
 			AttemptId:       3,
 			InputBytes:      400,
