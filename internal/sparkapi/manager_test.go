@@ -112,6 +112,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		assert.Equal(tt, int64(900), res.TotalNewExecutorCpuTime)
 		assert.Equal(tt, int64(500), res.TotalNewInputBytes)
 		assert.Equal(tt, int64(700), res.TotalNewOutputBytes)
+		assert.Equal(tt, 2, res.MaxProcessedStageId)
 
 		assert.Equal(tt, 2, len(res.SparkProperties))
 		assert.Equal(tt, "val1", res.SparkProperties["prop1"])
@@ -133,7 +134,7 @@ func TestStageAggregation(t *testing.T) {
 
 	logger := getTestLogger()
 
-	getStagesResponse := func(statuses []string) []sparkapiclient.Stage {
+	getStages := func(statuses []string) []sparkapiclient.Stage {
 		stages := make([]sparkapiclient.Stage, len(statuses))
 		for i := 0; i < len(statuses); i++ {
 			stage := sparkapiclient.Stage{
@@ -267,11 +268,33 @@ func TestStageAggregation(t *testing.T) {
 			},
 			message: "whenStagesCompleteOutOfOrder_3",
 		},
+		{
+			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "SKIPPED", "ACTIVE", "COMPLETED"},
+			oldMaxProcessedStageId: 1,
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     200,
+				totalNewInputBytes:      200,
+				totalNewExecutorCpuTime: 200,
+				newMaxProcessedStageId:  3,
+			},
+			message: "whenStagesCompleteOutOfOrder_4",
+		},
+		{
+			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "SKIPPED", "COMPLETED", "COMPLETED"},
+			oldMaxProcessedStageId: 1,
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     400,
+				totalNewInputBytes:      400,
+				totalNewExecutorCpuTime: 400,
+				newMaxProcessedStageId:  5,
+			},
+			message: "whenStagesCompleteOutOfOrder_5",
+		},
 	}
 
 	for _, tc := range testCases {
 
-		stages := getStagesResponse(tc.statuses)
+		stages := getStages(tc.statuses)
 		res := aggregateStagesWindow(stages, tc.oldMaxProcessedStageId, logger)
 
 		assert.Equal(t, tc.expectedResult.newMaxProcessedStageId, res.newMaxProcessedStageId, tc.message)
@@ -279,6 +302,19 @@ func TestStageAggregation(t *testing.T) {
 		assert.Equal(t, tc.expectedResult.totalNewInputBytes, res.totalNewInputBytes, tc.message)
 		assert.Equal(t, tc.expectedResult.totalNewOutputBytes, res.totalNewOutputBytes, tc.message)
 	}
+
+	t.Run("whenStagesReceivedOutOfOrder", func(tt *testing.T) {
+
+		stages := getStages([]string{"COMPLETED", "COMPLETED", "COMPLETED", "ACTIVE", "COMPLETED", "ACTIVE"})
+		stages[0], stages[3] = stages[3], stages[0]
+		stages[2], stages[5] = stages[5], stages[2]
+
+		res := aggregateStagesWindow(stages, -1, logger)
+		assert.Equal(t, 2, res.newMaxProcessedStageId)
+		assert.Equal(t, int64(300), res.totalNewExecutorCpuTime)
+		assert.Equal(t, int64(300), res.totalNewInputBytes)
+		assert.Equal(t, int64(300), res.totalNewOutputBytes)
+	})
 }
 
 func getTestLogger() logr.Logger {
