@@ -133,30 +133,13 @@ func TestStageAggregation(t *testing.T) {
 
 	logger := getTestLogger()
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	applicationId := "spark-123"
-
 	t.Run("whenNoStagesReceived", func(tt *testing.T) {
 
-		m := mock_client.NewMockClient(ctrl)
-		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
-		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
-		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
-		m.EXPECT().GetStages(applicationId).Return([]sparkapiclient.Stage{}, nil).AnyTimes()
-
-		manager := &manager{
-			client: m,
-			logger: getTestLogger(),
-		}
-
-		res, err := manager.GetApplicationInfo(applicationId, -1, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(0), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(0), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(0), res.TotalNewOutputBytes)
-		assert.Equal(tt, -1, res.MaxProcessedStageId)
+		res := aggregateStagesWindow([]sparkapiclient.Stage{}, -1, logger)
+		assert.Equal(tt, int64(0), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(0), res.totalNewInputBytes)
+		assert.Equal(tt, int64(0), res.totalNewOutputBytes)
+		assert.Equal(tt, -1, res.newMaxProcessedStageId)
 
 	})
 
@@ -197,67 +180,50 @@ func TestStageAggregation(t *testing.T) {
 			},
 		}
 
-		m := mock_client.NewMockClient(ctrl)
-		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
-		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
-		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
-		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
-
-		manager := &manager{
-			client: m,
-			logger: getTestLogger(),
-		}
-
 		// No stage seen previously
-		res, err := manager.GetApplicationInfo(applicationId, -1, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(300), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(300), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(300), res.TotalNewOutputBytes)
-		assert.Equal(tt, 2, res.MaxProcessedStageId)
+		res := aggregateStagesWindow(stagesResponse, -1, logger)
+		assert.Equal(tt, int64(300), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(300), res.totalNewInputBytes)
+		assert.Equal(tt, int64(300), res.totalNewOutputBytes)
+		assert.Equal(tt, 2, res.newMaxProcessedStageId)
 
 		// 1 stage seen previously
-		res, err = manager.GetApplicationInfo(applicationId, 0, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(200), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(200), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(200), res.TotalNewOutputBytes)
-		assert.Equal(tt, 2, res.MaxProcessedStageId)
+		res = aggregateStagesWindow(stagesResponse, 0, logger)
+		assert.Equal(tt, int64(200), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(200), res.totalNewInputBytes)
+		assert.Equal(tt, int64(200), res.totalNewOutputBytes)
+		assert.Equal(tt, 2, res.newMaxProcessedStageId)
 
 		// 2 stages seen previously
-		res, err = manager.GetApplicationInfo(applicationId, 1, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(100), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(100), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(100), res.TotalNewOutputBytes)
-		assert.Equal(tt, 2, res.MaxProcessedStageId)
+		res = aggregateStagesWindow(stagesResponse, 1, logger)
+		assert.Equal(tt, int64(100), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(100), res.totalNewInputBytes)
+		assert.Equal(tt, int64(100), res.totalNewOutputBytes)
+		assert.Equal(tt, 2, res.newMaxProcessedStageId)
 
 		// 3 stages seen previously, final stage still active
-		res, err = manager.GetApplicationInfo(applicationId, 2, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(0), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(0), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(0), res.TotalNewOutputBytes)
-		assert.Equal(tt, 2, res.MaxProcessedStageId)
+		res = aggregateStagesWindow(stagesResponse, 2, logger)
+		assert.Equal(tt, int64(0), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(0), res.totalNewInputBytes)
+		assert.Equal(tt, int64(0), res.totalNewOutputBytes)
+		assert.Equal(tt, 2, res.newMaxProcessedStageId)
 
 		// Final stage finishes
 		stagesResponse[len(stagesResponse)-1].Status = "COMPLETED"
 
 		// 3 stages seen previously, final stage completed
-		res, err = manager.GetApplicationInfo(applicationId, 2, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(100), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(100), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(100), res.TotalNewOutputBytes)
-		assert.Equal(tt, 3, res.MaxProcessedStageId)
+		res = aggregateStagesWindow(stagesResponse, 2, logger)
+		assert.Equal(tt, int64(100), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(100), res.totalNewInputBytes)
+		assert.Equal(tt, int64(100), res.totalNewOutputBytes)
+		assert.Equal(tt, 3, res.newMaxProcessedStageId)
 
 		// No stages seen previously, final stage completed
-		res, err = manager.GetApplicationInfo(applicationId, -1, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(400), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(400), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(400), res.TotalNewOutputBytes)
-		assert.Equal(tt, 3, res.MaxProcessedStageId)
+		res = aggregateStagesWindow(stagesResponse, -1, logger)
+		assert.Equal(tt, int64(400), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(400), res.totalNewInputBytes)
+		assert.Equal(tt, int64(400), res.totalNewOutputBytes)
+		assert.Equal(tt, 3, res.newMaxProcessedStageId)
 	})
 
 	getStagesResponse := func() []sparkapiclient.Stage {
@@ -317,23 +283,11 @@ func TestStageAggregation(t *testing.T) {
 
 		stagesResponse := getStagesResponse()
 
-		m := mock_client.NewMockClient(ctrl)
-		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
-		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
-		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
-		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
-
-		manager := &manager{
-			client: m,
-			logger: getTestLogger(),
-		}
-
-		res, err := manager.GetApplicationInfo(applicationId, -1, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(200), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(200), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(200), res.TotalNewOutputBytes)
-		assert.Equal(tt, 1, res.MaxProcessedStageId)
+		res := aggregateStagesWindow(stagesResponse, -1, logger)
+		assert.Equal(tt, int64(200), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(200), res.totalNewInputBytes)
+		assert.Equal(tt, int64(200), res.totalNewOutputBytes)
+		assert.Equal(tt, 1, res.newMaxProcessedStageId)
 
 	})
 
@@ -341,23 +295,11 @@ func TestStageAggregation(t *testing.T) {
 
 		stagesResponse := getStagesResponse()
 
-		m := mock_client.NewMockClient(ctrl)
-		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
-		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
-		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
-		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
-
-		manager := &manager{
-			client: m,
-			logger: getTestLogger(),
-		}
-
-		res, err := manager.GetApplicationInfo(applicationId, 0, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(100), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(100), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(100), res.TotalNewOutputBytes)
-		assert.Equal(tt, 1, res.MaxProcessedStageId)
+		res := aggregateStagesWindow(stagesResponse, 0, logger)
+		assert.Equal(tt, int64(100), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(100), res.totalNewInputBytes)
+		assert.Equal(tt, int64(100), res.totalNewOutputBytes)
+		assert.Equal(tt, 1, res.newMaxProcessedStageId)
 
 	})
 
@@ -365,23 +307,11 @@ func TestStageAggregation(t *testing.T) {
 
 		stagesResponse := getStagesResponse()
 
-		m := mock_client.NewMockClient(ctrl)
-		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
-		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
-		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
-		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
-
-		manager := &manager{
-			client: m,
-			logger: getTestLogger(),
-		}
-
-		res, err := manager.GetApplicationInfo(applicationId, 1, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(0), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(0), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(0), res.TotalNewOutputBytes)
-		assert.Equal(tt, 1, res.MaxProcessedStageId)
+		res := aggregateStagesWindow(stagesResponse, 1, logger)
+		assert.Equal(tt, int64(0), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(0), res.totalNewInputBytes)
+		assert.Equal(tt, int64(0), res.totalNewOutputBytes)
+		assert.Equal(tt, 1, res.newMaxProcessedStageId)
 
 	})
 
@@ -389,23 +319,11 @@ func TestStageAggregation(t *testing.T) {
 
 		stagesResponse := getStagesResponse()
 
-		m := mock_client.NewMockClient(ctrl)
-		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).AnyTimes()
-		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).AnyTimes()
-		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).AnyTimes()
-		m.EXPECT().GetStages(applicationId).Return(stagesResponse, nil).AnyTimes()
-
-		manager := &manager{
-			client: m,
-			logger: getTestLogger(),
-		}
-
-		res, err := manager.GetApplicationInfo(applicationId, 1, logger)
-		assert.NoError(tt, err)
-		assert.Equal(tt, int64(0), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(0), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(0), res.TotalNewOutputBytes)
-		assert.Equal(tt, 1, res.MaxProcessedStageId)
+		res := aggregateStagesWindow(stagesResponse, 1, logger)
+		assert.Equal(tt, int64(0), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(0), res.totalNewInputBytes)
+		assert.Equal(tt, int64(0), res.totalNewOutputBytes)
+		assert.Equal(tt, 1, res.newMaxProcessedStageId)
 
 	})
 
