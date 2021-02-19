@@ -134,6 +134,10 @@ func TestStageAggregation(t *testing.T) {
 
 	logger := getTestLogger()
 
+	const inputBytesPerStage = 100
+	const outputBytesPerStage = 150
+	const cpuTimePerStage = 200
+
 	getStages := func(statuses []string) []sparkapiclient.Stage {
 		stages := make([]sparkapiclient.Stage, len(statuses))
 		for i := 0; i < len(statuses); i++ {
@@ -141,9 +145,9 @@ func TestStageAggregation(t *testing.T) {
 				Status:          statuses[i],
 				StageId:         i,
 				AttemptId:       1,
-				InputBytes:      100,
-				OutputBytes:     100,
-				ExecutorCpuTime: 100,
+				InputBytes:      inputBytesPerStage,
+				OutputBytes:     outputBytesPerStage,
+				ExecutorCpuTime: cpuTimePerStage,
 			}
 			stages[i] = stage
 		}
@@ -173,9 +177,9 @@ func TestStageAggregation(t *testing.T) {
 			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "ACTIVE"},
 			oldMaxProcessedStageId: -1,
 			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     300,
-				totalNewInputBytes:      300,
-				totalNewExecutorCpuTime: 300,
+				totalNewOutputBytes:     3 * outputBytesPerStage,
+				totalNewInputBytes:      3 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 3 * cpuTimePerStage,
 				newMaxProcessedStageId:  2,
 			},
 			message: "whenStagesCompleteInOrder_1",
@@ -184,9 +188,9 @@ func TestStageAggregation(t *testing.T) {
 			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "ACTIVE"},
 			oldMaxProcessedStageId: 0,
 			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     200,
-				totalNewInputBytes:      200,
-				totalNewExecutorCpuTime: 200,
+				totalNewOutputBytes:     2 * outputBytesPerStage,
+				totalNewInputBytes:      2 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
 				newMaxProcessedStageId:  2,
 			},
 			message: "whenStagesCompleteInOrder_2",
@@ -195,9 +199,9 @@ func TestStageAggregation(t *testing.T) {
 			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "ACTIVE"},
 			oldMaxProcessedStageId: 1,
 			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     100,
-				totalNewInputBytes:      100,
-				totalNewExecutorCpuTime: 100,
+				totalNewOutputBytes:     1 * outputBytesPerStage,
+				totalNewInputBytes:      1 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
 				newMaxProcessedStageId:  2,
 			},
 			message: "whenStagesCompleteInOrder_3",
@@ -217,9 +221,9 @@ func TestStageAggregation(t *testing.T) {
 			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "COMPLETED"},
 			oldMaxProcessedStageId: 2,
 			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     100,
-				totalNewInputBytes:      100,
-				totalNewExecutorCpuTime: 100,
+				totalNewOutputBytes:     1 * outputBytesPerStage,
+				totalNewInputBytes:      1 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
 				newMaxProcessedStageId:  3,
 			},
 			message: "whenStagesCompleteInOrder_5",
@@ -228,9 +232,9 @@ func TestStageAggregation(t *testing.T) {
 			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "COMPLETED"},
 			oldMaxProcessedStageId: -1,
 			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     400,
-				totalNewInputBytes:      400,
-				totalNewExecutorCpuTime: 400,
+				totalNewOutputBytes:     4 * outputBytesPerStage,
+				totalNewInputBytes:      4 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
 				newMaxProcessedStageId:  3,
 			},
 			message: "whenStagesCompleteInOrder_6",
@@ -239,9 +243,9 @@ func TestStageAggregation(t *testing.T) {
 			statuses:               []string{"COMPLETED", "COMPLETED", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETED"},
 			oldMaxProcessedStageId: -1,
 			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     200,
-				totalNewInputBytes:      200,
-				totalNewExecutorCpuTime: 200,
+				totalNewOutputBytes:     2 * outputBytesPerStage,
+				totalNewInputBytes:      2 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
 				newMaxProcessedStageId:  1,
 			},
 			message: "whenStagesCompleteOutOfOrder_1",
@@ -250,9 +254,9 @@ func TestStageAggregation(t *testing.T) {
 			statuses:               []string{"COMPLETED", "COMPLETED", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETED"},
 			oldMaxProcessedStageId: 0,
 			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     100,
-				totalNewInputBytes:      100,
-				totalNewExecutorCpuTime: 100,
+				totalNewOutputBytes:     1 * outputBytesPerStage,
+				totalNewInputBytes:      1 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
 				newMaxProcessedStageId:  1,
 			},
 			message: "whenStagesCompleteOutOfOrder_2",
@@ -272,9 +276,9 @@ func TestStageAggregation(t *testing.T) {
 			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "SKIPPED", "ACTIVE", "COMPLETED"},
 			oldMaxProcessedStageId: 1,
 			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     200,
-				totalNewInputBytes:      200,
-				totalNewExecutorCpuTime: 200,
+				totalNewOutputBytes:     2 * outputBytesPerStage,
+				totalNewInputBytes:      2 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
 				newMaxProcessedStageId:  3,
 			},
 			message: "whenStagesCompleteOutOfOrder_4",
@@ -283,9 +287,9 @@ func TestStageAggregation(t *testing.T) {
 			statuses:               []string{"COMPLETED", "COMPLETED", "COMPLETED", "SKIPPED", "COMPLETED", "COMPLETED"},
 			oldMaxProcessedStageId: 1,
 			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     400,
-				totalNewInputBytes:      400,
-				totalNewExecutorCpuTime: 400,
+				totalNewOutputBytes:     4 * outputBytesPerStage,
+				totalNewInputBytes:      4 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
 				newMaxProcessedStageId:  5,
 			},
 			message: "whenStagesCompleteOutOfOrder_5",
@@ -311,9 +315,9 @@ func TestStageAggregation(t *testing.T) {
 
 		res := aggregateStagesWindow(stages, -1, logger)
 		assert.Equal(t, 2, res.newMaxProcessedStageId)
-		assert.Equal(t, int64(300), res.totalNewExecutorCpuTime)
-		assert.Equal(t, int64(300), res.totalNewInputBytes)
-		assert.Equal(t, int64(300), res.totalNewOutputBytes)
+		assert.Equal(t, int64(3*cpuTimePerStage), res.totalNewExecutorCpuTime)
+		assert.Equal(t, int64(3*inputBytesPerStage), res.totalNewInputBytes)
+		assert.Equal(t, int64(3*outputBytesPerStage), res.totalNewOutputBytes)
 	})
 }
 
