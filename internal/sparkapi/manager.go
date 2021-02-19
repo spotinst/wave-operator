@@ -229,8 +229,7 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 	log.Info("Finished processing stage window", "stageCount", len(stages),
 		"minStageId", stageWindowMinId, "maxStageId", stageWindowMaxId,
 		"aggregationWindow", fmt.Sprintf("(%d,%d)", aggregationWindowMin, aggregationWindowMax),
-		"oldMaxProcessedStageId", oldMaxProcessedStageId, "newMaxProcessedStageId", newMaxProcessedStageId,
-		"foundExpectedStageId", foundExpectedStageId)
+		"oldMaxProcessedStageId", oldMaxProcessedStageId, "newMaxProcessedStageId", newMaxProcessedStageId)
 
 	if !foundExpectedStageId && windowHasAdvanced {
 		// Let's just log an error
