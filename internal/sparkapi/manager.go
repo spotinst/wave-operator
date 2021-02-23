@@ -249,15 +249,7 @@ func isStageFinalized(stage sparkapiclient.Stage) bool {
 	// Stages can have the following statuses:
 	// ACTIVE, COMPLETE, FAILED, PENDING, SKIPPED
 	switch stage.Status {
-	case "ACTIVE":
-		return false
-	case "COMPLETE":
-		return true
-	case "FAILED":
-		return true
-	case "PENDING":
-		return false
-	case "SKIPPED":
+	case "COMPLETE", "FAILED", "SKIPPED":
 		return true
 	default:
 		return false
