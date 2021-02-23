@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -183,7 +184,7 @@ func TestReconcile_driver_whenSparkApiCommunicationFails(t *testing.T) {
 	defer ctrl.Finish()
 
 	m := mock_sparkapi.NewMockManager(ctrl)
-	m.EXPECT().GetApplicationInfo(sparkAppId).Return(nil, fmt.Errorf("test error")).Times(1)
+	m.EXPECT().GetApplicationInfo(sparkAppId, gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test error")).Times(1)
 
 	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
 		return m, nil
@@ -220,7 +221,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	defer ctrl.Finish()
 
 	m := mock_sparkapi.NewMockManager(ctrl)
-	m.EXPECT().GetApplicationInfo(sparkAppId).Return(getTestApplicationInfo(), nil).Times(1)
+	m.EXPECT().GetApplicationInfo(sparkAppId, -1, gomock.Any()).Return(getTestApplicationInfo(), nil).Times(1)
 
 	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
 		return m, nil
@@ -284,9 +285,10 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	assert.Equal(t, getTestApplicationInfo().ApplicationName, createdCr.Spec.ApplicationName)
 	assert.Equal(t, sparkAppId, createdCr.Spec.ApplicationId)
 	assert.Equal(t, getTestApplicationInfo().SparkProperties, createdCr.Status.Data.SparkProperties)
-	assert.Equal(t, getTestApplicationInfo().TotalOutputBytes, createdCr.Status.Data.RunStatistics.TotalOutputBytes)
-	assert.Equal(t, getTestApplicationInfo().TotalInputBytes, createdCr.Status.Data.RunStatistics.TotalInputBytes)
-	assert.Equal(t, getTestApplicationInfo().TotalExecutorCpuTime, createdCr.Status.Data.RunStatistics.TotalExecutorCpuTime)
+	assert.Equal(t, getTestApplicationInfo().TotalNewOutputBytes, createdCr.Status.Data.RunStatistics.TotalOutputBytes)
+	assert.Equal(t, getTestApplicationInfo().TotalNewInputBytes, createdCr.Status.Data.RunStatistics.TotalInputBytes)
+	assert.Equal(t, getTestApplicationInfo().TotalNewExecutorCpuTime, createdCr.Status.Data.RunStatistics.TotalExecutorCpuTime)
+	assert.Equal(t, strconv.Itoa(getTestApplicationInfo().MaxProcessedStageId), createdCr.Annotations[maxProcessedStageIdAnnotation])
 	verifyCrAttempts(t, getTestApplicationInfo().Attempts, createdCr.Status.Data.RunStatistics.Attempts)
 	verifyCrExecutors(t, getTestApplicationInfo().Executors, createdCr.Status.Data.RunStatistics.Executors)
 }
@@ -308,7 +310,7 @@ func TestReconcile_driver_whenPodDeletionTimeoutPassed(t *testing.T) {
 	defer ctrl.Finish()
 
 	m := mock_sparkapi.NewMockManager(ctrl)
-	m.EXPECT().GetApplicationInfo(sparkAppId).Return(getTestApplicationInfo(), nil).Times(0)
+	m.EXPECT().GetApplicationInfo(sparkAppId, gomock.Any(), gomock.Any()).Return(getTestApplicationInfo(), nil).Times(0)
 
 	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
 		return m, nil
@@ -634,7 +636,7 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 
 			// Mock Spark API manager
 			m := mock_sparkapi.NewMockManager(ctrl)
-			m.EXPECT().GetApplicationInfo(sparkAppId).Return(getTestApplicationInfo(), nil).AnyTimes()
+			m.EXPECT().GetApplicationInfo(sparkAppId, gomock.Any(), gomock.Any()).Return(getTestApplicationInfo(), nil).AnyTimes()
 
 			var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
 				return m, nil
@@ -735,7 +737,7 @@ func TestReconcile_deletedPod_revertedToPending(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	m := mock_sparkapi.NewMockManager(ctrl)
-	m.EXPECT().GetApplicationInfo(applicationId).Return(getTestApplicationInfo(), nil).Times(2)
+	m.EXPECT().GetApplicationInfo(applicationId, gomock.Any(), gomock.Any()).Return(getTestApplicationInfo(), nil).Times(2)
 	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
 		return m, nil
 	}
@@ -839,7 +841,10 @@ func verifyCrExecutors(t *testing.T, executors []sparkapiclient.Executor, crExec
 		foundExecutor := false
 		for _, actualExecutor := range crExecutors {
 			foundExecutor = actualExecutor.Id == expectedExecutor.Id &&
-				actualExecutor.AddTime == expectedExecutor.AddTime
+				actualExecutor.AddTime == expectedExecutor.AddTime &&
+				actualExecutor.IsActive == expectedExecutor.IsActive &&
+				actualExecutor.RemoveTime == expectedExecutor.RemoveTime &&
+				actualExecutor.FailedTasks == expectedExecutor.FailedTasks
 			if foundExecutor {
 				break
 			}
@@ -948,14 +953,15 @@ func getTestPod(namespace string, name string, uid string, role string, applicat
 
 func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 	return &sparkapi.ApplicationInfo{
-		ApplicationName: "The application name",
+		MaxProcessedStageId: 1045,
+		ApplicationName:     "The application name",
 		SparkProperties: map[string]string{
 			"prop1": "val1",
 			"prop2": "val2",
 		},
-		TotalInputBytes:      987,
-		TotalOutputBytes:     765,
-		TotalExecutorCpuTime: 543,
+		TotalNewInputBytes:      987,
+		TotalNewOutputBytes:     765,
+		TotalNewExecutorCpuTime: 543,
 		Attempts: []sparkapiclient.Attempt{
 			{
 				StartTimeEpoch:   3528,
@@ -978,16 +984,22 @@ func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 		},
 		Executors: []sparkapiclient.Executor{
 			{
-				Id:      "driver",
-				AddTime: "2020-12-14T14:07:27.142GMT",
+				Id:       "driver",
+				AddTime:  "2020-12-14T14:07:27.142GMT",
+				IsActive: true,
 			},
 			{
-				Id:      "1",
-				AddTime: "2020-12-14T15:17:37.142GMT",
+				Id:          "1",
+				AddTime:     "2020-12-14T15:17:37.142GMT",
+				RemoveTime:  "2021-12-14T15:17:37.142GMT",
+				FailedTasks: 9999,
+				IsActive:    false,
 			},
 			{
-				Id:      "2",
-				AddTime: "2020-12-14T16:27:47.142GMT",
+				Id:          "2",
+				AddTime:     "2020-12-14T16:27:47.142GMT",
+				FailedTasks: 90,
+				IsActive:    true,
 			},
 		},
 	}

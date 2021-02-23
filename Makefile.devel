@@ -26,7 +26,7 @@ version:  ## set VERSION file
 	$Q echo ${BUILD_DATE} ${VERSION}
 	$Q echo ${VERSION} > VERSION
 
-test: generate fmt vet manifests mocks  ## Run tests
+test: generate mocks fmt vet manifests  ## Run tests
 	go test ./... -coverprofile cover.out
 
 mocks:  ## Generate test mock code
