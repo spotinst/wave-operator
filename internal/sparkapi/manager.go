@@ -22,7 +22,7 @@ const (
 )
 
 type Manager interface {
-	GetApplicationInfo(applicationId string) (*ApplicationInfo, error)
+	GetApplicationInfo(applicationId string, maxProcessedStageId int, log logr.Logger) (*ApplicationInfo, error)
 }
 
 type manager struct {
@@ -31,13 +31,14 @@ type manager struct {
 }
 
 type ApplicationInfo struct {
-	ApplicationName      string
-	SparkProperties      map[string]string
-	TotalInputBytes      int64
-	TotalOutputBytes     int64
-	TotalExecutorCpuTime int64
-	Attempts             []sparkapiclient.Attempt
-	Executors            []sparkapiclient.Executor
+	MaxProcessedStageId     int
+	ApplicationName         string
+	SparkProperties         map[string]string
+	TotalNewInputBytes      int64
+	TotalNewOutputBytes     int64
+	TotalNewExecutorCpuTime int64
+	Attempts                []sparkapiclient.Attempt
+	Executors               []sparkapiclient.Executor
 }
 
 var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (Manager, error) {
@@ -74,7 +75,7 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 	return nil, fmt.Errorf("could not get spark api client")
 }
 
-func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, error) {
+func (m manager) GetApplicationInfo(applicationId string, maxProcessedStageId int, log logr.Logger) (*ApplicationInfo, error) {
 
 	applicationInfo := &ApplicationInfo{}
 
@@ -111,21 +112,13 @@ func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, err
 		return nil, fmt.Errorf("stages are nil")
 	}
 
-	var totalExecutorCpuTime int64
-	var totalInputBytes int64
-	var totalOutputBytes int64
+	stageAggregationResult := aggregateStagesWindow(stages, maxProcessedStageId, log)
+	applicationInfo.TotalNewOutputBytes = stageAggregationResult.totalNewOutputBytes
+	applicationInfo.TotalNewInputBytes = stageAggregationResult.totalNewInputBytes
+	applicationInfo.TotalNewExecutorCpuTime = stageAggregationResult.totalNewExecutorCpuTime
+	applicationInfo.MaxProcessedStageId = stageAggregationResult.newMaxProcessedStageId
 
-	for _, stage := range stages {
-		totalExecutorCpuTime += stage.ExecutorCpuTime
-		totalInputBytes += stage.InputBytes
-		totalOutputBytes += stage.OutputBytes
-	}
-
-	applicationInfo.TotalOutputBytes = totalOutputBytes
-	applicationInfo.TotalInputBytes = totalInputBytes
-	applicationInfo.TotalExecutorCpuTime = totalExecutorCpuTime
-
-	executors, err := m.client.GetExecutors(applicationId)
+	executors, err := m.client.GetAllExecutors(applicationId)
 	if err != nil {
 		return nil, fmt.Errorf("could not get executors, %w", err)
 	}
@@ -133,6 +126,134 @@ func (m manager) GetApplicationInfo(applicationId string) (*ApplicationInfo, err
 	applicationInfo.Executors = executors
 
 	return applicationInfo, nil
+}
+
+type stageWindowAggregationResult struct {
+	totalNewOutputBytes     int64
+	totalNewInputBytes      int64
+	totalNewExecutorCpuTime int64
+	newMaxProcessedStageId  int
+}
+
+func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId int, log logr.Logger) stageWindowAggregationResult {
+
+	// TODO Use proper metrics, not the REST API
+	// The REST API only gives us the last ~1000 stages by default.
+	// Let's only aggregate stage metrics from the stages we have not processed yet
+
+	var totalNewExecutorCpuTime int64
+	var totalNewInputBytes int64
+	var totalNewOutputBytes int64
+
+	// If the stage window has advanced,
+	// and we don't find this stage ID in the window,
+	// it means we have missed some stages
+	expectedStageId := oldMaxProcessedStageId + 1
+	foundExpectedStageId := false
+	windowHasAdvanced := false
+
+	// The max and min IDs of the received stages
+	stageWindowMaxId := -1
+	stageWindowMinId := -1
+
+	// We can include stages up to this ID - 1 in our aggregation,
+	// all stages up to this number should be finalized
+	minNotFinalizedStageId := -1
+
+	// First pass, analysis
+	for _, stage := range stages {
+
+		// Figure out min stage ID that is still active
+		if !isStageFinalized(stage) {
+			if minNotFinalizedStageId == -1 {
+				minNotFinalizedStageId = stage.StageId
+			}
+			if stage.StageId < minNotFinalizedStageId {
+				minNotFinalizedStageId = stage.StageId
+			}
+		}
+
+		// Figure out the current stage window (logging purposes only)
+		if stageWindowMinId == -1 {
+			stageWindowMinId = stage.StageId
+		}
+		if stage.StageId < stageWindowMinId {
+			stageWindowMinId = stage.StageId
+		}
+		if stageWindowMaxId == -1 {
+			stageWindowMaxId = stage.StageId
+		}
+		if stage.StageId > stageWindowMaxId {
+			stageWindowMaxId = stage.StageId
+		}
+
+		if stage.StageId > oldMaxProcessedStageId {
+			windowHasAdvanced = true
+		}
+
+		if stage.StageId == expectedStageId {
+			foundExpectedStageId = true
+		}
+	}
+
+	// We only want to include stages in (aggregationWindowMin, aggregationWindowMax) (non-inclusive)
+	aggregationWindowMin := oldMaxProcessedStageId // We have already processed stages up to and including oldMaxProcessedStageId
+	aggregationWindowMax := minNotFinalizedStageId // Stages with IDs >= minNotFinalizedStageId may still be in progress
+
+	newMaxProcessedStageId := oldMaxProcessedStageId
+
+	// Second pass, aggregation
+	for _, stage := range stages {
+
+		// Only include stages within our aggregation window
+		if stage.StageId <= aggregationWindowMin {
+			continue
+		}
+		if aggregationWindowMax != -1 {
+			// We have an upper bound on the aggregation window
+			if stage.StageId >= aggregationWindowMax {
+				continue
+			}
+		}
+
+		totalNewExecutorCpuTime += stage.ExecutorCpuTime
+		totalNewInputBytes += stage.InputBytes
+		totalNewOutputBytes += stage.OutputBytes
+
+		// Remember new max processed stage ID
+		if stage.StageId > newMaxProcessedStageId {
+			newMaxProcessedStageId = stage.StageId
+		}
+	}
+
+	log.Info("Finished processing stage window", "stageCount", len(stages),
+		"minStageId", stageWindowMinId, "maxStageId", stageWindowMaxId,
+		"aggregationWindow", fmt.Sprintf("(%d,%d)", aggregationWindowMin, aggregationWindowMax),
+		"oldMaxProcessedStageId", oldMaxProcessedStageId, "newMaxProcessedStageId", newMaxProcessedStageId)
+
+	if !foundExpectedStageId && windowHasAdvanced {
+		// Let's just log an error
+		err := fmt.Errorf("did not find expected stage ID %d in stage window", expectedStageId)
+		log.Error(err, "missing stage metrics")
+	}
+
+	return stageWindowAggregationResult{
+		totalNewOutputBytes:     totalNewOutputBytes,
+		totalNewInputBytes:      totalNewInputBytes,
+		totalNewExecutorCpuTime: totalNewExecutorCpuTime,
+		newMaxProcessedStageId:  newMaxProcessedStageId,
+	}
+}
+
+func isStageFinalized(stage sparkapiclient.Stage) bool {
+	// Stages can have the following statuses:
+	// ACTIVE, COMPLETE, FAILED, PENDING, SKIPPED
+	switch stage.Status {
+	case "COMPLETE", "FAILED", "SKIPPED":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseSparkProperties(environment *sparkapiclient.Environment, logger logr.Logger) (map[string]string, error) {
