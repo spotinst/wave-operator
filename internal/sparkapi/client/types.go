@@ -1,15 +1,18 @@
 package client
 
+// Environment is the Spark API representation of a Spark application's environment
 type Environment struct {
 	SparkProperties [][]string `json:"sparkProperties"`
 }
 
+// Application is the Spark API representation of a Spark application
 type Application struct {
 	Id       string    `json:"id"`
 	Name     string    `json:"name"`
 	Attempts []Attempt `json:"attempts"`
 }
 
+// Attempt is the Spark API representation of a Spark application attempt
 type Attempt struct {
 	StartTimeEpoch   int64  `json:"startTimeEpoch"`
 	EndTimeEpoch     int64  `json:"endTimeEpoch"`
@@ -20,6 +23,7 @@ type Attempt struct {
 	AppSparkVersion  string `json:"appSparkVersion"`
 }
 
+// Stage is the Spark API representation of a Spark application stage
 type Stage struct {
 	Status          string `json:"status"`
 	StageId         int    `json:"stageId"`
@@ -29,6 +33,7 @@ type Stage struct {
 	ExecutorCpuTime int64  `json:"executorCpuTime"`
 }
 
+// Executor is the Spark API representation of a Spark executor
 type Executor struct {
 	Id                string                     `json:"id"`
 	IsActive          bool                       `json:"isActive"`
@@ -55,6 +60,7 @@ type Executor struct {
 	PeakMemoryMetrics *ExecutorPeakMemoryMetrics `json:"peakMemoryMetrics"`
 }
 
+// ExecutorMemoryMetrics holds the current values of an executor's memory metrics
 type ExecutorMemoryMetrics struct {
 	UsedOnHeapStorageMemory   int64 `json:"usedOnHeapStorageMemory"`
 	UsedOffHeapStorageMemory  int64 `json:"usedOffHeapStorageMemory"`
@@ -62,6 +68,7 @@ type ExecutorMemoryMetrics struct {
 	TotalOffHeapStorageMemory int64 `json:"totalOffHeapStorageMemory"`
 }
 
+// ExecutorPeakMemoryMetrics holds the peak values of an executor's memory and GC metrics
 type ExecutorPeakMemoryMetrics struct {
 	JVMHeapMemory              int64 `json:"JVMHeapMemory"`
 	JVMOffHeapMemory           int64 `json:"JVMOffHeapMemory"`
