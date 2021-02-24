@@ -11,10 +11,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const (
+	SparkRoleLabel         = "spark-role"
+	SparkRoleDriverValue   = "driver"
+	SparkRoleExecutorValue = "executor"
+)
+
 var (
 	ondemandAffinity = &corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{
-			// TODO make this required
 			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 				NodeSelectorTerms: []corev1.NodeSelectorTerm{
 					{
@@ -22,6 +27,24 @@ var (
 							{
 								Key:      "spotinst.io/node-lifecycle",
 								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{"od"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	ondemandAntiAffinity = &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
+				{
+					Weight: 1,
+					Preference: corev1.NodeSelectorTerm{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "spotinst.io/node-lifecycle",
+								Operator: corev1.NodeSelectorOpNotIn,
 								Values:   []string{"od"},
 							},
 						},
@@ -59,6 +82,9 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 		UID:     req.UID,
 		Allowed: true,
 	}
+	if sourceObj.Labels[SparkRoleLabel] == "" {
+		return resp, nil
+	}
 	storageInfo, err := provider.GetStorageInfo()
 	if err != nil {
 		log.Error(err, "cannot get storage configuration, not patching pod")
@@ -68,6 +94,28 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 		log.Error(fmt.Errorf("storage configuration is nil"), "not patching pod")
 		return resp, nil
 	}
+
+	modObj := &corev1.Pod{}
+	if sourceObj.Labels[SparkRoleLabel] == SparkRoleDriverValue {
+		modObj, err = mutateDriverPod(sourceObj, storageInfo, log)
+	} else {
+		modObj, err = mutateExecutorPod(sourceObj, storageInfo, log)
+	}
+
+	patchBytes, err := GetJsonPatch(sourceObj, modObj)
+	if err != nil {
+		log.Error(err, "unable to generate patch, continuing", "pod", sourceObj.Name)
+		return resp, nil
+	}
+
+	log.Info("patching pod", "patch", string(patchBytes))
+	resp.PatchType = &jsonPatchType
+	resp.Patch = patchBytes
+
+	return resp, nil
+}
+
+func mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInfo, log logr.Logger) (*corev1.Pod, error) {
 
 	modObj := sourceObj.DeepCopy()
 	newSpec := modObj.Spec
@@ -143,17 +191,12 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 	if !exists {
 		newSpec.Volumes = append(newSpec.Volumes, volume)
 	}
-
 	modObj.Spec = newSpec
-	patchBytes, err := GetJsonPatch(sourceObj, modObj)
-	if err != nil {
-		log.Error(err, "unable to generate patch, continuing", "pod", sourceObj.Name)
-		return resp, nil
-	}
+	return modObj, nil
+}
 
-	log.Info("patching pod", "patch", string(patchBytes))
-	resp.PatchType = &jsonPatchType
-	resp.Patch = patchBytes
-
-	return resp, nil
+func mutateExecutorPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInfo, log logr.Logger) (*corev1.Pod, error) {
+	modObj := sourceObj.DeepCopy()
+	modObj.Spec.Affinity = ondemandAntiAffinity
+	return modObj, nil
 }

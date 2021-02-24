@@ -40,7 +40,7 @@ const (
 
 	WaveOperatorChart      = "wave-operator"
 	WaveOperatorRepository = "https://charts.spot.io"
-	WaveOperatorVersion    = "0.2.0"
+	WaveOperatorVersion    = "0.2.1"
 	WaveOperatorValues     = ""
 
 	CertManagerChart      = "cert-manager"

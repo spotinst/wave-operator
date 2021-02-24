@@ -40,20 +40,23 @@ var (
 	}
 )
 
-// PLEASE NOTE all of the filtering on pods is done in the MutatingWebhook ObjectSelector
-// before the AdmissionRequest is created.
-// once the AdmissionRequest is submitted, the changes will be attempted
-func TestMutateSimplePod(t *testing.T) {
-	req := getAdmissionRequest(t, simplePod)
+// the MutatingWebhook ObjectSelector does the initial filtering on the pod and should select only those
+// with the label SparkRoleLabel
+func TestMutateDriverPod(t *testing.T) {
+	driverPod := simplePod
+	driverPod.Labels = map[string]string{
+		SparkRoleLabel: SparkRoleDriverValue,
+	}
+	req := getAdmissionRequest(t, driverPod)
 	r, err := MutatePod(&util.FakeStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
-	assert.Equal(t, simplePod.UID, r.UID)
+	assert.Equal(t, driverPod.UID, r.UID)
 	assert.Equal(t, &jsonPatchType, r.PatchType)
 	assert.NotNil(t, r.Patch)
 	assert.True(t, r.Allowed)
 
-	obj, err := ApplyJsonPatch(r.Patch, simplePod)
+	obj, err := ApplyJsonPatch(r.Patch, driverPod)
 	assert.NoError(t, err)
 	newPod, ok := obj.(*(corev1.Pod))
 	assert.True(t, ok)
@@ -64,12 +67,39 @@ func TestMutateSimplePod(t *testing.T) {
 	assert.Equal(t, "spark-logs", newPod.Spec.Volumes[0].Name)
 }
 
+func TestMutateExecutorPod(t *testing.T) {
+	execPod := simplePod
+	execPod.Labels = map[string]string{
+		SparkRoleLabel: SparkRoleExecutorValue,
+	}
+	req := getAdmissionRequest(t, execPod)
+	r, err := MutatePod(&util.FakeStorageProvider{}, log, req)
+	assert.NoError(t, err)
+	assert.NotNil(t, r)
+	assert.Equal(t, execPod.UID, r.UID)
+	assert.Equal(t, &jsonPatchType, r.PatchType)
+	assert.NotNil(t, r.Patch)
+	assert.True(t, r.Allowed)
+
+	obj, err := ApplyJsonPatch(r.Patch, execPod)
+	assert.NoError(t, err)
+	newPod, ok := obj.(*(corev1.Pod))
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(newPod.Spec.Containers))
+	assert.Equal(t, ondemandAntiAffinity, newPod.Spec.Affinity)
+	assert.Equal(t, 0, len(newPod.Spec.Volumes))
+}
+
 func TestIdempotency(t *testing.T) {
-	req := getAdmissionRequest(t, simplePod)
+	driverPod := simplePod
+	driverPod.Labels = map[string]string{
+		SparkRoleLabel: SparkRoleDriverValue,
+	}
+	req := getAdmissionRequest(t, driverPod)
 	r, err := MutatePod(&util.FakeStorageProvider{}, log, req)
 	require.NoError(t, err)
 
-	obj, err := ApplyJsonPatch(r.Patch, simplePod)
+	obj, err := ApplyJsonPatch(r.Patch, driverPod)
 	require.NoError(t, err)
 	newPod, ok := obj.(*(corev1.Pod))
 	require.True(t, ok)
@@ -90,7 +120,7 @@ func TestIdempotency(t *testing.T) {
 	assert.Equal(t, "spark-logs", newPod.Spec.Volumes[0].Name)
 }
 
-func TestMutatePodBadStorage(t *testing.T) {
+func TestSkipNonSparkPod(t *testing.T) {
 	req := getAdmissionRequest(t, simplePod)
 	r, err := MutatePod(&util.FailedStorageProvider{}, log, req)
 	assert.NoError(t, err)
@@ -99,12 +129,27 @@ func TestMutatePodBadStorage(t *testing.T) {
 	assert.Nil(t, r.PatchType)
 	assert.Nil(t, r.Patch)
 	assert.True(t, r.Allowed)
+}
 
-	req = getAdmissionRequest(t, simplePod)
+func TestMutatePodBadStorage(t *testing.T) {
+	driverPod := simplePod
+	driverPod.Labels = map[string]string{
+		SparkRoleLabel: SparkRoleDriverValue,
+	}
+	req := getAdmissionRequest(t, driverPod)
+	r, err := MutatePod(&util.FailedStorageProvider{}, log, req)
+	assert.NoError(t, err)
+	assert.NotNil(t, r)
+	assert.Equal(t, driverPod.UID, r.UID)
+	assert.Nil(t, r.PatchType)
+	assert.Nil(t, r.Patch)
+	assert.True(t, r.Allowed)
+
+	req = getAdmissionRequest(t, driverPod)
 	r, err = MutatePod(&util.NilStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
-	assert.Equal(t, simplePod.UID, r.UID)
+	assert.Equal(t, driverPod.UID, r.UID)
 	assert.Nil(t, r.PatchType)
 	assert.Nil(t, r.Patch)
 	assert.True(t, r.Allowed)
