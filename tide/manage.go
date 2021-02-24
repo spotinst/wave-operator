@@ -35,12 +35,9 @@ import (
 )
 
 const (
-
-	// TODO Read chart values from external source
-
 	WaveOperatorChart      = "wave-operator"
 	WaveOperatorRepository = "https://charts.spot.io"
-	WaveOperatorVersion    = "0.2.1"
+	WaveOperatorVersion    = "" // empty string indicates latest chart version
 	WaveOperatorValues     = ""
 
 	CertManagerChart      = "cert-manager"
@@ -657,7 +654,7 @@ func (m *manager) deleteWaveOperator(ctx context.Context) error {
 	}
 
 	installer := install.GetHelm("", m.kubeClientGetter, m.log)
-	err = installer.Delete(WaveOperatorChart, WaveOperatorRepository, WaveOperatorVersion, "")
+	err = installer.Delete(m.spec.Name, m.spec.Repository, m.spec.Version, "")
 	if err != nil {
 		return fmt.Errorf("cannot delete wave operator, %w", err)
 	}
