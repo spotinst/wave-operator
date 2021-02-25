@@ -65,14 +65,12 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 	logger.Info("Driver pod/container not running, will use history server Spark API client")
 
 	// Get client for history server
-	historyServerService, err := getHistoryServerService(clientSet)
+	historyServerService, err := getHistoryServerService(clientSet, logger)
 	if err != nil {
-		logger.Info(fmt.Sprintf("Could not get history server service, error: %s", err.Error()))
-	} else {
-		return sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
+		return nil, fmt.Errorf("could not get history server service, %w", err)
 	}
 
-	return nil, fmt.Errorf("could not get spark api client")
+	return sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
 }
 
 func (m manager) GetApplicationInfo(applicationId string, maxProcessedStageId int, log logr.Logger) (*ApplicationInfo, error) {
@@ -281,7 +279,7 @@ func parseSparkProperties(environment *sparkapiclient.Environment, logger logr.L
 	return sparkProperties, nil
 }
 
-func getHistoryServerService(clientSet kubernetes.Interface) (*corev1.Service, error) {
+func getHistoryServerService(clientSet kubernetes.Interface, logger logr.Logger) (*corev1.Service, error) {
 	ctx := context.TODO()
 	foundServices, err := clientSet.CoreV1().Services(catalog.SystemNamespace).List(ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", appNameLabel, historyServerAppNameLabelValue),
@@ -291,12 +289,15 @@ func getHistoryServerService(clientSet kubernetes.Interface) (*corev1.Service, e
 	}
 
 	if len(foundServices.Items) != 1 {
-		return nil, fmt.Errorf("could not find history server service, found %d but wanted 1", len(foundServices.Items))
+		logger.Info(fmt.Sprintf("Found unexpected number of history server services, found %d but wanted 1", len(foundServices.Items)))
 	}
 
-	service := foundServices.Items[0]
+	if len(foundServices.Items) > 0 {
+		service := foundServices.Items[0]
+		return &service, nil
+	}
 
-	return &service, nil
+	return nil, fmt.Errorf("could not find history server service")
 }
 
 func isSparkDriverRunning(driverPod *corev1.Pod) bool {
