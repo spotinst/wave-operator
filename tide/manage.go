@@ -583,14 +583,25 @@ func (m *manager) installWaveOperator(ctx context.Context, waveOperatorImage str
 	}
 
 	installer := install.GetHelm("", m.kubeClientGetter, m.log)
-	err = installer.Install(m.spec.Name, m.spec.Repository, m.spec.Version, values)
+	existing, err := installer.Get(m.spec.Name)
 	if err != nil {
-		return fmt.Errorf("cannot install wave operator, %w", err)
+		return fmt.Errorf("error checking release, %w", err)
+	}
+	if existing == nil {
+		err = installer.Install(m.spec.Name, m.spec.Repository, m.spec.Version, values)
+		if err != nil {
+			return fmt.Errorf("cannot install wave operator, %w", err)
+		}
+	} else {
+		err = installer.Upgrade(m.spec.Name, m.spec.Repository, m.spec.Version, values)
+		if err != nil {
+			return fmt.Errorf("cannot upgrade wave operator, %w", err)
+		}
 	}
 
 	err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		dep, err := kc.AppsV1().Deployments(catalog.SystemNamespace).Get(ctx, "wave-operator", metav1.GetOptions{})
-		if err != nil || dep.Status.AvailableReplicas == 0 {
+		if err != nil || dep.Status.AvailableReplicas == 0 || dep.Status.UnavailableReplicas != 0 {
 			return false, nil
 		}
 		m.log.Info("polled", "deployment", "wave-operator", "replicas", dep.Status.AvailableReplicas)
