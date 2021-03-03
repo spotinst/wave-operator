@@ -702,18 +702,18 @@ func TestPodStateHistory(t *testing.T) {
 	exitCode1 := int32(1)
 
 	type testCase struct {
-		oldStateHistory   []v1alpha1.PodStateHistoryEntry
-		newStateHistory   []v1alpha1.PodStateHistoryEntry
-		phase             corev1.PodPhase
-		containerStatuses []corev1.ContainerStatus
-		podCrExists       bool
-		message           string
+		currentStateHistory  []v1alpha1.PodStateHistoryEntry
+		expectedStateHistory []v1alpha1.PodStateHistoryEntry
+		phase                corev1.PodPhase
+		containerStatuses    []corev1.ContainerStatus
+		podCrExists          bool
+		message              string
 	}
 
 	testCases := []testCase{
 		{
-			oldStateHistory: nil,
-			newStateHistory: []v1alpha1.PodStateHistoryEntry{
+			currentStateHistory: nil,
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Now(),
 					Phase:     corev1.PodPending,
@@ -740,8 +740,8 @@ func TestPodStateHistory(t *testing.T) {
 			message:     "whenPodCrDoesntExist",
 		},
 		{
-			oldStateHistory: nil,
-			newStateHistory: []v1alpha1.PodStateHistoryEntry{
+			currentStateHistory: nil,
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Now(),
 					Phase:     corev1.PodPending,
@@ -768,8 +768,8 @@ func TestPodStateHistory(t *testing.T) {
 			message:     "whenNilStateHistory_pending",
 		},
 		{
-			oldStateHistory: []v1alpha1.PodStateHistoryEntry{},
-			newStateHistory: []v1alpha1.PodStateHistoryEntry{
+			currentStateHistory: []v1alpha1.PodStateHistoryEntry{},
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Now(),
 					Phase:     corev1.PodFailed,
@@ -798,7 +798,7 @@ func TestPodStateHistory(t *testing.T) {
 			message:     "whenEmptyStateHistory_terminated",
 		},
 		{
-			oldStateHistory: []v1alpha1.PodStateHistoryEntry{
+			currentStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Now(),
 					Phase:     corev1.PodFailed,
@@ -810,7 +810,7 @@ func TestPodStateHistory(t *testing.T) {
 					},
 				},
 			},
-			newStateHistory: []v1alpha1.PodStateHistoryEntry{
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Now(),
 					Phase:     corev1.PodFailed,
@@ -839,7 +839,7 @@ func TestPodStateHistory(t *testing.T) {
 			message:     "whenExistingStateHistory_noUpdate_1",
 		},
 		{
-			oldStateHistory: []v1alpha1.PodStateHistoryEntry{
+			currentStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Now(),
 					Phase:     corev1.PodPending,
@@ -861,7 +861,7 @@ func TestPodStateHistory(t *testing.T) {
 					},
 				},
 			},
-			newStateHistory: []v1alpha1.PodStateHistoryEntry{
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Now(),
 					Phase:     corev1.PodPending,
@@ -898,7 +898,7 @@ func TestPodStateHistory(t *testing.T) {
 			message:     "whenExistingStateHistory_noUpdate_2",
 		},
 		{
-			oldStateHistory: []v1alpha1.PodStateHistoryEntry{
+			currentStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Now(),
 					Phase:     corev1.PodPending,
@@ -920,7 +920,7 @@ func TestPodStateHistory(t *testing.T) {
 					},
 				},
 			},
-			newStateHistory: []v1alpha1.PodStateHistoryEntry{
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Now(),
 					Phase:     corev1.PodPending,
@@ -969,7 +969,7 @@ func TestPodStateHistory(t *testing.T) {
 			message:     "whenExistingStateHistory_shouldUpdate",
 		},
 		{
-			oldStateHistory: []v1alpha1.PodStateHistoryEntry{
+			currentStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Time{},
 					Phase:     corev1.PodRunning,
@@ -985,7 +985,7 @@ func TestPodStateHistory(t *testing.T) {
 					},
 				},
 			},
-			newStateHistory: []v1alpha1.PodStateHistoryEntry{
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
 				{
 					Timestamp: metav1.Time{},
 					Phase:     corev1.PodRunning,
@@ -1052,7 +1052,7 @@ func TestPodStateHistory(t *testing.T) {
 
 			var podCr *v1alpha1.Pod
 			if tc.podCrExists {
-				podCr = &v1alpha1.Pod{StateHistory: tc.oldStateHistory}
+				podCr = &v1alpha1.Pod{StateHistory: tc.currentStateHistory}
 			}
 
 			res := newPodCR(pod, podCr, logger)
@@ -1060,10 +1060,10 @@ func TestPodStateHistory(t *testing.T) {
 			assert.Equal(tt, tc.phase, res.Phase, tc.message)
 			assert.Equal(tt, tc.containerStatuses, res.Statuses, tc.message)
 
-			assert.Equal(tt, len(tc.newStateHistory), len(res.StateHistory), tc.message)
-			for i := 0; i < len(tc.newStateHistory); i++ {
-				assert.Equal(tt, tc.newStateHistory[i].Phase, res.StateHistory[i].Phase, tc.message)
-				assert.Equal(tt, tc.newStateHistory[i].ContainerStatuses, res.StateHistory[i].ContainerStatuses, tc.message)
+			assert.Equal(tt, len(tc.expectedStateHistory), len(res.StateHistory), tc.message)
+			for i := 0; i < len(tc.expectedStateHistory); i++ {
+				assert.Equal(tt, tc.expectedStateHistory[i].Phase, res.StateHistory[i].Phase, tc.message)
+				assert.Equal(tt, tc.expectedStateHistory[i].ContainerStatuses, res.StateHistory[i].ContainerStatuses, tc.message)
 			}
 		}
 	})
