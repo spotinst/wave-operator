@@ -19,6 +19,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	installpkg "github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/tide"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -42,8 +43,16 @@ var installCmd = &cobra.Command{
 }
 
 var (
-	k8sClusterCreated, oceanCreated, certManagerDeployed bool
-	waveOperatorImage                                    string
+	k8sClusterCreated   bool
+	oceanCreated        bool
+	certManagerDeployed bool
+
+	waveChartName       string
+	waveChartVersion    string
+	waveChartURL        string
+	waveChartValuesJSON string
+
+	waveOperatorImage string
 )
 
 func init() {
@@ -51,6 +60,12 @@ func init() {
 
 	installCmd.Flags().BoolVar(&k8sClusterCreated, "k8s-cluster-created", false, "indicates the cluster was created specifically for wave")
 	installCmd.Flags().BoolVar(&oceanCreated, "ocean-created", false, "indicates that spot ocean was created for this wave installation")
+
+	installCmd.Flags().StringVar(&waveChartName, "wave-chart-name", tide.WaveOperatorChart, "wave-operator chart name")
+	installCmd.Flags().StringVar(&waveChartVersion, "wave-chart-version", tide.WaveOperatorVersion, "wave-operator chart version")
+	installCmd.Flags().StringVar(&waveChartURL, "wave-chart-url", tide.WaveOperatorRepository, "wave-operator chart repository url")
+	installCmd.Flags().StringVar(&waveChartValuesJSON, "wave-chart-values", tide.WaveOperatorValues, "wave-operator chart values (json)")
+
 	installCmd.Flags().StringVar(&waveOperatorImage, "wave-image", "", "full container image specification for the wave operator")
 }
 
@@ -63,6 +78,18 @@ func install(cmd *cobra.Command, args []string) {
 	manager, err := tide.NewManager(logger)
 	if err != nil {
 		logger.Error(err, "create manager failed")
+		os.Exit(1)
+	}
+
+	waveSpec := installpkg.InstallSpec{
+		Name:       waveChartName,
+		Repository: waveChartURL,
+		Version:    waveChartVersion,
+		Values:     waveChartValuesJSON,
+	}
+	err = manager.SetWaveInstallSpec(waveSpec)
+	if err != nil {
+		logger.Error(err, "wave chart specification is invalid")
 		os.Exit(1)
 	}
 

@@ -2,6 +2,7 @@ package tide
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -133,6 +134,7 @@ func NewManager(log logr.Logger) (Manager, error) {
 }
 
 func (m *manager) SetWaveInstallSpec(spec install.InstallSpec) error {
+
 	if spec.Name != "" {
 		m.spec.Name = spec.Name
 	}
@@ -143,6 +145,11 @@ func (m *manager) SetWaveInstallSpec(spec install.InstallSpec) error {
 		m.spec.Version = spec.Version
 	}
 	if spec.Values != "" {
+		v := map[string]interface{}{}
+		err := json.Unmarshal([]byte(spec.Values), &v)
+		if err != nil {
+			return fmt.Errorf("invalid chart values, %w", err)
+		}
 		m.spec.Values = spec.Values
 	}
 	return nil
