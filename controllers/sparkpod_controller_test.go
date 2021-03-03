@@ -858,6 +858,10 @@ func TestPodStateHistory(t *testing.T) {
 							State:    v1alpha1.ContainerStateRunning,
 							ExitCode: nil,
 						},
+						"my-storage-sync": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
 					},
 				},
 			},
@@ -880,6 +884,10 @@ func TestPodStateHistory(t *testing.T) {
 							State:    v1alpha1.ContainerStateRunning,
 							ExitCode: nil,
 						},
+						"my-storage-sync": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
 					},
 				},
 			},
@@ -890,6 +898,14 @@ func TestPodStateHistory(t *testing.T) {
 					State: corev1.ContainerState{
 						Waiting:    nil,
 						Running:    &corev1.ContainerStateRunning{},
+						Terminated: nil,
+					},
+				},
+				{
+					Name: "my-storage-sync",
+					State: corev1.ContainerState{
+						Waiting:    &corev1.ContainerStateWaiting{},
+						Running:    nil,
 						Terminated: nil,
 					},
 				},
@@ -979,7 +995,7 @@ func TestPodStateHistory(t *testing.T) {
 							ExitCode: nil,
 						},
 						"storage-sync-container": {
-							State:    v1alpha1.ContainerStateRunning,
+							State:    v1alpha1.ContainerStateWaiting,
 							ExitCode: nil,
 						},
 					},
@@ -995,7 +1011,7 @@ func TestPodStateHistory(t *testing.T) {
 							ExitCode: nil,
 						},
 						"storage-sync-container": {
-							State:    v1alpha1.ContainerStateRunning,
+							State:    v1alpha1.ContainerStateWaiting,
 							ExitCode: nil,
 						},
 					},
