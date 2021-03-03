@@ -477,9 +477,9 @@ func getUpdatedPodStateHistory(pod *corev1.Pod, existingPodCr *v1alpha1.Pod, log
 		log.Info("New pod state", "podState", newEntry)
 		stateHistory = append(stateHistory, newEntry)
 	} else {
-		existingEntry := stateHistory[len(stateHistory)-1]
+		latestEntry := stateHistory[len(stateHistory)-1]
 		newEntry := newPodStateHistoryEntry(pod)
-		if !podStateHistoryEntryEqual(existingEntry, newEntry) {
+		if !podStateHistoryEntryEqual(latestEntry, newEntry) {
 			log.Info("New pod state", "podState", newEntry)
 			stateHistory = append(stateHistory, newEntry)
 		}
