@@ -523,21 +523,21 @@ func podStateHistoryEntryEqual(a v1alpha1.PodStateHistoryEntry, b v1alpha1.PodSt
 	if len(a.ContainerStatuses) != len(b.ContainerStatuses) {
 		return false
 	}
-	for aName, aState := range a.ContainerStatuses {
-		bState, ok := b.ContainerStatuses[aName]
+	for aContainerName, aContainerStatus := range a.ContainerStatuses {
+		bContainerStatus, ok := b.ContainerStatuses[aContainerName]
 		if !ok {
 			return false
 		}
-		if aState.State != bState.State {
+		if aContainerStatus.State != bContainerStatus.State {
 			return false
 		}
 		aExitCode := int32(-1)
 		bExitCode := int32(-1)
-		if aState.ExitCode != nil {
-			aExitCode = *aState.ExitCode
+		if aContainerStatus.ExitCode != nil {
+			aExitCode = *aContainerStatus.ExitCode
 		}
-		if bState.ExitCode != nil {
-			bExitCode = *bState.ExitCode
+		if bContainerStatus.ExitCode != nil {
+			bExitCode = *bContainerStatus.ExitCode
 		}
 		if aExitCode != bExitCode {
 			return false
