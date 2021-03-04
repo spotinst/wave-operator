@@ -22,7 +22,7 @@ const (
 )
 
 type Manager interface {
-	GetApplicationInfo(applicationId string, maxProcessedStageId int, log logr.Logger) (*ApplicationInfo, error)
+	GetApplicationInfo(applicationID string, maxProcessedStageID int, log logr.Logger) (*ApplicationInfo, error)
 }
 
 type manager struct {
@@ -31,7 +31,7 @@ type manager struct {
 }
 
 type ApplicationInfo struct {
-	MaxProcessedStageId     int
+	MaxProcessedStageID     int
 	ApplicationName         string
 	SparkProperties         map[string]string
 	TotalNewInputBytes      int64
@@ -73,11 +73,11 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 	return sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
 }
 
-func (m manager) GetApplicationInfo(applicationId string, maxProcessedStageId int, log logr.Logger) (*ApplicationInfo, error) {
+func (m manager) GetApplicationInfo(applicationID string, maxProcessedStageID int, log logr.Logger) (*ApplicationInfo, error) {
 
 	applicationInfo := &ApplicationInfo{}
 
-	application, err := m.client.GetApplication(applicationId)
+	application, err := m.client.GetApplication(applicationID)
 	if err != nil {
 		return nil, fmt.Errorf("could not get application, %w", err)
 	}
@@ -89,7 +89,7 @@ func (m manager) GetApplicationInfo(applicationId string, maxProcessedStageId in
 	applicationInfo.ApplicationName = application.Name
 	applicationInfo.Attempts = application.Attempts
 
-	environment, err := m.client.GetEnvironment(applicationId)
+	environment, err := m.client.GetEnvironment(applicationID)
 	if err != nil {
 		return nil, fmt.Errorf("could not get environment, %w", err)
 	}
@@ -101,7 +101,7 @@ func (m manager) GetApplicationInfo(applicationId string, maxProcessedStageId in
 
 	applicationInfo.SparkProperties = sparkProperties
 
-	stages, err := m.client.GetStages(applicationId)
+	stages, err := m.client.GetStages(applicationID)
 	if err != nil {
 		return nil, fmt.Errorf("could not get stages, %w", err)
 	}
@@ -110,13 +110,13 @@ func (m manager) GetApplicationInfo(applicationId string, maxProcessedStageId in
 		return nil, fmt.Errorf("stages are nil")
 	}
 
-	stageAggregationResult := aggregateStagesWindow(stages, maxProcessedStageId, log)
+	stageAggregationResult := aggregateStagesWindow(stages, maxProcessedStageID, log)
 	applicationInfo.TotalNewOutputBytes = stageAggregationResult.totalNewOutputBytes
 	applicationInfo.TotalNewInputBytes = stageAggregationResult.totalNewInputBytes
 	applicationInfo.TotalNewExecutorCpuTime = stageAggregationResult.totalNewExecutorCpuTime
-	applicationInfo.MaxProcessedStageId = stageAggregationResult.newMaxProcessedStageId
+	applicationInfo.MaxProcessedStageID = stageAggregationResult.newMaxProcessedStageID
 
-	executors, err := m.client.GetAllExecutors(applicationId)
+	executors, err := m.client.GetAllExecutors(applicationID)
 	if err != nil {
 		return nil, fmt.Errorf("could not get executors, %w", err)
 	}
@@ -130,10 +130,10 @@ type stageWindowAggregationResult struct {
 	totalNewOutputBytes     int64
 	totalNewInputBytes      int64
 	totalNewExecutorCpuTime int64
-	newMaxProcessedStageId  int
+	newMaxProcessedStageID  int
 }
 
-func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId int, log logr.Logger) stageWindowAggregationResult {
+func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageID int, log logr.Logger) stageWindowAggregationResult {
 
 	// TODO Use proper metrics, not the REST API
 	// The REST API only gives us the last ~1000 stages by default.
@@ -146,70 +146,70 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 	// If the stage window has advanced,
 	// and we don't find this stage ID in the window,
 	// it means we have missed some stages
-	expectedStageId := oldMaxProcessedStageId + 1
-	foundExpectedStageId := false
+	expectedStageID := oldMaxProcessedStageID + 1
+	foundExpectedStageID := false
 	windowHasAdvanced := false
 
 	// The max and min IDs of the received stages
-	stageWindowMaxId := -1
-	stageWindowMinId := -1
+	stageWindowMaxID := -1
+	stageWindowMinID := -1
 
 	// We can include stages up to this ID - 1 in our aggregation,
 	// all stages up to this number should be finalized
-	minNotFinalizedStageId := -1
+	minNotFinalizedStageID := -1
 
 	// First pass, analysis
 	for _, stage := range stages {
 
 		// Figure out min stage ID that is still active
 		if !isStageFinalized(stage) {
-			if minNotFinalizedStageId == -1 {
-				minNotFinalizedStageId = stage.StageId
+			if minNotFinalizedStageID == -1 {
+				minNotFinalizedStageID = stage.StageID
 			}
-			if stage.StageId < minNotFinalizedStageId {
-				minNotFinalizedStageId = stage.StageId
+			if stage.StageID < minNotFinalizedStageID {
+				minNotFinalizedStageID = stage.StageID
 			}
 		}
 
 		// Figure out the current stage window (logging purposes only)
-		if stageWindowMinId == -1 {
-			stageWindowMinId = stage.StageId
+		if stageWindowMinID == -1 {
+			stageWindowMinID = stage.StageID
 		}
-		if stage.StageId < stageWindowMinId {
-			stageWindowMinId = stage.StageId
+		if stage.StageID < stageWindowMinID {
+			stageWindowMinID = stage.StageID
 		}
-		if stageWindowMaxId == -1 {
-			stageWindowMaxId = stage.StageId
+		if stageWindowMaxID == -1 {
+			stageWindowMaxID = stage.StageID
 		}
-		if stage.StageId > stageWindowMaxId {
-			stageWindowMaxId = stage.StageId
+		if stage.StageID > stageWindowMaxID {
+			stageWindowMaxID = stage.StageID
 		}
 
-		if stage.StageId > oldMaxProcessedStageId {
+		if stage.StageID > oldMaxProcessedStageID {
 			windowHasAdvanced = true
 		}
 
-		if stage.StageId == expectedStageId {
-			foundExpectedStageId = true
+		if stage.StageID == expectedStageID {
+			foundExpectedStageID = true
 		}
 	}
 
 	// We only want to include stages in (aggregationWindowMin, aggregationWindowMax) (non-inclusive)
-	aggregationWindowMin := oldMaxProcessedStageId // We have already processed stages up to and including oldMaxProcessedStageId
-	aggregationWindowMax := minNotFinalizedStageId // Stages with IDs >= minNotFinalizedStageId may still be in progress
+	aggregationWindowMin := oldMaxProcessedStageID // We have already processed stages up to and including oldMaxProcessedStageID
+	aggregationWindowMax := minNotFinalizedStageID // Stages with IDs >= minNotFinalizedStageID may still be in progress
 
-	newMaxProcessedStageId := oldMaxProcessedStageId
+	newMaxProcessedStageID := oldMaxProcessedStageID
 
 	// Second pass, aggregation
 	for _, stage := range stages {
 
 		// Only include stages within our aggregation window
-		if stage.StageId <= aggregationWindowMin {
+		if stage.StageID <= aggregationWindowMin {
 			continue
 		}
 		if aggregationWindowMax != -1 {
 			// We have an upper bound on the aggregation window
-			if stage.StageId >= aggregationWindowMax {
+			if stage.StageID >= aggregationWindowMax {
 				continue
 			}
 		}
@@ -219,19 +219,19 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 		totalNewOutputBytes += stage.OutputBytes
 
 		// Remember new max processed stage ID
-		if stage.StageId > newMaxProcessedStageId {
-			newMaxProcessedStageId = stage.StageId
+		if stage.StageID > newMaxProcessedStageID {
+			newMaxProcessedStageID = stage.StageID
 		}
 	}
 
 	log.Info("Finished processing stage window", "stageCount", len(stages),
-		"minStageId", stageWindowMinId, "maxStageId", stageWindowMaxId,
+		"minStageID", stageWindowMinID, "maxStageID", stageWindowMaxID,
 		"aggregationWindow", fmt.Sprintf("(%d,%d)", aggregationWindowMin, aggregationWindowMax),
-		"oldMaxProcessedStageId", oldMaxProcessedStageId, "newMaxProcessedStageId", newMaxProcessedStageId)
+		"oldMaxProcessedStageID", oldMaxProcessedStageID, "newMaxProcessedStageID", newMaxProcessedStageID)
 
-	if !foundExpectedStageId && windowHasAdvanced {
+	if !foundExpectedStageID && windowHasAdvanced {
 		// Let's just log an error
-		err := fmt.Errorf("did not find expected stage ID %d in stage window", expectedStageId)
+		err := fmt.Errorf("did not find expected stage ID %d in stage window", expectedStageID)
 		log.Error(err, "missing stage metrics")
 	}
 
@@ -239,7 +239,7 @@ func aggregateStagesWindow(stages []sparkapiclient.Stage, oldMaxProcessedStageId
 		totalNewOutputBytes:     totalNewOutputBytes,
 		totalNewInputBytes:      totalNewInputBytes,
 		totalNewExecutorCpuTime: totalNewExecutorCpuTime,
-		newMaxProcessedStageId:  newMaxProcessedStageId,
+		newMaxProcessedStageID:  newMaxProcessedStageID,
 	}
 }
 

@@ -36,7 +36,7 @@ spec:
           spec:
             description: SparkApplicationSpec defines the desired state of SparkApplication
             properties:
-              applicationId:
+              applicationID:
                 description: uniquely identifies the spark application, and is shared
                   as a label on all driver and executor pods
                 type: string
@@ -48,7 +48,7 @@ spec:
                   from a jupyter notebook, or from spark-submit directly
                 type: string
             required:
-            - applicationId
+            - applicationID
             - applicationName
             - heritage
             type: object
