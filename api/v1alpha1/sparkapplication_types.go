@@ -175,7 +175,29 @@ type Pod struct {
 	DeletionTimestamp *metav1.Time `json:"deletionTimestamp,omitempty"`
 	//the pod's labels
 	Labels map[string]string `json:"labels"`
+	//the pod's state history
+	StateHistory []PodStateHistoryEntry `json:"stateHistory"`
 }
+
+type PodStateHistoryEntry struct {
+	//the timestamp when this state was first seen
+	Timestamp metav1.Time `json:"timestamp"`
+	//the phase of the pod
+	Phase v1.PodPhase `json:"phase"`
+	//map of container name to container status
+	ContainerStatuses map[string]PodStateHistoryContainerStatus `json:"containerStatuses"`
+}
+
+type PodStateHistoryContainerStatus struct {
+	State    PodStateHistoryContainerState `json:"state"`
+	ExitCode *int32                        `json:"exitCode,omitempty"`
+}
+
+type PodStateHistoryContainerState string
+
+const ContainerStateWaiting PodStateHistoryContainerState = "waiting"
+const ContainerStateRunning PodStateHistoryContainerState = "running"
+const ContainerStateTerminated PodStateHistoryContainerState = "terminated"
 
 // +kubebuilder:object:root=true
 

@@ -693,105 +693,395 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 
 }
 
-func TestReconcile_deletedPod_revertedToPending(t *testing.T) {
-	ctx := context.TODO()
+func TestPodStateHistory(t *testing.T) {
 
-	applicationID := "spark-123"
+	name := "my-pod"
 	ns := "test-ns"
+	logger := getTestLogger()
+	exitCode0 := int32(0)
+	exitCode1 := int32(1)
 
-	pod := getTestPod(ns, "driver", "123890", DriverRole, applicationID, true)
-	pod.Finalizers = []string{sparkApplicationFinalizerName}
-	// Override deletion timestamp
-	ts := metav1.Now()
-	pod.DeletionTimestamp = &ts
-
-	cr := getMinimalTestCR(ns, applicationID)
-
-	// Set owner reference on pod
-	controllerOwner := false
-	blockOwnerDeletion := true
-	crOwnerRef := metav1.OwnerReference{
-		APIVersion:         apiVersion,
-		Kind:               sparkApplicationKind,
-		Name:               cr.Name,
-		UID:                cr.UID,
-		Controller:         &controllerOwner,
-		BlockOwnerDeletion: &blockOwnerDeletion,
+	type testCase struct {
+		currentStateHistory  []v1alpha1.PodStateHistoryEntry
+		expectedStateHistory []v1alpha1.PodStateHistoryEntry
+		phase                corev1.PodPhase
+		containerStatuses    []corev1.ContainerStatus
+		podCRExists          bool
+		message              string
 	}
-	pod.OwnerReferences = []metav1.OwnerReference{crOwnerRef}
 
-	driverCR := v1alpha1.Pod{
-		Name:      "driver",
-		Namespace: ns,
-		UID:       "123890",
-		Phase:     corev1.PodRunning, // The pod was previously running
-		Statuses: []corev1.ContainerStatus{
-			{
-				Name: "should not be overwritten",
+	testCases := []testCase{
+		{
+			currentStateHistory: nil,
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodPending,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"driver-container": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
+					},
+				},
 			},
+			phase: corev1.PodPending,
+			containerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "driver-container",
+					State: corev1.ContainerState{
+						Waiting:    &corev1.ContainerStateWaiting{},
+						Running:    nil,
+						Terminated: nil,
+					},
+				},
+			},
+			podCRExists: false,
+			message:     "whenPodCRDoesntExist",
+		},
+		{
+			currentStateHistory: nil,
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodPending,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"driver-container": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
+					},
+				},
+			},
+			phase: corev1.PodPending,
+			containerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "driver-container",
+					State: corev1.ContainerState{
+						Waiting:    &corev1.ContainerStateWaiting{},
+						Running:    nil,
+						Terminated: nil,
+					},
+				},
+			},
+			podCRExists: true,
+			message:     "whenNilStateHistory_pending",
+		},
+		{
+			currentStateHistory: []v1alpha1.PodStateHistoryEntry{},
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodFailed,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"executor-one": {
+							State:    v1alpha1.ContainerStateTerminated,
+							ExitCode: &exitCode1,
+						},
+					},
+				},
+			},
+			phase: corev1.PodFailed,
+			containerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "executor-one",
+					State: corev1.ContainerState{
+						Waiting: nil,
+						Running: nil,
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 1,
+						},
+					},
+				},
+			},
+			podCRExists: true,
+			message:     "whenEmptyStateHistory_terminated",
+		},
+		{
+			currentStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodFailed,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"executor-one": {
+							State:    v1alpha1.ContainerStateTerminated,
+							ExitCode: &exitCode1,
+						},
+					},
+				},
+			},
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodFailed,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"executor-one": {
+							State:    v1alpha1.ContainerStateTerminated,
+							ExitCode: &exitCode1,
+						},
+					},
+				},
+			},
+			phase: corev1.PodFailed,
+			containerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "executor-one",
+					State: corev1.ContainerState{
+						Waiting: nil,
+						Running: nil,
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 1,
+						},
+					},
+				},
+			},
+			podCRExists: true,
+			message:     "whenExistingStateHistory_noUpdate_1",
+		},
+		{
+			currentStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodPending,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"my-driver": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
+					},
+				},
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodRunning,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"my-driver": {
+							State:    v1alpha1.ContainerStateRunning,
+							ExitCode: nil,
+						},
+						"my-storage-sync": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
+					},
+				},
+			},
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodPending,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"my-driver": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
+					},
+				},
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodRunning,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"my-driver": {
+							State:    v1alpha1.ContainerStateRunning,
+							ExitCode: nil,
+						},
+						"my-storage-sync": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
+					},
+				},
+			},
+			phase: corev1.PodRunning,
+			containerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "my-driver",
+					State: corev1.ContainerState{
+						Waiting:    nil,
+						Running:    &corev1.ContainerStateRunning{},
+						Terminated: nil,
+					},
+				},
+				{
+					Name: "my-storage-sync",
+					State: corev1.ContainerState{
+						Waiting:    &corev1.ContainerStateWaiting{},
+						Running:    nil,
+						Terminated: nil,
+					},
+				},
+			},
+			podCRExists: true,
+			message:     "whenExistingStateHistory_noUpdate_2",
+		},
+		{
+			currentStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodPending,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"my-driver": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
+					},
+				},
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodRunning,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"my-driver": {
+							State:    v1alpha1.ContainerStateRunning,
+							ExitCode: nil,
+						},
+					},
+				},
+			},
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodPending,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"my-driver": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
+					},
+				},
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodRunning,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"my-driver": {
+							State:    v1alpha1.ContainerStateRunning,
+							ExitCode: nil,
+						},
+					},
+				},
+				{
+					Timestamp: metav1.Now(),
+					Phase:     corev1.PodFailed,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"my-driver": {
+							State:    v1alpha1.ContainerStateTerminated,
+							ExitCode: &exitCode1,
+						},
+					},
+				},
+			},
+			phase: corev1.PodFailed,
+			containerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "my-driver",
+					State: corev1.ContainerState{
+						Waiting: nil,
+						Running: nil,
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 1,
+						},
+					},
+				},
+			},
+			podCRExists: true,
+			message:     "whenExistingStateHistory_shouldUpdate",
+		},
+		{
+			currentStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Time{},
+					Phase:     corev1.PodRunning,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"driver-container": {
+							State:    v1alpha1.ContainerStateRunning,
+							ExitCode: nil,
+						},
+						"storage-sync-container": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
+					},
+				},
+			},
+			expectedStateHistory: []v1alpha1.PodStateHistoryEntry{
+				{
+					Timestamp: metav1.Time{},
+					Phase:     corev1.PodRunning,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"driver-container": {
+							State:    v1alpha1.ContainerStateRunning,
+							ExitCode: nil,
+						},
+						"storage-sync-container": {
+							State:    v1alpha1.ContainerStateWaiting,
+							ExitCode: nil,
+						},
+					},
+				},
+				{
+					Timestamp: metav1.Time{},
+					Phase:     corev1.PodFailed,
+					ContainerStatuses: map[string]v1alpha1.PodStateHistoryContainerStatus{
+						"driver-container": {
+							State:    v1alpha1.ContainerStateTerminated,
+							ExitCode: &exitCode1,
+						},
+						"storage-sync-container": {
+							State:    v1alpha1.ContainerStateTerminated,
+							ExitCode: &exitCode0,
+						},
+					},
+				},
+			},
+			phase: corev1.PodFailed,
+			containerStatuses: []corev1.ContainerStatus{
+				{
+					Name: "driver-container",
+					State: corev1.ContainerState{
+						Waiting: nil,
+						Running: nil,
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 1,
+						},
+					},
+				},
+				{
+					Name: "storage-sync-container",
+					State: corev1.ContainerState{
+						Waiting: nil,
+						Running: nil,
+						Terminated: &corev1.ContainerStateTerminated{
+							ExitCode: 0,
+						},
+					},
+				},
+			},
+			podCRExists: true,
+			message:     "whenMultipleContainers_stateUpdate",
 		},
 	}
-	cr.Status.Data.Driver = driverCR
 
-	// Mock Spark API manager
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	m := mock_sparkapi.NewMockManager(ctrl)
-	m.EXPECT().GetApplicationInfo(applicationID, gomock.Any(), gomock.Any()).Return(getTestApplicationInfo(), nil).Times(2)
-	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
-		return m, nil
-	}
+	t.Run("whenSuccessful", func(tt *testing.T) {
+		for _, tc := range testCases {
 
-	clientSet := k8sfake.NewSimpleClientset()
+			pod := getTestPod(ns, name, "123890", DriverRole, "id", false)
+			pod.Status.Phase = tc.phase
+			pod.Status.ContainerStatuses = tc.containerStatuses
 
-	t.Run("whenPodDeleted_revertedToPending_shouldNotUpdatePhaseAndStatus", func(tt *testing.T) {
-		// Pod is pending, and deleted
-		pod.Status.Phase = corev1.PodPending
+			var podCR *v1alpha1.Pod
+			if tc.podCRExists {
+				podCR = &v1alpha1.Pod{StateHistory: tc.currentStateHistory}
+			}
 
-		ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
+			res := newPodCR(pod, podCR, logger)
 
-		controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+			assert.Equal(tt, tc.phase, res.Phase, tc.message)
+			assert.Equal(tt, tc.containerStatuses, res.Statuses, tc.message)
 
-		req := ctrlrt.Request{
-			NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+			assert.Equal(tt, len(tc.expectedStateHistory), len(res.StateHistory), tc.message)
+			for i := 0; i < len(tc.expectedStateHistory); i++ {
+				assert.Equal(tt, tc.expectedStateHistory[i].Phase, res.StateHistory[i].Phase, tc.message)
+				assert.Equal(tt, tc.expectedStateHistory[i].ContainerStatuses, res.StateHistory[i].ContainerStatuses, tc.message)
+			}
 		}
-		_, err := controller.Reconcile(ctx, req)
-		require.NoError(t, err)
-
-		updatedCR := &v1alpha1.SparkApplication{}
-		err = ctrlClient.Get(ctx, client.ObjectKey{Name: applicationID, Namespace: pod.Namespace}, updatedCR)
-		require.NoError(t, err)
-
-		// Most fields should have been updated
-		assert.NotNil(t, updatedCR.Status.Data.Driver.DeletionTimestamp)
-
-		// Phase and statuses should not have been updated
-		assert.Equal(t, driverCR.Phase, updatedCR.Status.Data.Driver.Phase)
-		assert.Equal(t, driverCR.Statuses, updatedCR.Status.Data.Driver.Statuses)
-	})
-
-	t.Run("whenPodDeleted_notRevertedToPending_shouldUpdatePhaseAndStatus", func(tt *testing.T) {
-		// Pod is succeeded, and deleted
-		pod.Status.Phase = corev1.PodSucceeded
-
-		ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
-
-		controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
-
-		req := ctrlrt.Request{
-			NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
-		}
-		_, err := controller.Reconcile(ctx, req)
-		require.NoError(t, err)
-
-		updatedCR := &v1alpha1.SparkApplication{}
-		err = ctrlClient.Get(ctx, client.ObjectKey{Name: applicationID, Namespace: pod.Namespace}, updatedCR)
-		require.NoError(t, err)
-
-		// All fields should have been updated
-		assert.NotNil(t, updatedCR.Status.Data.Driver.DeletionTimestamp)
-		assert.Equal(t, pod.Status.Phase, updatedCR.Status.Data.Driver.Phase)
-		assert.Equal(t, pod.Status.ContainerStatuses, updatedCR.Status.Data.Driver.Statuses)
 	})
 }
 
@@ -813,6 +1103,7 @@ func verifyCRPod(t *testing.T, pod *corev1.Pod, crPod v1alpha1.Pod) {
 	}
 
 	assert.Equal(t, len(pod.Status.ContainerStatuses), len(crPod.Statuses))
+	assert.True(t, len(crPod.StateHistory) > 0)
 
 	for _, cs := range pod.Status.ContainerStatuses {
 		foundCs := false
