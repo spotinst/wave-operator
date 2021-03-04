@@ -111,7 +111,7 @@ func install(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	err = manager.Create(env)
+	err = manager.Create(*env)
 	if err != nil {
 		logger.Error(err, "creation failed")
 		os.Exit(1)
