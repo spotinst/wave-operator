@@ -181,7 +181,7 @@ type Pod struct {
 
 type PodStateHistoryEntry struct {
 	//the timestamp when this state was first seen
-	Timestamp metav1.Time `json:"timestamp,omitempty"`
+	Timestamp metav1.Time `json:"timestamp"`
 	//the phase of the pod
 	Phase v1.PodPhase `json:"phase"`
 	//map of container name to container status

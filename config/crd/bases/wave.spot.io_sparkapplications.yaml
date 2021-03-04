@@ -290,6 +290,7 @@ spec:
                           required:
                           - containerStatuses
                           - phase
+                          - timestamp
                           type: object
                         type: array
                     required:
@@ -537,6 +538,7 @@ spec:
                             required:
                             - containerStatuses
                             - phase
+                            - timestamp
                             type: object
                           type: array
                       required:
