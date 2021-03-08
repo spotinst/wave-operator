@@ -263,6 +263,37 @@ spec:
                       podUid:
                         description: the kubernetes object UID
                         type: string
+                      stateHistory:
+                        description: the pod's state history
+                        items:
+                          properties:
+                            containerStatuses:
+                              additionalProperties:
+                                properties:
+                                  exitCode:
+                                    format: int32
+                                    type: integer
+                                  state:
+                                    type: string
+                                required:
+                                - state
+                                type: object
+                              description: map of container name to container status
+                              type: object
+                            phase:
+                              description: the phase of the pod
+                              type: string
+                            timestamp:
+                              description: the timestamp when this state was first
+                                seen
+                              format: date-time
+                              type: string
+                          required:
+                          - containerStatuses
+                          - phase
+                          - timestamp
+                          type: object
+                        type: array
                     required:
                     - containerStatuses
                     - labels
@@ -270,6 +301,7 @@ spec:
                     - podName
                     - podNamespace
                     - podUid
+                    - stateHistory
                     type: object
                   executors:
                     description: a list of references to the executor pods
@@ -479,6 +511,37 @@ spec:
                         podUid:
                           description: the kubernetes object UID
                           type: string
+                        stateHistory:
+                          description: the pod's state history
+                          items:
+                            properties:
+                              containerStatuses:
+                                additionalProperties:
+                                  properties:
+                                    exitCode:
+                                      format: int32
+                                      type: integer
+                                    state:
+                                      type: string
+                                  required:
+                                  - state
+                                  type: object
+                                description: map of container name to container status
+                                type: object
+                              phase:
+                                description: the phase of the pod
+                                type: string
+                              timestamp:
+                                description: the timestamp when this state was first
+                                  seen
+                                format: date-time
+                                type: string
+                            required:
+                            - containerStatuses
+                            - phase
+                            - timestamp
+                            type: object
+                          type: array
                       required:
                       - containerStatuses
                       - labels
@@ -486,6 +549,7 @@ spec:
                       - podName
                       - podNamespace
                       - podUid
+                      - stateHistory
                       type: object
                     type: array
                   runStatistics:

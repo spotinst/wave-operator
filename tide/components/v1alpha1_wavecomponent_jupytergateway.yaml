@@ -22,7 +22,7 @@ spec:
           hostname: gateway.wave.spot.io
         path: /gateway/?(.*)
         annotations:
-          kubernetes.io/ingress.class: "nginx"
+          kubernetes.io/ingress.class: "wave-nginx"
           nginx.ingress.kubernetes.io/rewrite-target: /$1
           nginx.ingress.kubernetes.io/ssl-redirect: "false"
           nginx.ingress.kubernetes.io/force-ssl-redirect: "false"

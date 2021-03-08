@@ -11,6 +11,7 @@ spec:
   valuesConfiguration: |
     controller:
       name: controller
+      ingressClass: "wave-nginx"
       config:
         hsts: "false"
 
