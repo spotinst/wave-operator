@@ -26,8 +26,8 @@ import (
 // deleteCmd represents the delete command
 var deleteCmd = &cobra.Command{
 	Use:   "recede",
-	Short: "deletes the wave operator",
-	Long: `deletes the wave operator and all its dependencies and components
+	Short: "Deletes the wave operator",
+	Long: `Deletes the wave operator and all its dependencies and components
 
   Dependencies:
   - cert-manager

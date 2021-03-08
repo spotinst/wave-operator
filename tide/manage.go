@@ -3,6 +3,7 @@ package tide
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"path"
 	"reflect"
@@ -53,8 +54,6 @@ const (
 	ConfigIsOceanClusterProvisioned = "isOceanClusterProvisioned"
 	ConfigIsK8sProvisioned          = "isK8sProvisioned"
 	ConfigInitialWaveOperatorImage  = "initialWaveOperatorImage"
-
-	AnnotationPrefix = "tide.wave.spot.io"
 )
 
 var (
@@ -82,7 +81,7 @@ type Manager interface {
 	DeleteConfiguration(deleteEnvironmentCRD bool) error
 	GetConfiguration() (*v1alpha1.WaveEnvironment, error)
 
-	Create(env *v1alpha1.WaveEnvironment) error
+	Create(env v1alpha1.WaveEnvironment) error
 	Delete() error
 
 	CreateTideRBAC() error
@@ -142,6 +141,7 @@ func NewManager(log logr.Logger) (Manager, error) {
 }
 
 func (m *manager) SetWaveInstallSpec(spec install.InstallSpec) error {
+
 	if spec.Name != "" {
 		m.spec.Name = spec.Name
 	}
@@ -152,6 +152,11 @@ func (m *manager) SetWaveInstallSpec(spec install.InstallSpec) error {
 		m.spec.Version = spec.Version
 	}
 	if spec.Values != "" {
+		v := map[string]interface{}{}
+		err := json.Unmarshal([]byte(spec.Values), &v)
+		if err != nil {
+			return fmt.Errorf("invalid chart values, %w", err)
+		}
 		m.spec.Values = spec.Values
 	}
 	return nil
@@ -368,7 +373,20 @@ func (m *manager) GetConfiguration() (*v1alpha1.WaveEnvironment, error) {
 	return env, nil
 }
 
-func (m *manager) Create(env *v1alpha1.WaveEnvironment) error {
+func (m *manager) SaveConfiguration(env *v1alpha1.WaveEnvironment) error {
+	client, err := m.getControllerRuntimeClient()
+	if err != nil {
+		return err
+	}
+	ctx := context.TODO()
+	err = client.Update(ctx, env)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *manager) Create(env v1alpha1.WaveEnvironment) error {
 	ctx := context.TODO()
 
 	m.log.Info("Installing Wave")
@@ -600,14 +618,37 @@ func (m *manager) installWaveOperator(ctx context.Context, waveOperatorImage str
 	}
 
 	installer := install.GetHelm("", m.kubeClientGetter, m.log)
-	err = installer.Install(m.spec.Name, m.spec.Repository, m.spec.Version, values)
+	existing, err := installer.Get(m.spec.Name)
 	if err != nil {
-		return fmt.Errorf("cannot install wave operator, %w", err)
+		return fmt.Errorf("error checking release, %w", err)
+	}
+	if existing == nil {
+		err = installer.Install(m.spec.Name, m.spec.Repository, m.spec.Version, values)
+		if err != nil {
+			return fmt.Errorf("cannot install wave operator, %w", err)
+		}
+	} else {
+		err = installer.Upgrade(m.spec.Name, m.spec.Repository, m.spec.Version, values)
+		if err != nil {
+			return fmt.Errorf("cannot upgrade wave operator, %w", err)
+		}
+		env, err := m.GetConfiguration()
+		if err != nil {
+			return fmt.Errorf("cannot upgrade wave operator, %w", err)
+		}
+		err = addUpgradeAnnotation(m.spec, env)
+		if err != nil {
+			return fmt.Errorf("cannot upgrade wave operator, %w", err)
+		}
+		err = m.SaveConfiguration(env)
+		if err != nil {
+			return fmt.Errorf("cannot upgrade wave operator, %w", err)
+		}
 	}
 
 	err = wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
 		dep, err := kc.AppsV1().Deployments(catalog.SystemNamespace).Get(ctx, "wave-operator", metav1.GetOptions{})
-		if err != nil || dep.Status.AvailableReplicas == 0 {
+		if err != nil || dep.Status.AvailableReplicas == 0 || dep.Status.UnavailableReplicas != 0 {
 			return false, nil
 		}
 		m.log.Info("polled", "deployment", "wave-operator", "replicas", dep.Status.AvailableReplicas)
