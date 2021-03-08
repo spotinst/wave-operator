@@ -304,7 +304,7 @@ const (
 // SparkApplicationStatus describes the current status of a Spark application.
 type SparkApplicationStatus struct {
 	// SparkApplicationID is set by the spark-distribution(via spark.app.id config) on the driver and executor pods
-	SparkApplicationID string `json:"sparkApplicationID,omitempty"`
+	SparkApplicationID string `json:"sparkApplicationId,omitempty"`
 	// SubmissionID is a unique ID of the current submission of the application.
 	SubmissionID string `json:"submissionID,omitempty"`
 	// LastSubmissionAttemptTime is the time for the last application submission attempt.

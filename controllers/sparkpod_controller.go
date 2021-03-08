@@ -316,21 +316,21 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 // setPodOwnerReference adds an owner reference to the spark application cr to the front of the pod's owner reference list
 // returns true if pod's owner references were updated, false otherwise
 func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
-	foundIDx := -1
+	foundIdx := -1
 	for idx, ownerRef := range pod.OwnerReferences {
 		if ownerRef.APIVersion == apiVersion &&
 			ownerRef.Kind == sparkApplicationKind &&
 			ownerRef.Name == cr.Name &&
 			ownerRef.UID == cr.UID {
-			foundIDx = idx
+			foundIdx = idx
 			break
 		}
 	}
 
-	if foundIDx == 0 {
+	if foundIdx == 0 {
 		// Owner reference found at the front of the list
 		return false
-	} else if foundIDx == -1 {
+	} else if foundIdx == -1 {
 		// Owner reference not found
 		updatedOwnerRefs := make([]v1.OwnerReference, 0, len(pod.OwnerReferences)+1)
 		newOwnerRef := newOwnerReference(cr)
@@ -340,7 +340,7 @@ func setPodOwnerReference(pod *corev1.Pod, cr *v1alpha1.SparkApplication) bool {
 		return true
 	} else {
 		// Owner reference found but not at the front of the list, move it to the front
-		pod.OwnerReferences[0], pod.OwnerReferences[foundIDx] = pod.OwnerReferences[foundIDx], pod.OwnerReferences[0]
+		pod.OwnerReferences[0], pod.OwnerReferences[foundIdx] = pod.OwnerReferences[foundIdx], pod.OwnerReferences[0]
 		return true
 	}
 }

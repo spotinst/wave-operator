@@ -33,7 +33,7 @@ const (
 type SparkApplicationSpec struct {
 
 	//uniquely identifies the spark application, and is shared as a label on all driver and executor pods
-	ApplicationID string `json:"applicationID"`
+	ApplicationID string `json:"applicationId"`
 
 	//the name of the spark application
 	ApplicationName string `json:"applicationName"`
