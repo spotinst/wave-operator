@@ -456,6 +456,9 @@ func (m *manager) Delete() error {
 		}
 		return true, nil
 	})
+	if err != nil {
+		return err
+	}
 
 	err = m.deleteWaveOperator(ctx)
 	if err != nil {

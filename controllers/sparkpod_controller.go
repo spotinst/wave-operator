@@ -446,19 +446,12 @@ func newPodCR(pod *corev1.Pod, existingPodCr *v1alpha1.Pod, log logr.Logger) v1a
 	podCr.UID = string(pod.UID)
 	podCr.Namespace = pod.Namespace
 	podCr.Name = pod.Name
-
-	if shouldUpdatePodCrPhaseAndStatuses(pod, existingPodCr) {
-		podCr.Phase = pod.Status.Phase
-		podCr.Statuses = pod.Status.ContainerStatuses
-	} else {
-		log.Info("Will not update pod CR phase and container statuses")
-		podCr.Phase = existingPodCr.Phase
-		podCr.Statuses = existingPodCr.Statuses
-	}
-
+	podCr.Phase = pod.Status.Phase
+	podCr.Statuses = pod.Status.ContainerStatuses
 	podCr.CreationTimestamp = pod.CreationTimestamp
 	podCr.DeletionTimestamp = pod.DeletionTimestamp
 	podCr.Labels = pod.Labels
+	podCr.StateHistory = getUpdatedPodStateHistory(pod, existingPodCr, log)
 
 	if podCr.Statuses == nil {
 		podCr.Statuses = make([]corev1.ContainerStatus, 0)
@@ -471,15 +464,82 @@ func newPodCR(pod *corev1.Pod, existingPodCr *v1alpha1.Pod, log logr.Logger) v1a
 	return podCr
 }
 
-// When a pod is deleted, we may get an event for the pod where it has gone back to pending state,
-// with container statuses ContainerCreating.
-// If we see this, let's not update the pod phase and container statuses
-func shouldUpdatePodCrPhaseAndStatuses(pod *corev1.Pod, existingCr *v1alpha1.Pod) bool {
-	if existingCr == nil {
-		return true
+func getUpdatedPodStateHistory(pod *corev1.Pod, existingPodCr *v1alpha1.Pod, log logr.Logger) []v1alpha1.PodStateHistoryEntry {
+	var stateHistory []v1alpha1.PodStateHistoryEntry
+
+	if existingPodCr != nil {
+		stateHistory = existingPodCr.StateHistory
 	}
-	if !pod.ObjectMeta.DeletionTimestamp.IsZero() && pod.Status.Phase == corev1.PodPending {
-		if existingCr.Phase != "" && existingCr.Phase != corev1.PodPending {
+
+	if len(stateHistory) == 0 {
+		// First entry
+		newEntry := newPodStateHistoryEntry(pod)
+		log.Info("New pod state", "podState", newEntry)
+		stateHistory = append(stateHistory, newEntry)
+	} else {
+		latestEntry := stateHistory[len(stateHistory)-1]
+		newEntry := newPodStateHistoryEntry(pod)
+		if !podStateHistoryEntryEqual(latestEntry, newEntry) {
+			log.Info("New pod state", "podState", newEntry)
+			stateHistory = append(stateHistory, newEntry)
+		}
+	}
+
+	return stateHistory
+}
+
+func newPodStateHistoryEntry(pod *corev1.Pod) v1alpha1.PodStateHistoryEntry {
+	containerStatuses := make(map[string]v1alpha1.PodStateHistoryContainerStatus)
+
+	for _, podContainerStatus := range pod.Status.ContainerStatuses {
+		status := v1alpha1.PodStateHistoryContainerStatus{}
+
+		if podContainerStatus.State.Terminated != nil {
+			status.State = v1alpha1.ContainerStateTerminated
+			status.ExitCode = &podContainerStatus.State.Terminated.ExitCode
+		} else if podContainerStatus.State.Running != nil {
+			status.State = v1alpha1.ContainerStateRunning
+		} else if podContainerStatus.State.Waiting != nil {
+			status.State = v1alpha1.ContainerStateWaiting
+		} else {
+			// Default to waiting
+			status.State = v1alpha1.ContainerStateWaiting
+		}
+
+		containerStatuses[podContainerStatus.Name] = status
+	}
+
+	return v1alpha1.PodStateHistoryEntry{
+		Timestamp:         v1.Now(),
+		Phase:             pod.Status.Phase,
+		ContainerStatuses: containerStatuses,
+	}
+}
+
+func podStateHistoryEntryEqual(a v1alpha1.PodStateHistoryEntry, b v1alpha1.PodStateHistoryEntry) bool {
+	if a.Phase != b.Phase {
+		return false
+	}
+	if len(a.ContainerStatuses) != len(b.ContainerStatuses) {
+		return false
+	}
+	for aContainerName, aContainerStatus := range a.ContainerStatuses {
+		bContainerStatus, ok := b.ContainerStatuses[aContainerName]
+		if !ok {
+			return false
+		}
+		if aContainerStatus.State != bContainerStatus.State {
+			return false
+		}
+		aExitCode := int32(-1)
+		bExitCode := int32(-1)
+		if aContainerStatus.ExitCode != nil {
+			aExitCode = *aContainerStatus.ExitCode
+		}
+		if bContainerStatus.ExitCode != nil {
+			bExitCode = *bContainerStatus.ExitCode
+		}
+		if aExitCode != bExitCode {
 			return false
 		}
 	}
