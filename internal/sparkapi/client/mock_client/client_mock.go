@@ -34,61 +34,61 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // GetApplication mocks base method
-func (m *MockClient) GetApplication(applicationId string) (*client.Application, error) {
+func (m *MockClient) GetApplication(applicationID string) (*client.Application, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetApplication", applicationId)
+	ret := m.ctrl.Call(m, "GetApplication", applicationID)
 	ret0, _ := ret[0].(*client.Application)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetApplication indicates an expected call of GetApplication
-func (mr *MockClientMockRecorder) GetApplication(applicationId interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) GetApplication(applicationID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetApplication", reflect.TypeOf((*MockClient)(nil).GetApplication), applicationId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetApplication", reflect.TypeOf((*MockClient)(nil).GetApplication), applicationID)
 }
 
 // GetEnvironment mocks base method
-func (m *MockClient) GetEnvironment(applicationId string) (*client.Environment, error) {
+func (m *MockClient) GetEnvironment(applicationID string) (*client.Environment, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEnvironment", applicationId)
+	ret := m.ctrl.Call(m, "GetEnvironment", applicationID)
 	ret0, _ := ret[0].(*client.Environment)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetEnvironment indicates an expected call of GetEnvironment
-func (mr *MockClientMockRecorder) GetEnvironment(applicationId interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) GetEnvironment(applicationID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEnvironment", reflect.TypeOf((*MockClient)(nil).GetEnvironment), applicationId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEnvironment", reflect.TypeOf((*MockClient)(nil).GetEnvironment), applicationID)
 }
 
 // GetStages mocks base method
-func (m *MockClient) GetStages(applicationId string) ([]client.Stage, error) {
+func (m *MockClient) GetStages(applicationID string) ([]client.Stage, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetStages", applicationId)
+	ret := m.ctrl.Call(m, "GetStages", applicationID)
 	ret0, _ := ret[0].([]client.Stage)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetStages indicates an expected call of GetStages
-func (mr *MockClientMockRecorder) GetStages(applicationId interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) GetStages(applicationID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStages", reflect.TypeOf((*MockClient)(nil).GetStages), applicationId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStages", reflect.TypeOf((*MockClient)(nil).GetStages), applicationID)
 }
 
 // GetAllExecutors mocks base method
-func (m *MockClient) GetAllExecutors(applicationId string) ([]client.Executor, error) {
+func (m *MockClient) GetAllExecutors(applicationID string) ([]client.Executor, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAllExecutors", applicationId)
+	ret := m.ctrl.Call(m, "GetAllExecutors", applicationID)
 	ret0, _ := ret[0].([]client.Executor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetAllExecutors indicates an expected call of GetAllExecutors
-func (mr *MockClientMockRecorder) GetAllExecutors(applicationId interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) GetAllExecutors(applicationID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllExecutors", reflect.TypeOf((*MockClient)(nil).GetAllExecutors), applicationId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllExecutors", reflect.TypeOf((*MockClient)(nil).GetAllExecutors), applicationID)
 }

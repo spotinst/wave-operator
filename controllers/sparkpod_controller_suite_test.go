@@ -23,7 +23,7 @@ var _ = Describe("SparkPodController", func() {
 	Context("When reconciling driver pod", func() {
 
 		ctx := context.Background()
-		sparkAppId := "my-spark-app-1"
+		sparkAppID := "my-spark-app-1"
 		nsName := "test-ns"
 		driverPodName := "my-spark-driver"
 		executorPodName := "my-spark-executor"
@@ -34,12 +34,12 @@ var _ = Describe("SparkPodController", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: nsName},
 			}
 
-			driverPod := getTestPod(nsName, driverPodName, "", DriverRole, sparkAppId, false)
+			driverPod := getTestPod(nsName, driverPodName, "", DriverRole, sparkAppID, false)
 
 			Expect(k8sClient.Create(ctx, ns)).Should(Succeed())
 			Expect(k8sClient.Create(ctx, driverPod)).Should(Succeed())
 
-			lookupKey := types.NamespacedName{Name: sparkAppId, Namespace: driverPod.Namespace}
+			lookupKey := types.NamespacedName{Name: sparkAppID, Namespace: driverPod.Namespace}
 			created := &v1alpha1.SparkApplication{}
 
 			Eventually(func() bool {
@@ -47,7 +47,7 @@ var _ = Describe("SparkPodController", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			Expect(created.Spec.ApplicationId).Should(Equal(sparkAppId))
+			Expect(created.Spec.ApplicationID).Should(Equal(sparkAppID))
 			Expect(created.Spec.ApplicationName).Should(Equal(driverPod.Name))
 			Expect(created.Spec.Heritage).Should(Equal(v1alpha1.SparkHeritageSubmit))
 			Expect(created.Status.Data.Driver.Name).Should(Equal(driverPod.Name))
@@ -75,17 +75,17 @@ var _ = Describe("SparkPodController", func() {
 			Expect(len(updatedPod.OwnerReferences)).Should(Equal(1))
 			Expect(updatedPod.OwnerReferences[0].APIVersion).Should(Equal(apiVersion))
 			Expect(updatedPod.OwnerReferences[0].Kind).Should(Equal(sparkApplicationKind))
-			Expect(updatedPod.OwnerReferences[0].Name).Should(Equal(sparkAppId))
+			Expect(updatedPod.OwnerReferences[0].Name).Should(Equal(sparkAppID))
 
 		})
 
 		It("Should add executors to CR as they come", func() {
 
-			executorPod := getTestPod(nsName, executorPodName, "", ExecutorRole, sparkAppId, false)
+			executorPod := getTestPod(nsName, executorPodName, "", ExecutorRole, sparkAppID, false)
 
 			Expect(k8sClient.Create(ctx, executorPod)).Should(Succeed())
 
-			lookupKey := types.NamespacedName{Name: sparkAppId, Namespace: nsName}
+			lookupKey := types.NamespacedName{Name: sparkAppID, Namespace: nsName}
 			updated := &v1alpha1.SparkApplication{}
 
 			Eventually(func() bool {

@@ -7,7 +7,7 @@ type Environment struct {
 
 // Application is the Spark API representation of a Spark application
 type Application struct {
-	Id       string    `json:"id"`
+	ID       string    `json:"id"`
 	Name     string    `json:"name"`
 	Attempts []Attempt `json:"attempts"`
 }
@@ -26,8 +26,8 @@ type Attempt struct {
 // Stage is the Spark API representation of a Spark application stage
 type Stage struct {
 	Status          string `json:"status"`
-	StageId         int    `json:"stageId"`
-	AttemptId       int    `json:"attemptId"`
+	StageID         int    `json:"stageID"`
+	AttemptID       int    `json:"attemptID"`
 	InputBytes      int64  `json:"inputBytes"`
 	OutputBytes     int64  `json:"outputBytes"`
 	ExecutorCpuTime int64  `json:"executorCpuTime"`
@@ -35,7 +35,7 @@ type Stage struct {
 
 // Executor is the Spark API representation of a Spark executor
 type Executor struct {
-	Id                string                     `json:"id"`
+	ID                string                     `json:"id"`
 	IsActive          bool                       `json:"isActive"`
 	AddTime           string                     `json:"addTime"`
 	RemoveTime        string                     `json:"removeTime"`

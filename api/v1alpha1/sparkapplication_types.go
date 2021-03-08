@@ -33,7 +33,7 @@ const (
 type SparkApplicationSpec struct {
 
 	//uniquely identifies the spark application, and is shared as a label on all driver and executor pods
-	ApplicationId string `json:"applicationId"`
+	ApplicationID string `json:"applicationId"`
 
 	//the name of the spark application
 	ApplicationName string `json:"applicationName"`
@@ -102,7 +102,7 @@ type Attempt struct {
 
 type Executor struct {
 	//the executor ID
-	Id string `json:"id"`
+	ID string `json:"id"`
 	//is the executor currently active
 	IsActive bool `json:"isActive"`
 	//the timestamp of executor added event
