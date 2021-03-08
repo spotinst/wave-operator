@@ -2,7 +2,9 @@ package tide
 
 import (
 	"context"
+	"embed"
 	"fmt"
+	"path"
 	"reflect"
 	"strings"
 	"time"
@@ -11,7 +13,6 @@ import (
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/catalog"
 	"github.com/spotinst/wave-operator/install"
-	"github.com/spotinst/wave-operator/tide/box"
 	tideconfig "github.com/spotinst/wave-operator/tide/config"
 	goyaml "gopkg.in/yaml.v3"
 	v1 "k8s.io/api/core/v1"
@@ -59,6 +60,14 @@ const (
 var (
 	scheme = runtime.NewScheme()
 )
+
+//go:embed components/*
+var components embed.FS
+var componentDirName string = "components"
+
+//go:embed crds/*
+var crds embed.FS
+var crdDirName = "crds"
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
@@ -206,13 +215,13 @@ func (m *manager) getControllerRuntimeClient() (ctrlrt.Client, error) {
 func (m *manager) loadCRD(name string) (*apiextensions.CustomResourceDefinition, error) {
 
 	crd := &apiextensions.CustomResourceDefinition{}
-	b := box.Boxed.Get(name)
-	if b == nil {
-		return nil, fmt.Errorf("crd %s not found", name)
+	data, err := crds.ReadFile(path.Join(crdDirName, name))
+	if err != nil {
+		return nil, fmt.Errorf("crd %s not readable, %w", name, err)
 	}
 
 	serializer := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
-	_, _, err := serializer.Decode(b, &schema.GroupVersionKind{
+	_, _, err = serializer.Decode(data, &schema.GroupVersionKind{
 		Group:   "apiextensions.k8s.io",
 		Version: runtime.APIVersionInternal,
 		Kind:    "CustomResourceDefinition",
@@ -225,32 +234,37 @@ func (m *manager) loadCRD(name string) (*apiextensions.CustomResourceDefinition,
 }
 
 func (m *manager) loadWaveComponents() ([]*v1alpha1.WaveComponent, error) {
-	boxed := box.Boxed.List()
-	var manifests []string
-	for _, n := range boxed {
-		// m.log.Info("reading box", "item", n)
-		if strings.HasPrefix(n, "/v1alpha1_wavecomponent") {
-			manifests = append(manifests, n)
-		}
+
+	dd, err := components.ReadDir(componentDirName)
+	if err != nil {
+		return nil, fmt.Errorf("components in %s can't be listed, %w", componentDirName, err)
 	}
+	manifests := make([]string, 0, len(dd))
+	for _, d := range dd {
+		manifests = append(manifests, path.Join(componentDirName, d.Name()))
+	}
+
 	if len(manifests) == 0 {
 		return nil, fmt.Errorf("No wave component manifests found")
 	}
-	waveComponents := make([]*v1alpha1.WaveComponent, len(manifests))
+	waveComponents := make([]*v1alpha1.WaveComponent, 0, len(manifests))
 
-	for i, mm := range manifests {
+	for _, mm := range manifests {
 		comp := &v1alpha1.WaveComponent{}
-		b := box.Boxed.Get(mm)
+		data, err := components.ReadFile(mm)
+		if err != nil {
+			return nil, fmt.Errorf("cannot read file %s, %w", mm, err)
+		}
 		serializer := yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
-		_, _, err := serializer.Decode(b, &schema.GroupVersionKind{
+		_, _, err = serializer.Decode(data, &schema.GroupVersionKind{
 			Group:   "wave.spot.io",
 			Version: "v1alpha1",
 			Kind:    "WaveComponent",
 		}, comp)
 		if err != nil {
-			return waveComponents, fmt.Errorf("cannot load wave component, %w", err)
+			return nil, fmt.Errorf("cannot load wave component %s, %w", mm, err)
 		}
-		waveComponents[i] = comp
+		waveComponents = append(waveComponents, comp)
 	}
 	return waveComponents, nil
 }

@@ -4,8 +4,15 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
+
+func getTestLogger() logr.Logger {
+	return zap.New(zap.UseDevMode(true))
+}
 
 func TestSetImageInValues(t *testing.T) {
 
@@ -76,4 +83,26 @@ image:
 	image = ":"
 	_, err = setImageInValues(valuesString, image)
 	assert.Error(t, err, image)
+}
+
+func TestLoadCrd(t *testing.T) {
+	logger := getTestLogger()
+	iface, err := NewManager(logger)
+	require.NoError(t, err)
+	m, ok := iface.(*manager)
+	require.True(t, ok)
+	w, err := m.loadCrd("wave.spot.io_wavecomponents.yaml")
+	assert.NoError(t, err)
+	assert.Equal(t, "wavecomponents.wave.spot.io", w.Name)
+}
+
+func TestLoadComponents(t *testing.T) {
+	logger := getTestLogger()
+	iface, err := NewManager(logger)
+	require.NoError(t, err)
+	m, ok := iface.(*manager)
+	require.True(t, ok)
+	ww, err := m.loadWaveComponents()
+	assert.NoError(t, err)
+	assert.Equal(t, 4, len(ww))
 }
