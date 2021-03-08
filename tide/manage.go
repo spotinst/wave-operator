@@ -619,7 +619,7 @@ func (m *manager) installWaveOperator(ctx context.Context, waveOperatorImage str
 
 	installer := install.GetHelm("", m.kubeClientGetter, m.log)
 	existing, err := installer.Get(m.spec.Name)
-	if err != nil {
+	if err != nil && err != install.ErrReleaseNotFound {
 		return fmt.Errorf("error checking release, %w", err)
 	}
 	if existing == nil {
