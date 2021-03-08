@@ -70,22 +70,22 @@ func TestGetApplicationInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	applicationId := "spark-123"
+	applicationID := "spark-123"
 
 	t.Run("whenError", func(tt *testing.T) {
 
 		m := mock_client.NewMockClient(ctrl)
-		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).Times(1)
-		m.EXPECT().GetEnvironment(applicationId).Return(nil, fmt.Errorf("test error")).Times(1)
-		m.EXPECT().GetStages(applicationId).Return(getStagesResponse(), nil).Times(0)
-		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).Times(0)
+		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
+		m.EXPECT().GetEnvironment(applicationID).Return(nil, fmt.Errorf("test error")).Times(1)
+		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(0)
+		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(0)
 
 		manager := &manager{
 			client: m,
 			logger: getTestLogger(),
 		}
 
-		_, err := manager.GetApplicationInfo(applicationId, -1, logger)
+		_, err := manager.GetApplicationInfo(applicationID, -1, logger)
 		assert.Error(tt, err)
 		assert.Contains(tt, err.Error(), "test error")
 
@@ -94,17 +94,17 @@ func TestGetApplicationInfo(t *testing.T) {
 	t.Run("whenSuccessful", func(tt *testing.T) {
 
 		m := mock_client.NewMockClient(ctrl)
-		m.EXPECT().GetApplication(applicationId).Return(getApplicationResponse(), nil).Times(1)
-		m.EXPECT().GetEnvironment(applicationId).Return(getEnvironmentResponse(), nil).Times(1)
-		m.EXPECT().GetStages(applicationId).Return(getStagesResponse(), nil).Times(1)
-		m.EXPECT().GetAllExecutors(applicationId).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
+		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
+		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
+		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
 
 		manager := &manager{
 			client: m,
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationId, -1, logger)
+		res, err := manager.GetApplicationInfo(applicationID, -1, logger)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, "my-test-application", res.ApplicationName)
@@ -112,7 +112,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		assert.Equal(tt, int64(900), res.TotalNewExecutorCpuTime)
 		assert.Equal(tt, int64(500), res.TotalNewInputBytes)
 		assert.Equal(tt, int64(700), res.TotalNewOutputBytes)
-		assert.Equal(tt, 2, res.MaxProcessedStageId)
+		assert.Equal(tt, 2, res.MaxProcessedStageID)
 
 		assert.Equal(tt, 2, len(res.SparkProperties))
 		assert.Equal(tt, "val1", res.SparkProperties["prop1"])
@@ -143,8 +143,8 @@ func TestStageAggregation(t *testing.T) {
 		for i := 0; i < len(statuses); i++ {
 			stage := sparkapiclient.Stage{
 				Status:          statuses[i],
-				StageId:         i,
-				AttemptId:       1,
+				StageID:         i,
+				AttemptID:       1,
 				InputBytes:      inputBytesPerStage,
 				OutputBytes:     outputBytesPerStage,
 				ExecutorCpuTime: cpuTimePerStage,
@@ -156,7 +156,7 @@ func TestStageAggregation(t *testing.T) {
 
 	type testCase struct {
 		statuses               []string
-		oldMaxProcessedStageId int
+		oldMaxProcessedStageID int
 		expectedResult         stageWindowAggregationResult
 		message                string
 	}
@@ -164,155 +164,155 @@ func TestStageAggregation(t *testing.T) {
 	testCases := []testCase{
 		{
 			statuses:               []string{},
-			oldMaxProcessedStageId: -1,
+			oldMaxProcessedStageID: -1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     0,
 				totalNewInputBytes:      0,
 				totalNewExecutorCpuTime: 0,
-				newMaxProcessedStageId:  -1,
+				newMaxProcessedStageID:  -1,
 			},
 			message: "whenNoStagesReceived",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldMaxProcessedStageId: -1,
+			oldMaxProcessedStageID: -1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     3 * outputBytesPerStage,
 				totalNewInputBytes:      3 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 3 * cpuTimePerStage,
-				newMaxProcessedStageId:  2,
+				newMaxProcessedStageID:  2,
 			},
 			message: "whenStagesCompleteInOrder_1",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldMaxProcessedStageId: 0,
+			oldMaxProcessedStageID: 0,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     2 * outputBytesPerStage,
 				totalNewInputBytes:      2 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
-				newMaxProcessedStageId:  2,
+				newMaxProcessedStageID:  2,
 			},
 			message: "whenStagesCompleteInOrder_2",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldMaxProcessedStageId: 1,
+			oldMaxProcessedStageID: 1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     1 * outputBytesPerStage,
 				totalNewInputBytes:      1 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newMaxProcessedStageId:  2,
+				newMaxProcessedStageID:  2,
 			},
 			message: "whenStagesCompleteInOrder_3",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldMaxProcessedStageId: 2,
+			oldMaxProcessedStageID: 2,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     0,
 				totalNewInputBytes:      0,
 				totalNewExecutorCpuTime: 0,
-				newMaxProcessedStageId:  2,
+				newMaxProcessedStageID:  2,
 			},
 			message: "whenStagesCompleteInOrder_4",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldMaxProcessedStageId: 2,
+			oldMaxProcessedStageID: 2,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     1 * outputBytesPerStage,
 				totalNewInputBytes:      1 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newMaxProcessedStageId:  3,
+				newMaxProcessedStageID:  3,
 			},
 			message: "whenStagesCompleteInOrder_5",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldMaxProcessedStageId: -1,
+			oldMaxProcessedStageID: -1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     4 * outputBytesPerStage,
 				totalNewInputBytes:      4 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newMaxProcessedStageId:  3,
+				newMaxProcessedStageID:  3,
 			},
 			message: "whenStagesCompleteInOrder_6",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageId: -1,
+			oldMaxProcessedStageID: -1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     2 * outputBytesPerStage,
 				totalNewInputBytes:      2 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
-				newMaxProcessedStageId:  1,
+				newMaxProcessedStageID:  1,
 			},
 			message: "whenStagesCompleteOutOfOrder_1",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageId: 0,
+			oldMaxProcessedStageID: 0,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     1 * outputBytesPerStage,
 				totalNewInputBytes:      1 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newMaxProcessedStageId:  1,
+				newMaxProcessedStageID:  1,
 			},
 			message: "whenStagesCompleteOutOfOrder_2",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageId: 1,
+			oldMaxProcessedStageID: 1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     0,
 				totalNewInputBytes:      0,
 				totalNewExecutorCpuTime: 0,
-				newMaxProcessedStageId:  1,
+				newMaxProcessedStageID:  1,
 			},
 			message: "whenStagesCompleteOutOfOrder_3",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageId: 1,
+			oldMaxProcessedStageID: 1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     2 * outputBytesPerStage,
 				totalNewInputBytes:      2 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
-				newMaxProcessedStageId:  3,
+				newMaxProcessedStageID:  3,
 			},
 			message: "whenStagesCompleteOutOfOrder_4",
 		},
 		{
 			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "COMPLETE", "COMPLETE"},
-			oldMaxProcessedStageId: 1,
+			oldMaxProcessedStageID: 1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     4 * outputBytesPerStage,
 				totalNewInputBytes:      4 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newMaxProcessedStageId:  5,
+				newMaxProcessedStageID:  5,
 			},
 			message: "whenStagesCompleteOutOfOrder_5",
 		},
 		{
 			statuses:               []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageId: -1,
+			oldMaxProcessedStageID: -1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     3 * outputBytesPerStage,
 				totalNewInputBytes:      3 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 3 * cpuTimePerStage,
-				newMaxProcessedStageId:  2,
+				newMaxProcessedStageID:  2,
 			},
 			message: "whenStagesCompleteOutOfOrder_6",
 		},
 		{
 			statuses:               []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageId: 100,
+			oldMaxProcessedStageID: 100,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     0,
 				totalNewInputBytes:      0,
 				totalNewExecutorCpuTime: 0,
-				newMaxProcessedStageId:  100,
+				newMaxProcessedStageID:  100,
 			},
 			message: "whenOnlyOldStagesReceived",
 		},
@@ -321,9 +321,9 @@ func TestStageAggregation(t *testing.T) {
 	for _, tc := range testCases {
 
 		stages := getStages(tc.statuses)
-		res := aggregateStagesWindow(stages, tc.oldMaxProcessedStageId, logger)
+		res := aggregateStagesWindow(stages, tc.oldMaxProcessedStageID, logger)
 
-		assert.Equal(t, tc.expectedResult.newMaxProcessedStageId, res.newMaxProcessedStageId, tc.message)
+		assert.Equal(t, tc.expectedResult.newMaxProcessedStageID, res.newMaxProcessedStageID, tc.message)
 		assert.Equal(t, tc.expectedResult.totalNewExecutorCpuTime, res.totalNewExecutorCpuTime, tc.message)
 		assert.Equal(t, tc.expectedResult.totalNewInputBytes, res.totalNewInputBytes, tc.message)
 		assert.Equal(t, tc.expectedResult.totalNewOutputBytes, res.totalNewOutputBytes, tc.message)
@@ -336,7 +336,7 @@ func TestStageAggregation(t *testing.T) {
 		stages[2], stages[5] = stages[5], stages[2]
 
 		res := aggregateStagesWindow(stages, -1, logger)
-		assert.Equal(t, 2, res.newMaxProcessedStageId)
+		assert.Equal(t, 2, res.newMaxProcessedStageID)
 		assert.Equal(t, int64(3*cpuTimePerStage), res.totalNewExecutorCpuTime)
 		assert.Equal(t, int64(3*inputBytesPerStage), res.totalNewInputBytes)
 		assert.Equal(t, int64(3*outputBytesPerStage), res.totalNewOutputBytes)
@@ -352,8 +352,8 @@ func TestStageAggregation(t *testing.T) {
 		// Should not log error, no stages seen before
 		aggregateStagesWindow(stages, -1, logger)
 
-		stages[0].StageId = 4
-		stages[1].StageId = 5
+		stages[0].StageID = 4
+		stages[1].StageID = 5
 
 		// Should not log error
 		aggregateStagesWindow(stages, 3, logger)
@@ -380,7 +380,7 @@ func getTestLogger() logr.Logger {
 
 func getApplicationResponse() *sparkapiclient.Application {
 	return &sparkapiclient.Application{
-		Id:   "spark-123",
+		ID:   "spark-123",
 		Name: "my-test-application",
 		Attempts: []sparkapiclient.Attempt{
 			{
@@ -409,16 +409,16 @@ func getStagesResponse() []sparkapiclient.Stage {
 	return []sparkapiclient.Stage{
 		{
 			Status:          "COMPLETE",
-			StageId:         1,
-			AttemptId:       2,
+			StageID:         1,
+			AttemptID:       2,
 			InputBytes:      100,
 			OutputBytes:     200,
 			ExecutorCpuTime: 300,
 		},
 		{
 			Status:          "COMPLETE",
-			StageId:         2,
-			AttemptId:       3,
+			StageID:         2,
+			AttemptID:       3,
 			InputBytes:      400,
 			OutputBytes:     500,
 			ExecutorCpuTime: 600,
@@ -445,15 +445,15 @@ func getEnvironmentResponse() *sparkapiclient.Environment {
 func getExecutorsResponse() []sparkapiclient.Executor {
 	return []sparkapiclient.Executor{
 		{
-			Id:      "driver",
+			ID:      "driver",
 			AddTime: "2020-12-14T14:07:27.142GMT",
 		},
 		{
-			Id:      "1",
+			ID:      "1",
 			AddTime: "2020-12-14T15:17:37.142GMT",
 		},
 		{
-			Id:      "2",
+			ID:      "2",
 			AddTime: "2020-12-14T16:27:47.142GMT",
 		},
 	}

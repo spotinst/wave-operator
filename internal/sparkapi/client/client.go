@@ -17,10 +17,10 @@ const (
 )
 
 type Client interface {
-	GetApplication(applicationId string) (*Application, error)
-	GetEnvironment(applicationId string) (*Environment, error)
-	GetStages(applicationId string) ([]Stage, error)
-	GetAllExecutors(applicationId string) ([]Executor, error)
+	GetApplication(applicationID string) (*Application, error)
+	GetEnvironment(applicationID string) (*Environment, error)
+	GetStages(applicationID string) ([]Stage, error)
+	GetAllExecutors(applicationID string) ([]Executor, error)
 }
 
 type client struct {
@@ -43,9 +43,9 @@ func NewHistoryServerClient(service *corev1.Service, clientSet kubernetes.Interf
 	return c
 }
 
-func (c client) GetApplication(applicationId string) (*Application, error) {
+func (c client) GetApplication(applicationID string) (*Application, error) {
 
-	path := c.getApplicationURLPath(applicationId)
+	path := c.getApplicationURLPath(applicationID)
 	resp, err := c.transportClient.Get(path)
 	if err != nil {
 		return nil, err
@@ -60,9 +60,9 @@ func (c client) GetApplication(applicationId string) (*Application, error) {
 	return application, nil
 }
 
-func (c client) GetEnvironment(applicationId string) (*Environment, error) {
+func (c client) GetEnvironment(applicationID string) (*Environment, error) {
 
-	path := c.getEnvironmentURLPath(applicationId)
+	path := c.getEnvironmentURLPath(applicationID)
 	resp, err := c.transportClient.Get(path)
 	if err != nil {
 		return nil, err
@@ -77,9 +77,9 @@ func (c client) GetEnvironment(applicationId string) (*Environment, error) {
 	return environment, nil
 }
 
-func (c client) GetStages(applicationId string) ([]Stage, error) {
+func (c client) GetStages(applicationID string) ([]Stage, error) {
 
-	path := c.getStagesURLPath(applicationId)
+	path := c.getStagesURLPath(applicationID)
 	resp, err := c.transportClient.Get(path)
 	if err != nil {
 		return nil, err
@@ -94,9 +94,9 @@ func (c client) GetStages(applicationId string) ([]Stage, error) {
 	return stages, nil
 }
 
-func (c client) GetAllExecutors(applicationId string) ([]Executor, error) {
+func (c client) GetAllExecutors(applicationID string) ([]Executor, error) {
 
-	path := c.getAllExecutorsURLPath(applicationId)
+	path := c.getAllExecutorsURLPath(applicationID)
 	resp, err := c.transportClient.Get(path)
 	if err != nil {
 		return nil, err
@@ -111,18 +111,18 @@ func (c client) GetAllExecutors(applicationId string) ([]Executor, error) {
 	return executors, nil
 }
 
-func (c client) getEnvironmentURLPath(applicationId string) string {
-	return fmt.Sprintf("%s/applications/%s/environment", apiVersionUrl, applicationId)
+func (c client) getEnvironmentURLPath(applicationID string) string {
+	return fmt.Sprintf("%s/applications/%s/environment", apiVersionUrl, applicationID)
 }
 
-func (c client) getApplicationURLPath(applicationId string) string {
-	return fmt.Sprintf("%s/applications/%s", apiVersionUrl, applicationId)
+func (c client) getApplicationURLPath(applicationID string) string {
+	return fmt.Sprintf("%s/applications/%s", apiVersionUrl, applicationID)
 }
 
-func (c client) getStagesURLPath(applicationId string) string {
-	return fmt.Sprintf("%s/applications/%s/stages", apiVersionUrl, applicationId)
+func (c client) getStagesURLPath(applicationID string) string {
+	return fmt.Sprintf("%s/applications/%s/stages", apiVersionUrl, applicationID)
 }
 
-func (c client) getAllExecutorsURLPath(applicationId string) string {
-	return fmt.Sprintf("%s/applications/%s/allexecutors", apiVersionUrl, applicationId)
+func (c client) getAllExecutorsURLPath(applicationID string) string {
+	return fmt.Sprintf("%s/applications/%s/allexecutors", apiVersionUrl, applicationID)
 }

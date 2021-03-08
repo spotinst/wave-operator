@@ -42,14 +42,14 @@ var deleteCmd = &cobra.Command{
 }
 
 var (
-	deleteEnvironmentCrd bool
+	deleteEnvironmentCRD bool
 	deleteTideRBAC       bool
 )
 
 func init() {
 	rootCmd.AddCommand(deleteCmd)
 
-	deleteCmd.Flags().BoolVar(&deleteEnvironmentCrd, "delete-environment-crd", false, "should the Wave Environment CRD be deleted")
+	deleteCmd.Flags().BoolVar(&deleteEnvironmentCRD, "delete-environment-crd", false, "should the Wave Environment CRD be deleted")
 	deleteCmd.Flags().BoolVar(&deleteTideRBAC, "delete-tide-rbac", false, "should the Tide RBAC objects be deleted")
 }
 
@@ -69,7 +69,7 @@ func delete(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	err = manager.DeleteConfiguration(deleteEnvironmentCrd)
+	err = manager.DeleteConfiguration(deleteEnvironmentCRD)
 	if err != nil {
 		logger.Error(err, "could not delete wave configuration")
 		os.Exit(1)

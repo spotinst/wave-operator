@@ -36,9 +36,9 @@ const (
 	apiVersion             = "wave.spot.io/v1alpha1"
 	sparkApplicationKind   = "SparkApplication"
 	waveKindLabel          = "wave.spot.io/kind"
-	waveApplicationIdLabel = "wave.spot.io/application-id"
+	waveApplicationIDLabel = "wave.spot.io/application-id"
 
-	maxProcessedStageIdAnnotation = "wave.spot.io/maxProcessedStageId"
+	maxProcessedStageIDAnnotation = "wave.spot.io/maxProcessedStageID"
 
 	requeueAfterTimeout = 10 * time.Second
 	podDeletionTimeout  = 5 * time.Minute
@@ -87,13 +87,13 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	sparkApplicationId, ok := p.Labels[SparkAppLabel]
+	sparkApplicationID, ok := p.Labels[SparkAppLabel]
 	if !ok {
 		// This is not a Spark application pod, ignore
 		return ctrl.Result{}, nil
 	}
 
-	if sparkApplicationId == "" {
+	if sparkApplicationID == "" {
 		err := fmt.Errorf("spark application ID label value missing")
 		log.Error(err, "error handling spark pod")
 		return ctrl.Result{}, nil // Just log error
@@ -107,7 +107,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	log = r.Log.WithValues("role", sparkRole, "name", p.Name, "namespace", p.Namespace,
-		"sparkApplicationId", sparkApplicationId, "phase", p.Status.Phase, "deleted", !p.ObjectMeta.DeletionTimestamp.IsZero())
+		"sparkApplicationID", sparkApplicationID, "phase", p.Status.Phase, "deleted", !p.ObjectMeta.DeletionTimestamp.IsZero())
 
 	log.Info("Reconciling")
 
@@ -148,10 +148,10 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Get or create Spark application CR
-	cr, err := r.getSparkApplicationCr(ctx, p.Namespace, sparkApplicationId)
+	cr, err := r.getSparkApplicationCR(ctx, p.Namespace, sparkApplicationID)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			if !p.DeletionTimestamp.IsZero() && hasWaveSparkApplicationOwnerRef(p, sparkApplicationId) {
+			if !p.DeletionTimestamp.IsZero() && hasWaveSparkApplicationOwnerRef(p, sparkApplicationID) {
 				// The Wave Spark application CR does not exist but the pod has an owner reference to it,
 				// and the pod is being deleted -> this is a garbage collection event
 				changed = removeFinalizer(p)
@@ -170,7 +170,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				log.Info("Ignoring garbage collection event")
 				return ctrl.Result{}, nil
 			} else if sparkRole == DriverRole {
-				err := r.createNewSparkApplicationCr(ctx, p, sparkApplicationId, log)
+				err := r.createNewSparkApplicationCR(ctx, p, sparkApplicationID, log)
 				if err != nil {
 					log.Error(err, "could not create spark application cr")
 					return ctrl.Result{}, err
@@ -277,19 +277,19 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 
 	deepCopy := cr.DeepCopy()
 
-	updatedDriverPodCr := newPodCR(pod, &deepCopy.Status.Data.Driver, log)
-	deepCopy.Status.Data.Driver = updatedDriverPodCr
+	updatedDriverPodCR := newPodCR(pod, &deepCopy.Status.Data.Driver, log)
+	deepCopy.Status.Data.Driver = updatedDriverPodCR
 
 	// Fetch information from Spark API
 	// Let's update the driver pod information even though the Spark API call fails
 
-	maxProcessedStageId, err := getMaxProcessedStageId(deepCopy)
+	maxProcessedStageID, err := getMaxProcessedStageID(deepCopy)
 	if err != nil {
 		return fmt.Errorf("could not get max processed stage ID, %w", err)
 	}
 
 	var sparkApiError error
-	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationId, maxProcessedStageId, log)
+	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationID, maxProcessedStageID, log)
 	if err != nil {
 		sparkApiError = fmt.Errorf("could not get spark api application information, %w", err)
 	} else {
@@ -396,11 +396,11 @@ func podDeletionTimeoutPassed(pod *corev1.Pod) bool {
 	return false
 }
 
-func hasWaveSparkApplicationOwnerRef(pod *corev1.Pod, applicationId string) bool {
+func hasWaveSparkApplicationOwnerRef(pod *corev1.Pod, applicationID string) bool {
 	for _, ownerRef := range pod.OwnerReferences {
 		if ownerRef.APIVersion == apiVersion &&
 			ownerRef.Kind == sparkApplicationKind &&
-			ownerRef.Name == applicationId {
+			ownerRef.Name == applicationID {
 			return true
 		}
 	}
@@ -412,24 +412,24 @@ func (r *SparkPodReconciler) handleExecutor(ctx context.Context, pod *corev1.Pod
 	deepCopy := cr.DeepCopy()
 
 	// Do we already have an entry for this executor in the CR?
-	foundIdx := -1
+	foundIDx := -1
 	for idx, executor := range deepCopy.Status.Data.Executors {
 		if executor.UID == string(pod.UID) {
-			foundIdx = idx
+			foundIDx = idx
 			break
 		}
 	}
 
-	if foundIdx == -1 {
+	if foundIDx == -1 {
 		// Create new executor entry
 		newExecutor := newPodCR(pod, nil, log)
 		newExecutors := append(deepCopy.Status.Data.Executors, newExecutor)
 		deepCopy.Status.Data.Executors = newExecutors
 	} else {
 		// Update existing executor entry
-		existingExecutor := &deepCopy.Status.Data.Executors[foundIdx]
+		existingExecutor := &deepCopy.Status.Data.Executors[foundIDx]
 		updatedExecutor := newPodCR(pod, existingExecutor, log)
-		deepCopy.Status.Data.Executors[foundIdx] = updatedExecutor
+		deepCopy.Status.Data.Executors[foundIDx] = updatedExecutor
 	}
 
 	err := r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
@@ -440,35 +440,35 @@ func (r *SparkPodReconciler) handleExecutor(ctx context.Context, pod *corev1.Pod
 	return nil
 }
 
-func newPodCR(pod *corev1.Pod, existingPodCr *v1alpha1.Pod, log logr.Logger) v1alpha1.Pod {
-	podCr := v1alpha1.Pod{}
+func newPodCR(pod *corev1.Pod, existingPodCR *v1alpha1.Pod, log logr.Logger) v1alpha1.Pod {
+	podCR := v1alpha1.Pod{}
 
-	podCr.UID = string(pod.UID)
-	podCr.Namespace = pod.Namespace
-	podCr.Name = pod.Name
-	podCr.Phase = pod.Status.Phase
-	podCr.Statuses = pod.Status.ContainerStatuses
-	podCr.CreationTimestamp = pod.CreationTimestamp
-	podCr.DeletionTimestamp = pod.DeletionTimestamp
-	podCr.Labels = pod.Labels
-	podCr.StateHistory = getUpdatedPodStateHistory(pod, existingPodCr, log)
+	podCR.UID = string(pod.UID)
+	podCR.Namespace = pod.Namespace
+	podCR.Name = pod.Name
+	podCR.Phase = pod.Status.Phase
+	podCR.Statuses = pod.Status.ContainerStatuses
+	podCR.CreationTimestamp = pod.CreationTimestamp
+	podCR.DeletionTimestamp = pod.DeletionTimestamp
+	podCR.Labels = pod.Labels
+	podCR.StateHistory = getUpdatedPodStateHistory(pod, existingPodCR, log)
 
-	if podCr.Statuses == nil {
-		podCr.Statuses = make([]corev1.ContainerStatus, 0)
+	if podCR.Statuses == nil {
+		podCR.Statuses = make([]corev1.ContainerStatus, 0)
 	}
 
-	if podCr.Labels == nil {
-		podCr.Labels = make(map[string]string, 0)
+	if podCR.Labels == nil {
+		podCR.Labels = make(map[string]string, 0)
 	}
 
-	return podCr
+	return podCR
 }
 
-func getUpdatedPodStateHistory(pod *corev1.Pod, existingPodCr *v1alpha1.Pod, log logr.Logger) []v1alpha1.PodStateHistoryEntry {
+func getUpdatedPodStateHistory(pod *corev1.Pod, existingPodCR *v1alpha1.Pod, log logr.Logger) []v1alpha1.PodStateHistoryEntry {
 	var stateHistory []v1alpha1.PodStateHistoryEntry
 
-	if existingPodCr != nil {
-		stateHistory = existingPodCr.StateHistory
+	if existingPodCR != nil {
+		stateHistory = existingPodCR.StateHistory
 	}
 
 	if len(stateHistory) == 0 {
@@ -546,14 +546,14 @@ func podStateHistoryEntryEqual(a v1alpha1.PodStateHistoryEntry, b v1alpha1.PodSt
 	return true
 }
 
-func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationId string, maxProcessedStageId int, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
+func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationID string, maxProcessedStageID int, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
 
 	manager, err := r.getSparkApiManager(clientSet, driverPod, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api manager, %w", err)
 	}
 
-	applicationInfo, err := manager.GetApplicationInfo(applicationId, maxProcessedStageId, logger)
+	applicationInfo, err := manager.GetApplicationInfo(applicationID, maxProcessedStageID, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api application info, %w", err)
 	}
@@ -570,7 +570,7 @@ func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	deepCopy.Status.Data.RunStatistics.TotalInputBytes += sparkApiInfo.TotalNewInputBytes
 	deepCopy.Status.Data.RunStatistics.TotalOutputBytes += sparkApiInfo.TotalNewOutputBytes
 
-	setMaxProcessedStageId(deepCopy, sparkApiInfo.MaxProcessedStageId)
+	setMaxProcessedStageID(deepCopy, sparkApiInfo.MaxProcessedStageID)
 
 	attempts := make([]v1alpha1.Attempt, 0, len(sparkApiInfo.Attempts))
 	for _, apiAttempt := range sparkApiInfo.Attempts {
@@ -589,7 +589,7 @@ func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	executors := make([]v1alpha1.Executor, 0, len(sparkApiInfo.Executors))
 	for _, apiExecutor := range sparkApiInfo.Executors {
 		executor := v1alpha1.Executor{
-			Id:                apiExecutor.Id,
+			ID:                apiExecutor.ID,
 			IsActive:          apiExecutor.IsActive,
 			AddTime:           apiExecutor.AddTime,
 			RemoveTime:        apiExecutor.RemoveTime,
@@ -641,9 +641,9 @@ func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
 	return "", fmt.Errorf("could not determine heritage")
 }
 
-func (r *SparkPodReconciler) getSparkApplicationCr(ctx context.Context, namespace string, applicationId string) (*v1alpha1.SparkApplication, error) {
+func (r *SparkPodReconciler) getSparkApplicationCR(ctx context.Context, namespace string, applicationID string) (*v1alpha1.SparkApplication, error) {
 	app := v1alpha1.SparkApplication{}
-	err := r.Get(ctx, ctrlclient.ObjectKey{Name: applicationId, Namespace: namespace}, &app)
+	err := r.Get(ctx, ctrlclient.ObjectKey{Name: applicationID, Namespace: namespace}, &app)
 	if err != nil {
 		return nil, err
 	}
@@ -651,17 +651,17 @@ func (r *SparkPodReconciler) getSparkApplicationCr(ctx context.Context, namespac
 	return &app, nil
 }
 
-func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, driverPod *corev1.Pod, applicationId string, log logr.Logger) error {
+func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, driverPod *corev1.Pod, applicationID string, log logr.Logger) error {
 	cr := &v1alpha1.SparkApplication{}
 
 	cr.Labels = map[string]string{
 		waveKindLabel:          sparkApplicationKind, // Facilitates cost calculations
-		waveApplicationIdLabel: applicationId,        // Facilitates cost calculations
+		waveApplicationIDLabel: applicationID,        // Facilitates cost calculations
 	}
 
-	cr.Name = applicationId
+	cr.Name = applicationID
 	cr.Namespace = driverPod.Namespace
-	cr.Spec.ApplicationId = applicationId
+	cr.Spec.ApplicationID = applicationID
 	// We always need an application name, set it to driver pod name (will be updated with application name from Spark API)
 	cr.Spec.ApplicationName = driverPod.Name
 
@@ -686,26 +686,26 @@ func (r *SparkPodReconciler) createNewSparkApplicationCr(ctx context.Context, dr
 	return nil
 }
 
-func getMaxProcessedStageId(cr *v1alpha1.SparkApplication) (int, error) {
+func getMaxProcessedStageID(cr *v1alpha1.SparkApplication) (int, error) {
 	if cr.Annotations == nil {
 		// We haven't processed any stages yet
 		return -1, nil
 	}
-	val := cr.Annotations[maxProcessedStageIdAnnotation]
+	val := cr.Annotations[maxProcessedStageIDAnnotation]
 	if val == "" {
 		// We haven't processed any stages yet
 		return -1, nil
 	}
-	maxProcessedStageId, err := strconv.Atoi(val)
+	maxProcessedStageID, err := strconv.Atoi(val)
 	if err != nil {
 		return -1, fmt.Errorf("could not parse max processed stage ID: %q, %w", val, err)
 	}
-	return maxProcessedStageId, nil
+	return maxProcessedStageID, nil
 }
 
-func setMaxProcessedStageId(cr *v1alpha1.SparkApplication, maxProcessedStageId int) {
+func setMaxProcessedStageID(cr *v1alpha1.SparkApplication, maxProcessedStageID int) {
 	if cr.Annotations == nil {
 		cr.Annotations = make(map[string]string)
 	}
-	cr.Annotations[maxProcessedStageIdAnnotation] = strconv.Itoa(maxProcessedStageId)
+	cr.Annotations[maxProcessedStageIDAnnotation] = strconv.Itoa(maxProcessedStageID)
 }

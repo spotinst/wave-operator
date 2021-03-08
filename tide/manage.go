@@ -79,7 +79,7 @@ type Manager interface {
 	SetWaveInstallSpec(spec install.InstallSpec) error
 
 	SetConfiguration(config map[string]interface{}) (*v1alpha1.WaveEnvironment, error)
-	DeleteConfiguration(deleteEnvironmentCrd bool) error
+	DeleteConfiguration(deleteEnvironmentCRD bool) error
 	GetConfiguration() (*v1alpha1.WaveEnvironment, error)
 
 	Create(env *v1alpha1.WaveEnvironment) error
@@ -212,7 +212,7 @@ func (m *manager) getControllerRuntimeClient() (ctrlrt.Client, error) {
 	return rc, nil
 }
 
-func (m *manager) loadCrd(name string) (*apiextensions.CustomResourceDefinition, error) {
+func (m *manager) loadCRD(name string) (*apiextensions.CustomResourceDefinition, error) {
 
 	crd := &apiextensions.CustomResourceDefinition{}
 	data, err := crds.ReadFile(path.Join(crdDirName, name))
@@ -297,7 +297,7 @@ func (m *manager) SetConfiguration(input map[string]interface{}) (*v1alpha1.Wave
 		return nil, fmt.Errorf("can't determine state of certificate manager before installation, %w", err)
 	}
 
-	crd, err := m.loadCrd("/wave.spot.io_waveenvironments.yaml")
+	crd, err := m.loadCRD("/wave.spot.io_waveenvironments.yaml")
 	if err != nil {
 		return nil, err
 	}
@@ -489,9 +489,9 @@ func (m *manager) Delete() error {
 	return nil
 }
 
-func (m *manager) DeleteConfiguration(deleteEnvironmentCrd bool) error {
+func (m *manager) DeleteConfiguration(deleteEnvironmentCRD bool) error {
 
-	m.log.Info("Deleting configuration", "deleteEnvironmentCrd", deleteEnvironmentCrd)
+	m.log.Info("Deleting configuration", "deleteEnvironmentCRD", deleteEnvironmentCRD)
 
 	ctx := context.TODO()
 
@@ -530,8 +530,8 @@ func (m *manager) DeleteConfiguration(deleteEnvironmentCrd bool) error {
 		}
 	}
 
-	if crdPresent && deleteEnvironmentCrd {
-		crd, err := m.loadCrd("/wave.spot.io_waveenvironments.yaml")
+	if crdPresent && deleteEnvironmentCRD {
+		crd, err := m.loadCRD("/wave.spot.io_waveenvironments.yaml")
 		if err != nil {
 			return fmt.Errorf("could not load crd, %w", err)
 		}

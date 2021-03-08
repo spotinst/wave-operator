@@ -38,7 +38,7 @@ func TestGetApplication(t *testing.T) {
 		res, err := client.GetApplication("spark-123")
 		assert.NoError(tt, err)
 		assert.Equal(tt, "Spark Pi", res.Name)
-		assert.Equal(tt, "spark-123", res.Id)
+		assert.Equal(tt, "spark-123", res.ID)
 		assert.Equal(tt, 1, len(res.Attempts))
 		attempt := res.Attempts[0]
 		assert.Equal(tt, "3.0.0", attempt.AppSparkVersion)
@@ -84,8 +84,8 @@ func TestGetStages(t *testing.T) {
 		assert.Equal(tt, int64(5555), stage.OutputBytes)
 		assert.Equal(tt, int64(3333), stage.InputBytes)
 		assert.Equal(tt, int64(147527368), stage.ExecutorCpuTime)
-		assert.Equal(tt, 9, stage.AttemptId)
-		assert.Equal(tt, 7, stage.StageId)
+		assert.Equal(tt, 9, stage.AttemptID)
+		assert.Equal(tt, 7, stage.StageID)
 
 	})
 
@@ -155,7 +155,7 @@ func TestGetAllExecutors(t *testing.T) {
 		assert.NoError(tt, err)
 		assert.Equal(tt, 3, len(res))
 		for _, exec := range res {
-			id := exec.Id
+			id := exec.ID
 			assert.True(tt, id == "driver" || id == "1" || id == "2")
 			assert.NotEmpty(tt, exec.AddTime)
 
@@ -203,8 +203,8 @@ func getStagesResponse() []byte {
 	return []byte(`[
     {
         "status": "COMPLETE",
-        "stageId": 7,
-        "attemptId": 9,
+        "stageID": 7,
+        "attemptID": 9,
         "numTasks": 2,
         "numActiveTasks": 0,
         "numCompleteTasks": 2,
@@ -229,7 +229,7 @@ func getStagesResponse() []byte {
         "name": "reduce at SparkPi.scala:38",
         "details": "org.apache.spark.rdd.RDD.reduce(RDD.scala:1076)\norg.apache.spark.examples.SparkPi$.main(SparkPi.scala:38)\norg.apache.spark.examples.SparkPi.main(SparkPi.scala)\nsun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)\nsun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)\nsun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)\njava.lang.reflect.Method.invoke(Method.java:498)\norg.apache.spark.deploy.JavaMainApplication.start(SparkApplication.scala:52)\norg.apache.spark.deploy.SparkSubmit.org$apache$spark$deploy$SparkSubmit$$runMain(SparkSubmit.scala:928)\norg.apache.spark.deploy.SparkSubmit.doRunMain$1(SparkSubmit.scala:180)\norg.apache.spark.deploy.SparkSubmit.submit(SparkSubmit.scala:203)\norg.apache.spark.deploy.SparkSubmit.doSubmit(SparkSubmit.scala:90)\norg.apache.spark.deploy.SparkSubmit$$anon$2.doSubmit(SparkSubmit.scala:1007)\norg.apache.spark.deploy.SparkSubmit$.main(SparkSubmit.scala:1016)\norg.apache.spark.deploy.SparkSubmit.main(SparkSubmit.scala)",
         "schedulingPool": "default",
-        "rddIds": [
+        "rddIDs": [
             1,
             0
         ],

@@ -91,7 +91,7 @@ func TestLoadCrd(t *testing.T) {
 	require.NoError(t, err)
 	m, ok := iface.(*manager)
 	require.True(t, ok)
-	w, err := m.loadCrd("wave.spot.io_wavecomponents.yaml")
+	w, err := m.loadCRD("wave.spot.io_wavecomponents.yaml")
 	assert.NoError(t, err)
 	assert.Equal(t, "wavecomponents.wave.spot.io", w.Name)
 }
