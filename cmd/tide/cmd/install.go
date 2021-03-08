@@ -27,8 +27,8 @@ import (
 // installCmd represents the install command
 var installCmd = &cobra.Command{
 	Use:   "advance",
-	Short: "installs the wave operator",
-	Long: `installs the wave operator and all its dependencies, and configures wave components
+	Short: "Installs the wave operator",
+	Long: `Installs the wave operator and all its dependencies, and configures wave components
 
   Dependencies:
   - cert-manager
