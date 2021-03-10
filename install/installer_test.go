@@ -44,7 +44,10 @@ func getVersionedObjects(componentVersion, releasedVersion string) (*v1alpha1.Wa
 				ValuesConfiguration: "",
 			},
 		},
-		NewInstallation("foo", releasedVersion, "", "", nil)
+		&Installation{
+			Name:    "foo",
+			Version: releasedVersion,
+		}
 }
 
 func getValuesObjects(componentValues string, releasedValues map[string]interface{}) (*v1alpha1.WaveComponent, *Installation) {
@@ -58,7 +61,12 @@ func getValuesObjects(componentValues string, releasedValues map[string]interfac
 				ValuesConfiguration: componentValues,
 			},
 		},
-		NewInstallation("foo", "v1.2", "", "", releasedValues)
+		&Installation{
+			Name:    "foo",
+			Version: "v1.2",
+			Values:  releasedValues,
+		}
+
 }
 
 func TestIsUpgrade(t *testing.T) {

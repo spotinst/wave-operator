@@ -3,6 +3,7 @@ package components
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
@@ -68,10 +69,29 @@ func GetSparkOperatorConditions(config *rest.Config, client client.Client, relea
 	return conditions, nil
 }
 
-func GetSparkOperatorProperties(c *v1alpha1.WaveComponent, client client.Client, log logr.Logger) (map[string]string, error) {
-	props := map[string]string{}
-	if c.Spec.Version == "0.8.4" { // app version "v1beta2-1.2.0-3.0.0" {
-		props["SparkVersion"] = "3.0.0"
+func parseAppVersion(v string) (apiVersion, operatorVersion, sparkVersion string) {
+	vv := strings.Split(v, "-")
+	if len(vv) > 0 {
+		apiVersion = vv[0]
 	}
+	if len(vv) > 1 {
+		operatorVersion = vv[1]
+	}
+	if len(vv) > 2 {
+		sparkVersion = vv[2]
+	}
+	return
+}
+
+func GetSparkOperatorProperties(c *v1alpha1.WaveComponent, client client.Client, log logr.Logger) (map[string]string, error) {
+	if c.Status.Properties == nil {
+		return nil, nil
+	}
+	props := c.Status.Properties
+	av, ov, sv := parseAppVersion(props["AppVersion"])
+	props["APIVersion"] = av
+	props["OperatorVersion"] = ov
+	props["SparkVersion"] = sv
+
 	return props, nil
 }
