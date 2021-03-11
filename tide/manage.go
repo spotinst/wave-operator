@@ -616,6 +616,7 @@ func (m *manager) installWaveOperator(ctx context.Context, waveOperatorImage str
 	if err != nil {
 		return fmt.Errorf("unable to set image %s, %w", waveOperatorImage, err)
 	}
+	m.spec.Values = values
 
 	installer := install.GetHelm("", m.kubeClientGetter, m.log)
 	existing, err := installer.Get(m.spec.Name)
@@ -623,12 +624,12 @@ func (m *manager) installWaveOperator(ctx context.Context, waveOperatorImage str
 		return fmt.Errorf("error checking release, %w", err)
 	}
 	if existing == nil {
-		err = installer.Install(m.spec.Name, m.spec.Repository, m.spec.Version, values)
+		err = installer.Install(m.spec.Name, m.spec.Repository, m.spec.Version, m.spec.Values)
 		if err != nil {
 			return fmt.Errorf("cannot install wave operator, %w", err)
 		}
 	} else {
-		err = installer.Upgrade(m.spec.Name, m.spec.Repository, m.spec.Version, values)
+		err = installer.Upgrade(m.spec.Name, m.spec.Repository, m.spec.Version, m.spec.Values)
 		if err != nil {
 			return fmt.Errorf("cannot upgrade wave operator, %w", err)
 		}

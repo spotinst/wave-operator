@@ -38,7 +38,7 @@ const (
 type InstallSpec struct {
 	Name       string `json:"name"`
 	Repository string `json:"repository"`
-	Version    string `json:"version"`
+	Version    string `json:"version,omitempty"`
 	Values     string `json:"values,omitempty"`
 }
 
