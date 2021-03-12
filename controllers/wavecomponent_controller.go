@@ -209,12 +209,22 @@ func (r *WaveComponentReconciler) unsupportedType(ctx context.Context, req ctrl.
 	return ctrl.Result{}, nil
 }
 
+func setPropertiesFromInstallation(inst *install.Installation, comp *v1alpha1.WaveComponent) {
+	if comp.Status.Properties == nil {
+		comp.Status.Properties = map[string]string{}
+	}
+	comp.Status.Properties["AppVersion"] = inst.AppVersion
+}
+
 func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl.Request, comp *v1alpha1.WaveComponent) (ctrl.Result, error) {
 	log := r.Log.WithValues("wavecomponent", req.NamespacedName)
 
 	i := r.getInstaller(WavePrefix, r.getClient, log)
 
 	inst, err := i.Get(i.GetReleaseName(string(comp.Spec.Name)))
+	if inst != nil {
+		setPropertiesFromInstallation(inst, comp)
+	}
 	if err != nil {
 		if err != install.ErrReleaseNotFound {
 			return ctrl.Result{}, err
@@ -222,6 +232,7 @@ func (r *WaveComponentReconciler) reconcilePresent(ctx context.Context, req ctrl
 			return r.install(ctx, log, comp)
 		}
 	}
+
 	if i.IsUpgrade(comp, inst) {
 		return r.upgrade(ctx, log, comp)
 	}
