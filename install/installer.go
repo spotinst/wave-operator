@@ -186,6 +186,7 @@ func (i *HelmInstaller) Upgrade(chartName string, repository string, version str
 	upgradeAction.Namespace = i.namespace
 	upgradeAction.ChartPathOptions.RepoURL = repository
 	upgradeAction.ChartPathOptions.Version = version
+	upgradeAction.ReuseValues = true
 
 	settings := &cli.EnvSettings{}
 	cache, err := ioutil.TempDir(os.TempDir(), "wavecache-")
