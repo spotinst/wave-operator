@@ -2,6 +2,7 @@ package admission
 
 import (
 	"fmt"
+	"k8s.io/client-go/kubernetes"
 	"strconv"
 
 	"github.com/go-logr/logr"
@@ -65,7 +66,7 @@ var (
 	}
 )
 
-func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
+func MutatePod(_ kubernetes.Interface, provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
 
 	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 	sourceObj := &corev1.Pod{}
@@ -120,6 +121,13 @@ func mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInf
 	modObj := sourceObj.DeepCopy()
 	newSpec := modObj.Spec
 	newSpec.Affinity = ondemandAffinity
+
+	log.Info("Will mutate driver pod", "name", sourceObj.Name, "annotations", sourceObj.Annotations)
+	if !isEventLogSyncEnabled(sourceObj.Annotations) {
+		log.Info("Event log sync not enabled, will not add storage sync container")
+		modObj.Spec = newSpec
+		return modObj, nil
+	}
 
 	log.Info("pod admission control", "mountPath", volumeMount.MountPath)
 

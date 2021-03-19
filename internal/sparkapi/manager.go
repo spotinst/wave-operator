@@ -21,6 +21,8 @@ const (
 	historyServerAppNameLabelValue = "spark-history-server"
 )
 
+// TODO Config object - should not try history server if event log sync not enabled
+
 type Manager interface {
 	GetApplicationInfo(applicationID string, maxProcessedStageID int, log logr.Logger) (*ApplicationInfo, error)
 }

@@ -5,10 +5,13 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/spotinst/wave-operator/controllers"
 	"io/ioutil"
+	"k8s.io/client-go/kubernetes"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -17,18 +20,20 @@ import (
 )
 
 type AdmissionController struct {
+	client   kubernetes.Interface
 	provider cloudstorage.CloudStorageProvider
 	log      logr.Logger
 }
 
-type Mutator func(storageInfo cloudstorage.CloudStorageProvider, log logr.Logger, admissionSpec *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error)
+type Mutator func(client kubernetes.Interface, storageInfo cloudstorage.CloudStorageProvider, log logr.Logger, admissionSpec *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error)
 
 func handleRoot(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Wave Mutating Admission Webhook")
 }
 
-func NewAdmissionController(provider cloudstorage.CloudStorageProvider, log logr.Logger) *AdmissionController {
+func NewAdmissionController(client kubernetes.Interface, provider cloudstorage.CloudStorageProvider, log logr.Logger) *AdmissionController {
 	return &AdmissionController{
+		client:   client,
 		provider: provider,
 		log:      log,
 	}
@@ -52,7 +57,7 @@ func (ac *AdmissionController) GetHandlerFunc(mutate Mutator) func(http.Response
 			return
 		}
 
-		response, err := mutate(ac.provider, ac.log, review.Request)
+		response, err := mutate(ac.client, ac.provider, ac.log, review.Request)
 		if err != nil {
 			ac.log.Error(err, "mutating webhook request", "name", review.Request.Name, "kind", review.Request.Kind)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -122,4 +127,19 @@ func (ac *AdmissionController) Start(ctx context.Context) error {
 
 	ac.log.Info("admission controller exited properly")
 	return nil
+}
+
+// TODO Opt-in or opt-out?
+func isEventLogSyncEnabled(annotations map[string]string) bool {
+	if annotations == nil {
+		return false
+	}
+	storageSyncOn, ok := annotations[controllers.WaveConfigAnnotationSyncEventLogs]
+	if !ok {
+		return false
+	}
+	if strings.ToUpper(storageSyncOn) == "TRUE" {
+		return true
+	}
+	return false
 }

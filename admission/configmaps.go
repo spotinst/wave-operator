@@ -1,7 +1,10 @@
 package admission
 
 import (
+	"context"
 	"fmt"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -11,7 +14,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
+func MutateConfigMap(client kubernetes.Interface, provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
+
+	ctx := context.TODO()
 
 	gvk := corev1.SchemeGroupVersion.WithKind("ConfigMap")
 	sourceObj := &corev1.ConfigMap{}
@@ -45,6 +50,19 @@ func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger
 		return resp, nil
 	}
 
+	ownerPod, err := client.CoreV1().Pods(sourceObj.Namespace).Get(ctx, sourceObj.OwnerReferences[0].Name, v1.GetOptions{})
+	if err != nil {
+		log.Error(err, "cannot get owner pod")
+		return resp, nil
+	}
+
+	log.Info("Got owner pod", "name", ownerPod.Name, "annotations", ownerPod.Annotations)
+
+	if !isEventLogSyncEnabled(ownerPod.Annotations) {
+		log.Info("Event log sync not enabled, will not modify cm")
+		return resp, nil
+	}
+
 	storageInfo, err := provider.GetStorageInfo()
 	if err != nil {
 		log.Error(err, "cannot get storage configuration")
@@ -66,6 +84,7 @@ func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger
 	if props == nil {
 		props = properties.NewProperties()
 	}
+	// TODO Don't override customer configuration?
 	props.Set("spark.eventLog.dir", "file:///var/log/spark") //storageInfo.Path)
 	props.Set("spark.eventLog.enabled", "true")
 	modObj.Data["spark.properties"] = props.String()

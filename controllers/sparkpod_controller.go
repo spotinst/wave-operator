@@ -31,6 +31,8 @@ const (
 	AppEnterpriseGatewayLabelValue = "enterprise-gateway"
 	SparkOperatorLaunchedByLabel   = "sparkoperator.k8s.io/launched-by-spark-operator"
 
+	WaveConfigAnnotationSyncEventLogs = "wave.spot.io/synceventlogs"
+
 	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
 
 	apiVersion             = "wave.spot.io/v1alpha1"
