@@ -294,7 +294,7 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 	if err != nil {
 		sparkApiError = fmt.Errorf("could not get spark api application information, %w", err)
 	} else {
-		mapSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
+		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
 	}
 
 	// Make sure we have an application name
@@ -562,7 +562,7 @@ func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Int
 	return applicationInfo, nil
 }
 
-func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo) {
+func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo) {
 
 	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
