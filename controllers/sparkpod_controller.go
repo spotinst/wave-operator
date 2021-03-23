@@ -39,6 +39,7 @@ const (
 	waveApplicationIDLabel = "wave.spot.io/application-id"
 
 	maxProcessedStageIDAnnotation = "wave.spot.io/maxProcessedStageID"
+	workloadTypeAnnotation        = "wave.spot.io/workloadType"
 
 	requeueAfterTimeout = 10 * time.Second
 	podDeletionTimeout  = 5 * time.Minute
@@ -621,6 +622,10 @@ func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	}
 
 	deepCopy.Status.Data.RunStatistics.Executors = executors
+
+	if sparkApiInfo.WorkloadType != "" {
+		setWorkloadType(deepCopy, sparkApiInfo.WorkloadType)
+	}
 }
 
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
@@ -708,4 +713,11 @@ func setMaxProcessedStageID(cr *v1alpha1.SparkApplication, maxProcessedStageID i
 		cr.Annotations = make(map[string]string)
 	}
 	cr.Annotations[maxProcessedStageIDAnnotation] = strconv.Itoa(maxProcessedStageID)
+}
+
+func setWorkloadType(cr *v1alpha1.SparkApplication, workloadType sparkapi.WorkloadType) {
+	if cr.Annotations == nil {
+		cr.Annotations = make(map[string]string)
+	}
+	cr.Annotations[workloadTypeAnnotation] = string(workloadType)
 }

@@ -21,6 +21,7 @@ type Client interface {
 	GetEnvironment(applicationID string) (*Environment, error)
 	GetStages(applicationID string) ([]Stage, error)
 	GetAllExecutors(applicationID string) ([]Executor, error)
+	GetStreamingStatistics(applicationID string) (*StreamingStatistics, error)
 }
 
 type client struct {
@@ -111,6 +112,23 @@ func (c client) GetAllExecutors(applicationID string) ([]Executor, error) {
 	return executors, nil
 }
 
+func (c client) GetStreamingStatistics(applicationID string) (*StreamingStatistics, error) {
+
+	path := c.getStreamingStatisticsURLPath(applicationID)
+	resp, err := c.transportClient.Get(path)
+	if err != nil {
+		return nil, err
+	}
+
+	streamingStatistics := &StreamingStatistics{}
+	err = json.Unmarshal(resp, &streamingStatistics)
+	if err != nil {
+		return nil, err
+	}
+
+	return streamingStatistics, nil
+}
+
 func (c client) getEnvironmentURLPath(applicationID string) string {
 	return fmt.Sprintf("%s/applications/%s/environment", apiVersionUrl, applicationID)
 }
@@ -125,4 +143,8 @@ func (c client) getStagesURLPath(applicationID string) string {
 
 func (c client) getAllExecutorsURLPath(applicationID string) string {
 	return fmt.Sprintf("%s/applications/%s/allexecutors", apiVersionUrl, applicationID)
+}
+
+func (c client) getStreamingStatisticsURLPath(applicationID string) string {
+	return fmt.Sprintf("%s/applications/%s/streaming/statistics", apiVersionUrl, applicationID)
 }
