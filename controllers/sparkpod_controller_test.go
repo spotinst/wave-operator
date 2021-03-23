@@ -289,6 +289,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	assert.Equal(t, getTestApplicationInfo().TotalNewInputBytes, createdCR.Status.Data.RunStatistics.TotalInputBytes)
 	assert.Equal(t, getTestApplicationInfo().TotalNewExecutorCpuTime, createdCR.Status.Data.RunStatistics.TotalExecutorCpuTime)
 	assert.Equal(t, strconv.Itoa(getTestApplicationInfo().MaxProcessedStageID), createdCR.Annotations[maxProcessedStageIDAnnotation])
+	assert.Equal(t, string(getTestApplicationInfo().WorkloadType), createdCR.Annotations[workloadTypeAnnotation])
 	verifyCRAttempts(t, getTestApplicationInfo().Attempts, createdCR.Status.Data.RunStatistics.Attempts)
 	verifyCRExecutors(t, getTestApplicationInfo().Executors, createdCR.Status.Data.RunStatistics.Executors)
 }
@@ -1293,5 +1294,6 @@ func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 				IsActive:    true,
 			},
 		},
+		WorkloadType: "my-workload-type",
 	}
 }
