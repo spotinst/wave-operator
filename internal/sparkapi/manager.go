@@ -133,14 +133,21 @@ func (m manager) GetApplicationInfo(applicationID string, maxProcessedStageID in
 
 	applicationInfo.Executors = executors
 
+	workloadType := m.getWorkloadType(applicationID)
+	applicationInfo.WorkloadType = workloadType
+
+	return applicationInfo, nil
+}
+
+func (m manager) getWorkloadType(applicationID string) WorkloadType {
+	// Streaming statistics endpoint is only available on running driver
 	if m.clientType == driverClient {
 		_, err := m.client.GetStreamingStatistics(applicationID)
 		if err == nil {
-			applicationInfo.WorkloadType = SparkStreaming
+			return SparkStreaming
 		}
 	}
-
-	return applicationInfo, nil
+	return ""
 }
 
 type stageWindowAggregationResult struct {
