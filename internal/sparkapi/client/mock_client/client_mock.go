@@ -92,3 +92,18 @@ func (mr *MockClientMockRecorder) GetAllExecutors(applicationID interface{}) *go
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllExecutors", reflect.TypeOf((*MockClient)(nil).GetAllExecutors), applicationID)
 }
+
+// GetStreamingStatistics mocks base method
+func (m *MockClient) GetStreamingStatistics(applicationID string) (*client.StreamingStatistics, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStreamingStatistics", applicationID)
+	ret0, _ := ret[0].(*client.StreamingStatistics)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetStreamingStatistics indicates an expected call of GetStreamingStatistics
+func (mr *MockClientMockRecorder) GetStreamingStatistics(applicationID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStreamingStatistics", reflect.TypeOf((*MockClient)(nil).GetStreamingStatistics), applicationID)
+}

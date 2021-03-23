@@ -53,7 +53,7 @@ func (c client) GetApplication(applicationID string) (*Application, error) {
 	}
 
 	application := &Application{}
-	err = json.Unmarshal(resp, &application)
+	err = json.Unmarshal(resp, application)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (c client) GetEnvironment(applicationID string) (*Environment, error) {
 	}
 
 	environment := &Environment{}
-	err = json.Unmarshal(resp, &environment)
+	err = json.Unmarshal(resp, environment)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func (c client) GetStreamingStatistics(applicationID string) (*StreamingStatisti
 	}
 
 	streamingStatistics := &StreamingStatistics{}
-	err = json.Unmarshal(resp, &streamingStatistics)
+	err = json.Unmarshal(resp, streamingStatistics)
 	if err != nil {
 		return nil, err
 	}
