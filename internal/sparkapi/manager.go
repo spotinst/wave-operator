@@ -350,8 +350,8 @@ func IsServiceUnavailableError(err error) bool {
 	return false
 }
 
-func IsApplicationNotFoundError(err error) bool {
-	if errors.As(err, &transport.UnknownAppError{}) {
+func IsNotFoundError(err error) bool {
+	if errors.As(err, &transport.NotFoundError{}) {
 		return true
 	}
 	return false

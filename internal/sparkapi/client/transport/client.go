@@ -76,7 +76,7 @@ func decorateError(err error, statusError *k8serrors.StatusError) error {
 	wrappedErr := fmt.Errorf("code: %d, reason: %s, causes: %s, %w", code, reason, causeMessages, err)
 
 	if k8serrors.IsNotFound(statusError) {
-		wrappedErr = newUnknownAppError(wrappedErr)
+		wrappedErr = newNotFoundError(wrappedErr)
 	} else if k8serrors.IsServiceUnavailable(statusError) {
 		wrappedErr = newServiceUnavailableError(wrappedErr)
 	}
@@ -84,20 +84,20 @@ func decorateError(err error, statusError *k8serrors.StatusError) error {
 	return wrappedErr
 }
 
-// UnknownAppError indicates that the app was not found
-type UnknownAppError struct {
+// NotFoundError indicates that the requested resource was not found
+type NotFoundError struct {
 	err error
 }
 
-func newUnknownAppError(err error) UnknownAppError {
-	return UnknownAppError{err: err}
+func newNotFoundError(err error) NotFoundError {
+	return NotFoundError{err: err}
 }
 
-func (e UnknownAppError) Error() string {
-	return fmt.Sprintf("unknown app error: %s", e.err.Error())
+func (e NotFoundError) Error() string {
+	return fmt.Sprintf("not found error: %s", e.err.Error())
 }
 
-func (e UnknownAppError) Unwrap() error {
+func (e NotFoundError) Unwrap() error {
 	return e.err
 }
 
