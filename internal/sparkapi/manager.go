@@ -20,13 +20,9 @@ const (
 	appNameLabel                   = "app.kubernetes.io/name"
 	historyServerAppNameLabelValue = "spark-history-server"
 
-	driverClient        sparkClientType = "driver"
-	historyServerClient sparkClientType = "history-server"
-
 	SparkStreaming WorkloadType = "spark-streaming"
 )
 
-type sparkClientType string
 type WorkloadType string
 
 type Manager interface {
@@ -34,9 +30,8 @@ type Manager interface {
 }
 
 type manager struct {
-	clientType sparkClientType
-	client     sparkapiclient.Client
-	logger     logr.Logger
+	client sparkapiclient.Client
+	logger logr.Logger
 }
 
 type ApplicationInfo struct {
@@ -52,25 +47,24 @@ type ApplicationInfo struct {
 }
 
 var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (Manager, error) {
-	clientType, client, err := getSparkApiClient(clientSet, driverPod, logger)
+	client, err := getSparkApiClient(clientSet, driverPod, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api client, %w", err)
 	}
 	return manager{
-		clientType: clientType,
-		client:     client,
-		logger:     logger,
+		client: client,
+		logger: logger,
 	}, nil
 }
 
-func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkClientType, sparkapiclient.Client, error) {
+func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapiclient.Client, error) {
 
 	// Try the driver API first, to get information on running applications
 	// Once the application is finished the info is written to history server
 
 	// Get client for driver pod
 	if isSparkDriverRunning(driverPod) {
-		return driverClient, sparkapiclient.NewDriverPodClient(driverPod, clientSet), nil
+		return sparkapiclient.NewDriverPodClient(driverPod, clientSet), nil
 	}
 
 	logger.Info("Driver pod/container not running, will use history server Spark API client")
@@ -78,10 +72,10 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 	// Get client for history server
 	historyServerService, err := getHistoryServerService(clientSet, logger)
 	if err != nil {
-		return "", nil, fmt.Errorf("could not get history server service, %w", err)
+		return nil, fmt.Errorf("could not get history server service, %w", err)
 	}
 
-	return historyServerClient, sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
+	return sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
 }
 
 func (m manager) GetApplicationInfo(applicationID string, maxProcessedStageID int, log logr.Logger) (*ApplicationInfo, error) {
@@ -142,7 +136,7 @@ func (m manager) GetApplicationInfo(applicationID string, maxProcessedStageID in
 
 func (m manager) getWorkloadType(applicationID string) WorkloadType {
 	// Streaming statistics endpoint is only available on running driver
-	if m.clientType == driverClient {
+	if m.client.GetClientType() == sparkapiclient.DriverClient {
 		_, err := m.client.GetStreamingStatistics(applicationID)
 		if err == nil {
 			return SparkStreaming

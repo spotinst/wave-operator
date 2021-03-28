@@ -28,10 +28,10 @@ func TestGetSparkApiClient(t *testing.T) {
 
 		clientSet := k8sfake.NewSimpleClientset(svc, pod)
 
-		clientType, c, err := getSparkApiClient(clientSet, pod, logger)
+		c, err := getSparkApiClient(clientSet, pod, logger)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, c)
-		assert.Equal(tt, driverClient, clientType)
+		assert.Equal(tt, sparkapiclient.DriverClient, c.GetClientType())
 
 	})
 
@@ -43,10 +43,10 @@ func TestGetSparkApiClient(t *testing.T) {
 
 		clientSet := k8sfake.NewSimpleClientset(svc, pod)
 
-		clientType, c, err := getSparkApiClient(clientSet, pod, logger)
+		c, err := getSparkApiClient(clientSet, pod, logger)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, c)
-		assert.Equal(tt, historyServerClient, clientType)
+		assert.Equal(tt, sparkapiclient.HistoryServerClient, c.GetClientType())
 
 	})
 
@@ -57,10 +57,9 @@ func TestGetSparkApiClient(t *testing.T) {
 
 		clientSet := k8sfake.NewSimpleClientset(pod)
 
-		clientType, c, err := getSparkApiClient(clientSet, pod, logger)
+		c, err := getSparkApiClient(clientSet, pod, logger)
 		assert.Error(tt, err)
 		assert.Nil(tt, c)
-		assert.Equal(tt, sparkClientType(""), clientType)
 
 	})
 
@@ -101,6 +100,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetClientType().Times(1)
 		m.EXPECT().GetStreamingStatistics(applicationID).Times(0)
 
 		manager := &manager{
@@ -141,12 +141,12 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetClientType().Return(sparkapiclient.DriverClient).Times(1)
 		m.EXPECT().GetStreamingStatistics(applicationID).Return(nil, fmt.Errorf("404 not found")).Times(1)
 
 		manager := &manager{
-			clientType: driverClient,
-			client:     m,
-			logger:     getTestLogger(),
+			client: m,
+			logger: getTestLogger(),
 		}
 
 		res, err := manager.GetApplicationInfo(applicationID, -1, logger)
@@ -162,12 +162,12 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetClientType().Return(sparkapiclient.DriverClient).Times(1)
 		m.EXPECT().GetStreamingStatistics(applicationID).Return(getStreamingStatisticsResponse(), nil).Times(1)
 
 		manager := &manager{
-			clientType: driverClient,
-			client:     m,
-			logger:     getTestLogger(),
+			client: m,
+			logger: getTestLogger(),
 		}
 
 		res, err := manager.GetApplicationInfo(applicationID, -1, logger)
@@ -183,12 +183,12 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetClientType().Return(sparkapiclient.HistoryServerClient).Times(1)
 		m.EXPECT().GetStreamingStatistics(applicationID).Times(0)
 
 		manager := &manager{
-			clientType: historyServerClient,
-			client:     m,
-			logger:     getTestLogger(),
+			client: m,
+			logger: getTestLogger(),
 		}
 
 		res, err := manager.GetApplicationInfo(applicationID, -1, logger)

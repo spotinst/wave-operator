@@ -14,9 +14,15 @@ const (
 	apiVersionUrl     = "api/v1"
 	driverPort        = "4040"
 	historyServerPort = "18080"
+
+	DriverClient        ClientType = "driver"
+	HistoryServerClient ClientType = "history-server"
 )
 
+type ClientType string
+
 type Client interface {
+	GetClientType() ClientType
 	GetApplication(applicationID string) (*Application, error)
 	GetEnvironment(applicationID string) (*Environment, error)
 	GetStages(applicationID string) ([]Stage, error)
@@ -25,12 +31,14 @@ type Client interface {
 }
 
 type client struct {
+	clientType      ClientType
 	transportClient transport.Client
 }
 
 func NewDriverPodClient(pod *corev1.Pod, clientSet kubernetes.Interface) Client {
 	tc := transport.NewProxyClient(transport.Pod, pod.Name, pod.Namespace, driverPort, clientSet)
 	c := &client{
+		clientType:      DriverClient,
 		transportClient: tc,
 	}
 	return c
@@ -39,9 +47,14 @@ func NewDriverPodClient(pod *corev1.Pod, clientSet kubernetes.Interface) Client 
 func NewHistoryServerClient(service *corev1.Service, clientSet kubernetes.Interface) Client {
 	tc := transport.NewProxyClient(transport.Service, service.Name, service.Namespace, historyServerPort, clientSet)
 	c := &client{
+		clientType:      HistoryServerClient,
 		transportClient: tc,
 	}
 	return c
+}
+
+func (c client) GetClientType() ClientType {
+	return c.clientType
 }
 
 func (c client) GetApplication(applicationID string) (*Application, error) {

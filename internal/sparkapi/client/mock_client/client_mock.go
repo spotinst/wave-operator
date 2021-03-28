@@ -33,6 +33,20 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
+// GetClientType mocks base method
+func (m *MockClient) GetClientType() client.ClientType {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClientType")
+	ret0, _ := ret[0].(client.ClientType)
+	return ret0
+}
+
+// GetClientType indicates an expected call of GetClientType
+func (mr *MockClientMockRecorder) GetClientType() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientType", reflect.TypeOf((*MockClient)(nil).GetClientType))
+}
+
 // GetApplication mocks base method
 func (m *MockClient) GetApplication(applicationID string) (*client.Application, error) {
 	m.ctrl.T.Helper()
