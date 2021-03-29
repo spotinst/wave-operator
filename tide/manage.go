@@ -433,6 +433,7 @@ func (m *manager) Create(env v1alpha1.WaveEnvironment) error {
 		if err != nil {
 			if k8serrors.IsAlreadyExists(err) {
 				m.log.Info("wave component already exists, patching", "name", wc.Name)
+
 				objName := ctrlrt.ObjectKeyFromObject(wc)
 				existing := &v1alpha1.WaveComponent{}
 				err = rc.Get(ctx, objName, existing)
@@ -440,6 +441,11 @@ func (m *manager) Create(env v1alpha1.WaveEnvironment) error {
 					return fmt.Errorf("error retrieving object, %w", err)
 				}
 				wc.ObjectMeta.ResourceVersion = existing.ObjectMeta.ResourceVersion
+
+				_, stateSpecified := m.spec.Enabled[wc.Spec.Name]
+				if !stateSpecified {
+					wc.Spec.State = existing.Spec.State // remove state from patch if it was not explicitly specified
+				}
 				err = rc.Patch(ctx, wc, ctrlrt.MergeFrom(existing))
 				if err != nil {
 					return fmt.Errorf("patch error, %w", err)
