@@ -136,6 +136,7 @@ func NewManager(log logr.Logger) (Manager, error) {
 			Repository: WaveOperatorRepository,
 			Version:    WaveOperatorVersion,
 			Values:     WaveOperatorValues,
+			Enabled:    map[v1alpha1.ChartName]bool{},
 		},
 	}, nil
 }
@@ -158,6 +159,9 @@ func (m *manager) SetWaveInstallSpec(spec install.InstallSpec) error {
 			return fmt.Errorf("invalid chart values, %w", err)
 		}
 		m.spec.Values = spec.Values
+	}
+	if spec.Enabled != nil {
+		m.spec.Enabled = spec.Enabled
 	}
 	return nil
 }
@@ -268,6 +272,15 @@ func (m *manager) loadWaveComponents() ([]*v1alpha1.WaveComponent, error) {
 		}, comp)
 		if err != nil {
 			return nil, fmt.Errorf("cannot load wave component %s, %w", mm, err)
+		}
+
+		enable, specified := m.spec.Enabled[comp.Spec.Name]
+		if specified {
+			if enable {
+				comp.Spec.State = v1alpha1.PresentComponentState
+			} else {
+				comp.Spec.State = v1alpha1.AbsentComponentState
+			}
 		}
 		waveComponents = append(waveComponents, comp)
 	}

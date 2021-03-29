@@ -40,6 +40,7 @@ type InstallSpec struct {
 	Repository string `json:"repository"`
 	Version    string `json:"version,omitempty"`
 	Values     string `json:"values,omitempty"`
+	Enabled    map[v1alpha1.ChartName]bool
 }
 
 type Installer interface {

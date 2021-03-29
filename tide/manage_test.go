@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -105,4 +106,28 @@ func TestLoadComponents(t *testing.T) {
 	ww, err := m.loadWaveComponents()
 	assert.NoError(t, err)
 	assert.Equal(t, 4, len(ww))
+	for _, wc := range ww {
+		assert.Equal(t, v1alpha1.PresentComponentState, wc.Spec.State)
+	}
+}
+
+func TestDisableComponents(t *testing.T) {
+	logger := getTestLogger()
+	iface, err := NewManager(logger)
+	require.NoError(t, err)
+	m, ok := iface.(*manager)
+	require.True(t, ok)
+
+	m.spec.Enabled[v1alpha1.SparkHistoryChartName] = false
+
+	ww, err := m.loadWaveComponents()
+	assert.NoError(t, err)
+	assert.Equal(t, 4, len(ww))
+	for _, wc := range ww {
+		if wc.Spec.Name == v1alpha1.SparkHistoryChartName {
+			assert.Equal(t, v1alpha1.AbsentComponentState, wc.Spec.State)
+		} else {
+			assert.Equal(t, v1alpha1.PresentComponentState, wc.Spec.State)
+		}
+	}
 }
