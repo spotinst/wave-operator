@@ -19,7 +19,11 @@ const (
 	SparkDriverContainerName       = "spark-kubernetes-driver"
 	appNameLabel                   = "app.kubernetes.io/name"
 	historyServerAppNameLabelValue = "spark-history-server"
+
+	SparkStreaming WorkloadType = "spark-streaming"
 )
+
+type WorkloadType string
 
 type Manager interface {
 	GetApplicationInfo(applicationID string, maxProcessedStageID int, log logr.Logger) (*ApplicationInfo, error)
@@ -39,6 +43,7 @@ type ApplicationInfo struct {
 	TotalNewExecutorCpuTime int64
 	Attempts                []sparkapiclient.Attempt
 	Executors               []sparkapiclient.Executor
+	WorkloadType            WorkloadType
 }
 
 var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (Manager, error) {
@@ -123,7 +128,21 @@ func (m manager) GetApplicationInfo(applicationID string, maxProcessedStageID in
 
 	applicationInfo.Executors = executors
 
+	workloadType := m.getWorkloadType(applicationID)
+	applicationInfo.WorkloadType = workloadType
+
 	return applicationInfo, nil
+}
+
+func (m manager) getWorkloadType(applicationID string) WorkloadType {
+	// Streaming statistics endpoint is only available on running driver
+	if m.client.GetClientType() == sparkapiclient.DriverClient {
+		_, err := m.client.GetStreamingStatistics(applicationID)
+		if err == nil {
+			return SparkStreaming
+		}
+	}
+	return ""
 }
 
 type stageWindowAggregationResult struct {
@@ -326,8 +345,8 @@ func IsServiceUnavailableError(err error) bool {
 	return false
 }
 
-func IsApplicationNotFoundError(err error) bool {
-	if errors.As(err, &transport.UnknownAppError{}) {
+func IsNotFoundError(err error) bool {
+	if errors.As(err, &transport.NotFoundError{}) {
 		return true
 	}
 	return false

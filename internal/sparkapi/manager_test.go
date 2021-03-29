@@ -31,6 +31,7 @@ func TestGetSparkApiClient(t *testing.T) {
 		c, err := getSparkApiClient(clientSet, pod, logger)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, c)
+		assert.Equal(tt, sparkapiclient.DriverClient, c.GetClientType())
 
 	})
 
@@ -45,6 +46,7 @@ func TestGetSparkApiClient(t *testing.T) {
 		c, err := getSparkApiClient(clientSet, pod, logger)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, c)
+		assert.Equal(tt, sparkapiclient.HistoryServerClient, c.GetClientType())
 
 	})
 
@@ -98,6 +100,8 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetClientType().Times(1)
+		m.EXPECT().GetStreamingStatistics(applicationID).Times(0)
 
 		manager := &manager{
 			client: m,
@@ -126,6 +130,71 @@ func TestGetApplicationInfo(t *testing.T) {
 		assert.Equal(tt, getExecutorsResponse()[0], res.Executors[0])
 		assert.Equal(tt, getExecutorsResponse()[1], res.Executors[1])
 		assert.Equal(tt, getExecutorsResponse()[2], res.Executors[2])
+
+		assert.Equal(tt, WorkloadType(""), res.WorkloadType)
+	})
+
+	t.Run("whenDriverClient_notSparkStreaming", func(tt *testing.T) {
+
+		m := mock_client.NewMockClient(ctrl)
+		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
+		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
+		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
+		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetClientType().Return(sparkapiclient.DriverClient).Times(1)
+		m.EXPECT().GetStreamingStatistics(applicationID).Return(nil, fmt.Errorf("404 not found")).Times(1)
+
+		manager := &manager{
+			client: m,
+			logger: getTestLogger(),
+		}
+
+		res, err := manager.GetApplicationInfo(applicationID, -1, logger)
+		assert.NoError(tt, err)
+
+		assert.Equal(tt, WorkloadType(""), res.WorkloadType)
+	})
+
+	t.Run("whenDriverClient_sparkStreaming", func(tt *testing.T) {
+
+		m := mock_client.NewMockClient(ctrl)
+		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
+		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
+		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
+		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetClientType().Return(sparkapiclient.DriverClient).Times(1)
+		m.EXPECT().GetStreamingStatistics(applicationID).Return(getStreamingStatisticsResponse(), nil).Times(1)
+
+		manager := &manager{
+			client: m,
+			logger: getTestLogger(),
+		}
+
+		res, err := manager.GetApplicationInfo(applicationID, -1, logger)
+		assert.NoError(tt, err)
+
+		assert.Equal(tt, SparkStreaming, res.WorkloadType)
+	})
+
+	t.Run("whenHistoryServerClient_dontCheckSparkStreaming", func(tt *testing.T) {
+
+		m := mock_client.NewMockClient(ctrl)
+		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
+		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
+		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
+		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetClientType().Return(sparkapiclient.HistoryServerClient).Times(1)
+		m.EXPECT().GetStreamingStatistics(applicationID).Times(0)
+
+		manager := &manager{
+			client: m,
+			logger: getTestLogger(),
+		}
+
+		res, err := manager.GetApplicationInfo(applicationID, -1, logger)
+		assert.NoError(tt, err)
+
+		assert.Equal(tt, WorkloadType(""), res.WorkloadType)
 	})
 
 }
@@ -456,6 +525,14 @@ func getExecutorsResponse() []sparkapiclient.Executor {
 			ID:      "2",
 			AddTime: "2020-12-14T16:27:47.142GMT",
 		},
+	}
+}
+
+func getStreamingStatisticsResponse() *sparkapiclient.StreamingStatistics {
+	return &sparkapiclient.StreamingStatistics{
+		StartTime:         "2020-12-14T16:27:47.142GMT",
+		BatchDuration:     9999,
+		AvgProcessingTime: 3333,
 	}
 }
 

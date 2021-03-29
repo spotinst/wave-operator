@@ -14,22 +14,31 @@ const (
 	apiVersionUrl     = "api/v1"
 	driverPort        = "4040"
 	historyServerPort = "18080"
+
+	DriverClient        ClientType = "driver"
+	HistoryServerClient ClientType = "history-server"
 )
 
+type ClientType string
+
 type Client interface {
+	GetClientType() ClientType
 	GetApplication(applicationID string) (*Application, error)
 	GetEnvironment(applicationID string) (*Environment, error)
 	GetStages(applicationID string) ([]Stage, error)
 	GetAllExecutors(applicationID string) ([]Executor, error)
+	GetStreamingStatistics(applicationID string) (*StreamingStatistics, error)
 }
 
 type client struct {
+	clientType      ClientType
 	transportClient transport.Client
 }
 
 func NewDriverPodClient(pod *corev1.Pod, clientSet kubernetes.Interface) Client {
 	tc := transport.NewProxyClient(transport.Pod, pod.Name, pod.Namespace, driverPort, clientSet)
 	c := &client{
+		clientType:      DriverClient,
 		transportClient: tc,
 	}
 	return c
@@ -38,9 +47,14 @@ func NewDriverPodClient(pod *corev1.Pod, clientSet kubernetes.Interface) Client 
 func NewHistoryServerClient(service *corev1.Service, clientSet kubernetes.Interface) Client {
 	tc := transport.NewProxyClient(transport.Service, service.Name, service.Namespace, historyServerPort, clientSet)
 	c := &client{
+		clientType:      HistoryServerClient,
 		transportClient: tc,
 	}
 	return c
+}
+
+func (c client) GetClientType() ClientType {
+	return c.clientType
 }
 
 func (c client) GetApplication(applicationID string) (*Application, error) {
@@ -52,7 +66,7 @@ func (c client) GetApplication(applicationID string) (*Application, error) {
 	}
 
 	application := &Application{}
-	err = json.Unmarshal(resp, &application)
+	err = json.Unmarshal(resp, application)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +83,7 @@ func (c client) GetEnvironment(applicationID string) (*Environment, error) {
 	}
 
 	environment := &Environment{}
-	err = json.Unmarshal(resp, &environment)
+	err = json.Unmarshal(resp, environment)
 	if err != nil {
 		return nil, err
 	}
@@ -111,6 +125,23 @@ func (c client) GetAllExecutors(applicationID string) ([]Executor, error) {
 	return executors, nil
 }
 
+func (c client) GetStreamingStatistics(applicationID string) (*StreamingStatistics, error) {
+
+	path := c.getStreamingStatisticsURLPath(applicationID)
+	resp, err := c.transportClient.Get(path)
+	if err != nil {
+		return nil, err
+	}
+
+	streamingStatistics := &StreamingStatistics{}
+	err = json.Unmarshal(resp, streamingStatistics)
+	if err != nil {
+		return nil, err
+	}
+
+	return streamingStatistics, nil
+}
+
 func (c client) getEnvironmentURLPath(applicationID string) string {
 	return fmt.Sprintf("%s/applications/%s/environment", apiVersionUrl, applicationID)
 }
@@ -125,4 +156,8 @@ func (c client) getStagesURLPath(applicationID string) string {
 
 func (c client) getAllExecutorsURLPath(applicationID string) string {
 	return fmt.Sprintf("%s/applications/%s/allexecutors", apiVersionUrl, applicationID)
+}
+
+func (c client) getStreamingStatisticsURLPath(applicationID string) string {
+	return fmt.Sprintf("%s/applications/%s/streaming/statistics", apiVersionUrl, applicationID)
 }

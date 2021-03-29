@@ -39,6 +39,7 @@ const (
 	waveApplicationIDLabel = "wave.spot.io/application-id"
 
 	maxProcessedStageIDAnnotation = "wave.spot.io/maxProcessedStageID"
+	workloadTypeAnnotation        = "wave.spot.io/workloadType"
 
 	requeueAfterTimeout = 10 * time.Second
 	podDeletionTimeout  = 5 * time.Minute
@@ -207,7 +208,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		err := r.handleDriver(ctx, p, cr, log)
 		if err != nil {
 			// Check for expected Spark API communication errors
-			if sparkapi.IsApplicationNotFoundError(err) ||
+			if sparkapi.IsNotFoundError(err) ||
 				sparkapi.IsServiceUnavailableError(err) {
 				// Let's requeue after a set amount of time, don't want exponential backoff
 				log.Info(fmt.Sprintf("Spark API error, will requeue: %s", err.Error()))
@@ -293,7 +294,7 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 	if err != nil {
 		sparkApiError = fmt.Errorf("could not get spark api application information, %w", err)
 	} else {
-		mapSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
+		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
 	}
 
 	// Make sure we have an application name
@@ -561,7 +562,7 @@ func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Int
 	return applicationInfo, nil
 }
 
-func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo) {
+func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo) {
 
 	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
@@ -621,6 +622,10 @@ func mapSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	}
 
 	deepCopy.Status.Data.RunStatistics.Executors = executors
+
+	if sparkApiInfo.WorkloadType != "" {
+		setWorkloadType(deepCopy, sparkApiInfo.WorkloadType)
+	}
 }
 
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
@@ -708,4 +713,11 @@ func setMaxProcessedStageID(cr *v1alpha1.SparkApplication, maxProcessedStageID i
 		cr.Annotations = make(map[string]string)
 	}
 	cr.Annotations[maxProcessedStageIDAnnotation] = strconv.Itoa(maxProcessedStageID)
+}
+
+func setWorkloadType(cr *v1alpha1.SparkApplication, workloadType sparkapi.WorkloadType) {
+	if cr.Annotations == nil {
+		cr.Annotations = make(map[string]string)
+	}
+	cr.Annotations[workloadTypeAnnotation] = string(workloadType)
 }
