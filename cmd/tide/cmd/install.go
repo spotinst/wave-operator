@@ -88,7 +88,7 @@ func init() {
 	installCmd.Flags().StringVar(&waveOperatorImage, "wave-image", "", "full container image specification for the wave operator")
 
 	installCmd.Flags().StringToStringVar(&waveComponentRequest, "enable", nil,
-		fmt.Sprintf("enable or disable charts, multiple arguments: <name>=true|false, for name in %s", GetChartNames()))
+		fmt.Sprintf("enable or disable components, allows multiple arguments: <name>=true|false, for name in %s", GetChartNames()))
 
 }
 
