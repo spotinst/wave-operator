@@ -36,11 +36,11 @@ const (
 )
 
 type InstallSpec struct {
-	Name       string `json:"name"`
-	Repository string `json:"repository"`
-	Version    string `json:"version,omitempty"`
-	Values     string `json:"values,omitempty"`
-	Enabled    map[v1alpha1.ChartName]bool
+	Name       string                      `json:"name"`
+	Repository string                      `json:"repository"`
+	Version    string                      `json:"version,omitempty"`
+	Values     string                      `json:"values,omitempty"`
+	Enabled    map[v1alpha1.ChartName]bool `json:"enabled,omitempty"`
 }
 
 type Installer interface {
