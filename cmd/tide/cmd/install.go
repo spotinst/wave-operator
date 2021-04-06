@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
@@ -28,25 +29,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-// installCmd represents the install command
-var installCmd = &cobra.Command{
-	Use:   "advance",
-	Short: "Installs the wave operator",
-	Long: `Installs the wave operator and all its dependencies, and configures wave components
+var (
+	chartNames = []string{
+		string(v1alpha1.WaveIngressChartName),
+		string(v1alpha1.EnterpriseGatewayChartName),
+		string(v1alpha1.SparkHistoryChartName),
+		string(v1alpha1.SparkOperatorChartName),
+	}
+
+	installCmd = &cobra.Command{
+		Use:   "advance",
+		Short: "Installs the wave operator",
+		Long: `Installs the wave operator and all its dependencies, and configures wave components
 
   Dependencies:
-  - cert-manager
+    cert-manager
 
   Components:
-  - spark-history-server
-  - nginx-ingress
-  - spark-operator
-  - enterprise-gateway`,
+    ` + strings.Join(chartNames, "\n    "),
+		Run: install,
+	}
 
-	Run: install,
-}
-
-var (
 	logger logr.Logger
 
 	k8sClusterCreated   bool
@@ -59,17 +62,8 @@ var (
 	waveChartValuesJSON string
 
 	waveOperatorImage string
-
-	waveComponentRequest map[string]string
+	waveComponents    components = map[v1alpha1.ChartName]bool{}
 )
-
-func GetChartNames() []string {
-	return []string{string(v1alpha1.WaveIngressChartName),
-		string(v1alpha1.EnterpriseGatewayChartName),
-		string(v1alpha1.SparkHistoryChartName),
-		string(v1alpha1.SparkOperatorChartName),
-	}
-}
 
 func init() {
 
@@ -87,41 +81,51 @@ func init() {
 
 	installCmd.Flags().StringVar(&waveOperatorImage, "wave-image", "", "full container image specification for the wave operator")
 
-	installCmd.Flags().StringToStringVar(&waveComponentRequest, "enable", nil,
-		fmt.Sprintf("enable or disable components, allows multiple arguments: <name>=true|false, for name in %s", GetChartNames()))
+	installCmd.Flags().Var(&waveComponents, "enable", fmt.Sprintf("enable or disable components, allows multiple arguments: <name>=true|false, for name in %s", chartNames))
 
 }
 
-func validateInput(requested map[string]string) (map[v1alpha1.ChartName]bool, error) {
-	waveComponentEnabled := map[v1alpha1.ChartName]bool{}
+type components map[v1alpha1.ChartName]bool
 
-	for chartName, value := range requested {
-		switch chartName {
+func (c components) String() string {
+	s := make([]string, 0, len(c))
+	for n, e := range c {
+		s = append(s, fmt.Sprintf("%s=%t", n, e))
+	}
+	return strings.Join(s, ",")
+}
+
+func (c components) Type() string {
+	return "WaveComponentSet"
+}
+
+func (c components) Set(arg string) error {
+	v := strings.Split(arg, ",")
+	for _, val := range v {
+		input := strings.Split(val, "=")
+		name := v1alpha1.ChartName(input[0])
+
+		switch name {
 		case
-			string(v1alpha1.WaveIngressChartName),
-			string(v1alpha1.EnterpriseGatewayChartName),
-			string(v1alpha1.SparkHistoryChartName),
-			string(v1alpha1.SparkOperatorChartName):
-			enabled, err := strconv.ParseBool(value)
+			v1alpha1.WaveIngressChartName,
+			v1alpha1.EnterpriseGatewayChartName,
+			v1alpha1.SparkHistoryChartName,
+			v1alpha1.SparkOperatorChartName:
+			enabled, err := strconv.ParseBool(input[1])
 			if err != nil {
-				return nil, fmt.Errorf("cannot parse enabled flag for %s (%s), %w", chartName, value, err)
+				return fmt.Errorf("cannot parse enabled flag for %s (%s), %w", name, val, err)
 			}
-			waveComponentEnabled[v1alpha1.ChartName(chartName)] = enabled
+			c[name] = enabled
 
 		default:
-			logger.Info("Unknown chart name input, ignoring", "name", chartName)
+			logger.Info("Unknown chart name input, ignoring", "name", name)
 		}
 	}
-	return waveComponentEnabled, nil
+	return nil
+
 }
 
 func install(cmd *cobra.Command, args []string) {
-
-	waveComponentEnabled, err := validateInput(waveComponentRequest)
-	if err != nil {
-		logger.Info("input validation error", "message", err.Error())
-		os.Exit(1)
-	}
 
 	logger.Info("advance: installing wave")
 
@@ -136,7 +140,7 @@ func install(cmd *cobra.Command, args []string) {
 		Repository: waveChartURL,
 		Version:    waveChartVersion,
 		Values:     waveChartValuesJSON,
-		Enabled:    waveComponentEnabled,
+		Enabled:    waveComponents,
 	}
 	err = manager.SetWaveInstallSpec(waveSpec)
 	if err != nil {
