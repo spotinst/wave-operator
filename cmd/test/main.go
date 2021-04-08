@@ -188,10 +188,7 @@ serviceAccount:
 	// }
 	if webhook {
 
-		ac := admission.NewAdmissionController(
-			&util.FakeStorageProvider{},
-			logger,
-		)
+		ac := admission.NewAdmissionController(&util.FakeStorageProvider{}, logger, false)
 		ctx := ctrl.SetupSignalHandler()
 		ac.Start(ctx)
 	}

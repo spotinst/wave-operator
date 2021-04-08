@@ -54,10 +54,13 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
+	var sparkMetrics bool
 	flag.StringVar(&metricsAddr, "metrics-addr", "0.0.0.0:8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&sparkMetrics, "enable-spark-metrics", true, "Enables the metrics subsystem for spark drivers and executors")
+
 	flag.Parse()
 
 	logger := zap.New(zap.UseDevMode(true))
@@ -114,7 +117,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ac := admission.NewAdmissionController(storageProvider, logger)
+	ac := admission.NewAdmissionController(storageProvider, logger, sparkMetrics)
 	err = mgr.Add(ac)
 	if err != nil {
 		setupLog.Error(err, "unable to add admission controller")
