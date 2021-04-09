@@ -36,6 +36,8 @@ import (
 	"github.com/spotinst/wave-operator/internal/ocean"
 	"github.com/spotinst/wave-operator/internal/sparkapi"
 	"github.com/spotinst/wave-operator/internal/version"
+	"github.com/spotinst/wave-operator/tide"
+
 	// +kubebuilder:scaffold:imports
 )
 
@@ -117,7 +119,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	ac := admission.NewAdmissionController(storageProvider, logger, sparkMetrics)
+	env := tide.NewKubernetesEnvironment(mgr.GetClient(), clusterName)
+	ac := admission.NewAdmissionController(storageProvider, logger, env)
 	err = mgr.Add(ac)
 	if err != nil {
 		setupLog.Error(err, "unable to add admission controller")

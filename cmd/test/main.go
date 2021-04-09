@@ -13,6 +13,8 @@ import (
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/util"
 	sparkoperator "github.com/spotinst/wave-operator/sparkoperator.k8s.io/v1beta2"
+	"github.com/spotinst/wave-operator/tide"
+
 	"helm.sh/helm/v3/pkg/action"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -172,6 +174,22 @@ serviceAccount:
 			fmt.Println("wavecomponents crd not found,", err.Error())
 		}
 
+		waveEnv := &apiextensions.CustomResourceDefinition{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "CustomResourceDefinition",
+				APIVersion: "apiextensions.k8s.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "waveenvironments.wave.spot.io",
+			},
+			Spec:   apiextensions.CustomResourceDefinitionSpec{},
+			Status: apiextensions.CustomResourceDefinitionStatus{},
+		}
+
+		err = c.Get(context.TODO(), types.NamespacedName{Name: waveEnv.Name}, waveEnv)
+		if err != nil {
+			fmt.Println("waveenvironments crd not found,", err.Error())
+		}
 	}
 
 	// if s3Bucket {
@@ -187,8 +205,7 @@ serviceAccount:
 	// 	}
 	// }
 	if webhook {
-
-		ac := admission.NewAdmissionController(&util.FakeStorageProvider{}, logger, false)
+		ac := admission.NewAdmissionController(&util.FakeStorageProvider{}, logger, &tide.FakeEnvironment{})
 		ctx := ctrl.SetupSignalHandler()
 		ac.Start(ctx)
 	}

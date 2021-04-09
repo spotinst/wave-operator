@@ -20,6 +20,9 @@ type WaveEnvironmentSpec struct {
 
 	// whether the Ocean cluster was provisioned when create Wave
 	OceanClusterProvisioned bool `json:"oceanClusterProvisioned"`
+
+	// whether the metrics subsystem should be enabled for
+	MetricsEnabled bool `json:"metricsEnabled"`
 }
 
 type WaveEnvironmentStatus struct {
