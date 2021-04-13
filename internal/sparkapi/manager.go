@@ -53,8 +53,8 @@ var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, log
 		return nil, fmt.Errorf("could not get spark api client, %w", err)
 	}
 	return manager{
-		client:  client,
-		logger:  logger,
+		client: client,
+		logger: logger,
 	}, nil
 }
 

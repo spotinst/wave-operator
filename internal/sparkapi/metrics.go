@@ -7,6 +7,7 @@ import (
 )
 
 var registry = make(applicationRegistry)
+
 type applicationRegistry map[string]*applicationCollector
 
 func (ar applicationRegistry) Register(app *ApplicationInfo) {
@@ -59,8 +60,6 @@ type applicationCollector struct {
 	executors     *executorCollector
 	attemptsTotal *prometheus.Desc
 }
-
-
 
 func newApplicationCollector(info *ApplicationInfo) *applicationCollector {
 	applicationLabels := prometheus.Labels{
