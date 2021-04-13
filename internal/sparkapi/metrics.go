@@ -6,15 +6,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-var registry = make(applicationRegistry)
+var registry = make(ApplicationRegistry)
 
-// applicationRegistry contains all registered application collectors indexed by ID
-type applicationRegistry map[string]*applicationCollector
+// ApplicationRegistry contains all registered application collectors indexed by ID
+type ApplicationRegistry map[string]*applicationCollector
 
 // Register creates a prometheus metrics collector for the specified application
 // in the case the application has already been registered the collector is updated
 // with the current application information
-func (ar applicationRegistry) Register(app *ApplicationInfo) {
+func (ar ApplicationRegistry) Register(app *ApplicationInfo) {
 	// If if a collector has already been created for the application
 	// Then we just update the app for the application
 	if collector, ok := ar[app.ID]; ok {
