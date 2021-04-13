@@ -25,3 +25,4 @@ VERSION
 .gradle/
 scratch
 venv/
+telepresence.log
