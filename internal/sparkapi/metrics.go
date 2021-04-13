@@ -24,8 +24,15 @@ func (ar applicationRegistry) Register(app *ApplicationInfo) {
 }
 
 type executorCollector struct {
-	count           *prometheus.Desc
-	inputBytesTotal *prometheus.Desc
+	count               *prometheus.Desc
+	inputBytesTotal     *prometheus.Desc
+	memoryUsedTotal     *prometheus.Desc
+	diskUsedTotal       *prometheus.Desc
+	coresTotal          *prometheus.Desc
+	activeTasks         *prometheus.Desc
+	failedTasksTotal    *prometheus.Desc
+	completedTasksTotal *prometheus.Desc
+	tasksTotal          *prometheus.Desc
 }
 
 func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollector {
@@ -33,6 +40,41 @@ func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollecto
 		inputBytesTotal: prometheus.NewDesc(
 			"spark_executor_input_bytes_total",
 			"Total amount of bytes processed by executor",
+			[]string{"executor_id"},
+			applicationLabels),
+		memoryUsedTotal: prometheus.NewDesc(
+			"spark_executor_memory_used_bytes_total",
+			"Total amount of bytes of memory used by executor",
+			[]string{"executor_id"},
+			applicationLabels),
+		diskUsedTotal: prometheus.NewDesc(
+			"spark_executor_disk_used_bytes_total",
+			"Total amount of bytes of space used by executor",
+			[]string{"executor_id"},
+			applicationLabels),
+		coresTotal: prometheus.NewDesc(
+			"spark_executor_cores_total",
+			"Total amount of cpu cores available to executor",
+			[]string{"executor_id"},
+			applicationLabels),
+		activeTasks: prometheus.NewDesc(
+			"spark_executor_active_tasks",
+			"Current count of active tasks on the executor",
+			[]string{"executor_id"},
+			applicationLabels),
+		failedTasksTotal: prometheus.NewDesc(
+			"spark_executor_failed_tasks_total",
+			"Total number of failed tasks on the executor",
+			[]string{"executor_id"},
+			applicationLabels),
+		completedTasksTotal: prometheus.NewDesc(
+			"spark_executor_completed_tasks_total",
+			"Total number of tasks the executor has completed",
+			[]string{"executor_id"},
+			applicationLabels),
+		tasksTotal: prometheus.NewDesc(
+			"spark_executor_tasks_total",
+			"Total number of tasks the executor has been assigned",
 			[]string{"executor_id"},
 			applicationLabels),
 		count: prometheus.NewDesc(
@@ -45,14 +87,28 @@ func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollecto
 
 func (e *executorCollector) Describe(descs chan<- *prometheus.Desc) {
 	descs <- e.inputBytesTotal
+	descs <- e.memoryUsedTotal
+	descs <- e.diskUsedTotal
+	descs <- e.coresTotal
+	descs <- e.activeTasks
+	descs <- e.failedTasksTotal
+	descs <- e.completedTasksTotal
+	descs <- e.tasksTotal
 	descs <- e.count
 }
 
 func (e *executorCollector) Collect(executors []client.Executor, metrics chan<- prometheus.Metric) {
-	metrics <- prometheus.MustNewConstMetric(e.count, prometheus.GaugeValue, float64(len(executors)))
 	for _, executor := range executors {
 		metrics <- prometheus.MustNewConstMetric(e.inputBytesTotal, prometheus.CounterValue, float64(executor.TotalInputBytes), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.memoryUsedTotal, prometheus.CounterValue, float64(executor.MemoryUsed), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.diskUsedTotal, prometheus.CounterValue, float64(executor.DiskUsed), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.coresTotal, prometheus.GaugeValue, float64(executor.TotalCores), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.activeTasks, prometheus.GaugeValue, float64(executor.ActiveTasks), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.failedTasksTotal, prometheus.CounterValue, float64(executor.FailedTasks), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.completedTasksTotal, prometheus.CounterValue, float64(executor.CompletedTasks), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.tasksTotal, prometheus.CounterValue, float64(executor.TotalTasks), executor.ID)
 	}
+	metrics <- prometheus.MustNewConstMetric(e.count, prometheus.GaugeValue, float64(len(executors)))
 }
 
 type applicationCollector struct {
