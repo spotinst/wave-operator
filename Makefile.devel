@@ -84,8 +84,7 @@ generate: controller-gen  ## Generate code
 
 
 docker-build: test version ## Build the docker image
-	docker build . -t ${IMG}
-	docker tag ${IMG} ${LATEST}
+	docker build . -t ${IMG} -t ${LATEST}
 
 
 docker-push:  ## Push the docker image
@@ -94,9 +93,7 @@ docker-push:  ## Push the docker image
 
 
 docker-build-tide: test version ## Build the tide docker image
-	docker build --file Dockerfile.tide . -t ${TIDE_IMG}
-	docker tag ${TIDE_IMG} ${TIDE_LATEST}
-
+	docker build --file Dockerfile.tide . -t ${TIDE_IMG} -t ${TIDE_LATEST}
 
 docker-push-tide:  ## Push the tide docker image
 	docker push ${TIDE_IMG}
