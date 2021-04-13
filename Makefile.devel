@@ -29,7 +29,7 @@ version:  ## set VERSION file
 test: generate mocks fmt vet manifests  ## Run tests
 	go test ./... -coverprofile cover.out
 
-mocks:  ## Generate test mock code
+mocks: $(GOBIN)/mockgen ## Generate test mock code
 	mockgen -source=install/installer.go -destination controllers/internal/mock_install/installer_mock.go
 	mockgen -source=cloudstorage/storage.go -destination controllers/internal/mock_cloudstorage/storage_mock.go
 	mockgen -source=internal/sparkapi/client/transport/client.go -destination internal/sparkapi/client/transport/mock_transport/client_mock.go
@@ -118,3 +118,6 @@ CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+$(GOBIN)/mockgen:
+	go install github.com/golang/mock/mockgen
