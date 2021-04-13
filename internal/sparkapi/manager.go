@@ -343,15 +343,9 @@ func isSparkDriverRunning(driverPod *corev1.Pod) bool {
 }
 
 func IsServiceUnavailableError(err error) bool {
-	if errors.As(err, &transport.ServiceUnavailableError{}) {
-		return true
-	}
-	return false
+	return errors.Is(err, &transport.ServiceUnavailableError{})
 }
 
 func IsNotFoundError(err error) bool {
-	if errors.As(err, &transport.NotFoundError{}) {
-		return true
-	}
-	return false
+	return errors.Is(err, &transport.NotFoundError{})
 }

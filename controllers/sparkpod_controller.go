@@ -459,7 +459,7 @@ func newPodCR(pod *corev1.Pod, existingPodCR *v1alpha1.Pod, log logr.Logger) v1a
 	}
 
 	if podCR.Labels == nil {
-		podCR.Labels = make(map[string]string, 0)
+		podCR.Labels = make(map[string]string)
 	}
 
 	return podCR
