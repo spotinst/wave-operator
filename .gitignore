@@ -25,3 +25,6 @@ VERSION
 .gradle/
 scratch
 venv/
+
+# MacOS
+.DS_Store
