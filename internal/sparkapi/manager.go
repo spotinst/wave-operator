@@ -32,7 +32,6 @@ type Manager interface {
 type manager struct {
 	client sparkapiclient.Client
 	logger logr.Logger
-	metrics *applicationRegistry
 }
 
 type ApplicationInfo struct {
@@ -56,7 +55,6 @@ var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, log
 	return manager{
 		client:  client,
 		logger:  logger,
-		metrics: newApplicationRegistry(),
 	}, nil
 }
 
@@ -135,7 +133,7 @@ func (m manager) GetApplicationInfo(applicationID string, maxProcessedStageID in
 	workloadType := m.getWorkloadType(applicationID)
 	applicationInfo.WorkloadType = workloadType
 
-	m.metrics.Register(applicationInfo)
+	registry.Register(applicationInfo)
 
 	return applicationInfo, nil
 }
