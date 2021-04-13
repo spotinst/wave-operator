@@ -8,8 +8,12 @@ import (
 
 var registry = make(applicationRegistry)
 
+// applicationRegistry contains all registered application collectors indexed by ID
 type applicationRegistry map[string]*applicationCollector
 
+// Register creates a prometheus metrics collector for the specified application
+// in the case the application has already been registered the collector is updated
+// with the current application information
 func (ar applicationRegistry) Register(app *ApplicationInfo) {
 	// If if a collector has already been created for the application
 	// Then we just update the app for the application
@@ -23,6 +27,7 @@ func (ar applicationRegistry) Register(app *ApplicationInfo) {
 	metrics.Registry.MustRegister(collector)
 }
 
+// executorCollector is a prometheus collector for spark executors
 type executorCollector struct {
 	count               *prometheus.Desc
 	inputBytesTotal     *prometheus.Desc
@@ -35,6 +40,8 @@ type executorCollector struct {
 	tasksTotal          *prometheus.Desc
 }
 
+// newExecutorCollector creates a new executorCollector where the specified applicationLabels
+// are set as const labels for each metric that is collected
 func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollector {
 	return &executorCollector{
 		inputBytesTotal: prometheus.NewDesc(
@@ -111,6 +118,7 @@ func (e *executorCollector) Collect(executors []client.Executor, metrics chan<- 
 	metrics <- prometheus.MustNewConstMetric(e.count, prometheus.GaugeValue, float64(len(executors)))
 }
 
+// applicationCollector is a prometheus collector that collects information for the specific spark application
 type applicationCollector struct {
 	app           *ApplicationInfo
 	executors     *executorCollector
