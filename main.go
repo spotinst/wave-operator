@@ -36,8 +36,6 @@ import (
 	"github.com/spotinst/wave-operator/internal/ocean"
 	"github.com/spotinst/wave-operator/internal/sparkapi"
 	"github.com/spotinst/wave-operator/internal/version"
-	"github.com/spotinst/wave-operator/tide"
-
 	// +kubebuilder:scaffold:imports
 )
 
@@ -56,12 +54,10 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
-	var sparkMetrics bool
 	flag.StringVar(&metricsAddr, "metrics-addr", "0.0.0.0:8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&sparkMetrics, "enable-spark-metrics", true, "Enables the metrics subsystem for spark drivers and executors")
 
 	flag.Parse()
 
@@ -119,8 +115,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	env := tide.NewKubernetesEnvironment(mgr.GetClient(), clusterName)
-	ac := admission.NewAdmissionController(storageProvider, logger, env)
+	ac := admission.NewAdmissionController(storageProvider, logger)
 	err = mgr.Add(ac)
 	if err != nil {
 		setupLog.Error(err, "unable to add admission controller")

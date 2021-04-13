@@ -13,8 +13,6 @@ import (
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/util"
 	sparkoperator "github.com/spotinst/wave-operator/sparkoperator.k8s.io/v1beta2"
-	"github.com/spotinst/wave-operator/tide"
-
 	"helm.sh/helm/v3/pkg/action"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -205,7 +203,7 @@ serviceAccount:
 	// 	}
 	// }
 	if webhook {
-		ac := admission.NewAdmissionController(&util.FakeStorageProvider{}, logger, &tide.FakeEnvironment{})
+		ac := admission.NewAdmissionController(&util.FakeStorageProvider{}, logger)
 		ctx := ctrl.SetupSignalHandler()
 		ac.Start(ctx)
 	}

@@ -336,7 +336,6 @@ func (m *manager) SetConfiguration(input map[string]interface{}) (*v1alpha1.Wave
 			CertManagerDeployed:     !certManagerExists,
 			K8sClusterProvisioned:   vc.isK8sProvisioned,
 			OceanClusterProvisioned: vc.isOceanClusterProvisioned,
-			MetricsEnabled:          true,
 		},
 	}
 

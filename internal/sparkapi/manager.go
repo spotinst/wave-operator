@@ -32,9 +32,11 @@ type Manager interface {
 type manager struct {
 	client sparkapiclient.Client
 	logger logr.Logger
+	metrics *applicationRegistry
 }
 
 type ApplicationInfo struct {
+	ID                      string
 	MaxProcessedStageID     int
 	ApplicationName         string
 	SparkProperties         map[string]string
@@ -52,8 +54,9 @@ var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, log
 		return nil, fmt.Errorf("could not get spark api client, %w", err)
 	}
 	return manager{
-		client: client,
-		logger: logger,
+		client:  client,
+		logger:  logger,
+		metrics: newApplicationRegistry(),
 	}, nil
 }
 
@@ -91,6 +94,7 @@ func (m manager) GetApplicationInfo(applicationID string, maxProcessedStageID in
 		return nil, fmt.Errorf("application is nil")
 	}
 
+	applicationInfo.ID = application.ID
 	applicationInfo.ApplicationName = application.Name
 	applicationInfo.Attempts = application.Attempts
 
@@ -130,6 +134,8 @@ func (m manager) GetApplicationInfo(applicationID string, maxProcessedStageID in
 
 	workloadType := m.getWorkloadType(applicationID)
 	applicationInfo.WorkloadType = workloadType
+
+	m.metrics.Register(applicationInfo)
 
 	return applicationInfo, nil
 }

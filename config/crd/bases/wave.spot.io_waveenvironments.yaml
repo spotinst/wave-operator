@@ -45,9 +45,6 @@ spec:
                 description: whether the K8s cluster was provisioned when creating
                   Wave
                 type: boolean
-              metricsEnabled:
-                description: whether the metrics subsystem should be enabled for
-                type: boolean
               oceanClusterProvisioned:
                 description: whether the Ocean cluster was provisioned when create
                   Wave
@@ -59,7 +56,6 @@ spec:
             - certManagerDeployed
             - environmentNamespace
             - k8sClusterProvisioned
-            - metricsEnabled
             - oceanClusterProvisioned
             - operatorVersion
             type: object
