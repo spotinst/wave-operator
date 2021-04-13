@@ -118,6 +118,9 @@ image:
   repository: public.ecr.aws/l8m2k1n1/netapp/wave-operator
   tag: "0.2.1-1d11e752"
 `,
+		Enabled: map[v1alpha1.ChartName]bool{
+			v1alpha1.SparkHistoryChartName: false,
+		},
 	}
 
 	spec, err := json.Marshal(is)
@@ -127,7 +130,7 @@ image:
 
 func TestUnmarshal(t *testing.T) {
 
-	text := "{\"name\":\"wave-operator\",\"repository\":\"https://charts.spot.io\",\"version\":\"0.2.0\"}"
+	text := "{\"name\":\"wave-operator\",\"repository\":\"https://charts.spot.io\",\"version\":\"0.2.0\",\"enabled\":{\"spark-history-server\":false}}"
 	is := &InstallSpec{}
 
 	err := json.Unmarshal([]byte(text), is)
@@ -137,6 +140,10 @@ func TestUnmarshal(t *testing.T) {
 	assert.Equal(t, "https://charts.spot.io", is.Repository)
 	assert.Equal(t, "0.2.0", is.Version)
 	assert.Empty(t, is.Values)
+	assert.NotEmpty(t, is.Enabled)
+	e, ok := is.Enabled[v1alpha1.SparkHistoryChartName]
+	assert.True(t, ok)
+	assert.False(t, e)
 }
 
 func TestUnmarshalJsonValues(t *testing.T) {

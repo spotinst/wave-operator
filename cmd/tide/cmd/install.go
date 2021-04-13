@@ -16,33 +16,42 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
+	"github.com/spotinst/wave-operator/api/v1alpha1"
 	installpkg "github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/tide"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-// installCmd represents the install command
-var installCmd = &cobra.Command{
-	Use:   "advance",
-	Short: "Installs the wave operator",
-	Long: `Installs the wave operator and all its dependencies, and configures wave components
+var (
+	chartNames = []string{
+		string(v1alpha1.WaveIngressChartName),
+		string(v1alpha1.EnterpriseGatewayChartName),
+		string(v1alpha1.SparkHistoryChartName),
+		string(v1alpha1.SparkOperatorChartName),
+	}
+
+	installCmd = &cobra.Command{
+		Use:   "advance",
+		Short: "Installs the wave operator",
+		Long: `Installs the wave operator and all its dependencies, and configures wave components
 
   Dependencies:
-  - cert-manager
+    cert-manager
 
   Components:
-  - spark-history-server
-  - nginx-ingress
-  - spark-operator
-  - enterprise-gateway`,
+    ` + strings.Join(chartNames, "\n    "),
+		Run: install,
+	}
 
-	Run: install,
-}
+	logger logr.Logger
 
-var (
 	k8sClusterCreated   bool
 	oceanCreated        bool
 	certManagerDeployed bool
@@ -53,9 +62,13 @@ var (
 	waveChartValuesJSON string
 
 	waveOperatorImage string
+	waveComponents    components = map[v1alpha1.ChartName]bool{}
 )
 
 func init() {
+
+	logger = zap.New(zap.UseDevMode(true))
+
 	rootCmd.AddCommand(installCmd)
 
 	installCmd.Flags().BoolVar(&k8sClusterCreated, "k8s-cluster-created", false, "indicates the cluster was created specifically for wave")
@@ -67,11 +80,52 @@ func init() {
 	installCmd.Flags().StringVar(&waveChartValuesJSON, "wave-chart-values", tide.WaveOperatorValues, "wave-operator chart values (json)")
 
 	installCmd.Flags().StringVar(&waveOperatorImage, "wave-image", "", "full container image specification for the wave operator")
+
+	installCmd.Flags().Var(&waveComponents, "enable", fmt.Sprintf("enable or disable components, allows multiple arguments: <name>=true|false, for name in %s", chartNames))
+
+}
+
+type components map[v1alpha1.ChartName]bool
+
+func (c components) String() string {
+	s := make([]string, 0, len(c))
+	for n, e := range c {
+		s = append(s, fmt.Sprintf("%s=%t", n, e))
+	}
+	return strings.Join(s, ",")
+}
+
+func (c components) Type() string {
+	return "WaveComponentSet"
+}
+
+func (c components) Set(arg string) error {
+	v := strings.Split(arg, ",")
+	for _, val := range v {
+		input := strings.Split(val, "=")
+		name := v1alpha1.ChartName(input[0])
+
+		switch name {
+		case
+			v1alpha1.WaveIngressChartName,
+			v1alpha1.EnterpriseGatewayChartName,
+			v1alpha1.SparkHistoryChartName,
+			v1alpha1.SparkOperatorChartName:
+			enabled, err := strconv.ParseBool(input[1])
+			if err != nil {
+				return fmt.Errorf("cannot parse enabled flag for %s (%s), %w", name, val, err)
+			}
+			c[name] = enabled
+
+		default:
+			logger.Info("Unknown chart name input, ignoring", "name", name)
+		}
+	}
+	return nil
+
 }
 
 func install(cmd *cobra.Command, args []string) {
-
-	logger := zap.New(zap.UseDevMode(true))
 
 	logger.Info("advance: installing wave")
 
@@ -86,6 +140,7 @@ func install(cmd *cobra.Command, args []string) {
 		Repository: waveChartURL,
 		Version:    waveChartVersion,
 		Values:     waveChartValuesJSON,
+		Enabled:    waveComponents,
 	}
 	err = manager.SetWaveInstallSpec(waveSpec)
 	if err != nil {

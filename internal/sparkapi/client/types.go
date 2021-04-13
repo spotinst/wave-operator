@@ -91,3 +91,10 @@ type ExecutorPeakMemoryMetrics struct {
 	MajorGCCount               int64 `json:"MajorGCCount"`
 	MajorGCTime                int64 `json:"MajorGCTime"`
 }
+
+// StreamingStatistics holds Spark Streaming statistics
+type StreamingStatistics struct {
+	StartTime         string `json:"startTime"`
+	BatchDuration     int64  `json:"batchDuration"`
+	AvgProcessingTime int64  `json:"avgProcessingTime"`
+}
