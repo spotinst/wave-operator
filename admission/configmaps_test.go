@@ -81,7 +81,7 @@ var (
 
 func TestMutateEmptyCM(t *testing.T) {
 	req := getAdmissionRequest(t, emptyConfigMap)
-	r, err := NewConfigMapMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+	r, err := MutateConfigMap(&util.FakeStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, emptyConfigMap.UID, r.UID)
@@ -92,7 +92,7 @@ func TestMutateEmptyCM(t *testing.T) {
 
 func TestMutateNonsparkCM(t *testing.T) {
 	req := getAdmissionRequest(t, nonsparkConfigMap)
-	r, err := NewConfigMapMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+	r, err := MutateConfigMap(&util.FakeStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, nonsparkConfigMap.UID, r.UID)
@@ -103,7 +103,7 @@ func TestMutateNonsparkCM(t *testing.T) {
 
 func TestMutateBadSparkCM(t *testing.T) {
 	req := getAdmissionRequest(t, badSparkConfigMap)
-	r, err := NewConfigMapMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+	r, err := MutateConfigMap(&util.FakeStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, badSparkConfigMap.UID, r.UID)
@@ -114,7 +114,7 @@ func TestMutateBadSparkCM(t *testing.T) {
 
 func TestMutateSparkCM(t *testing.T) {
 	req := getAdmissionRequest(t, sparkConfigMap)
-	r, err := NewConfigMapMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+	r, err := MutateConfigMap(&util.FakeStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, sparkConfigMap.UID, r.UID)
@@ -130,17 +130,15 @@ func TestMutateSparkCM(t *testing.T) {
 
 func TestMutateSparkBadStorageCM(t *testing.T) {
 	req := getAdmissionRequest(t, sparkConfigMap)
-	m := NewConfigMapMutator(log, &util.FailedStorageProvider{})
-	r, err := m.Mutate(req)
+	r, err := MutateConfigMap(&util.FailedStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Nil(t, r.PatchType)
 	assert.Nil(t, r.Patch)
 	assert.True(t, r.Allowed)
 
-	m = NewConfigMapMutator(log, &util.NilStorageProvider{})
 	req = getAdmissionRequest(t, sparkConfigMap)
-	r, err = m.Mutate(req)
+	r, err = MutateConfigMap(&util.NilStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Nil(t, r.PatchType)

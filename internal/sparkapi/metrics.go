@@ -11,7 +11,7 @@ import (
 var (
 	registry = make(ApplicationRegistry)
 
-	ErrNoApp = errors.New("metrics: application to register can not be nil")
+	ErrNoApp   = errors.New("metrics: application to register can not be nil")
 	ErrNoAppID = errors.New("metrics: application to register has to have an application id specified")
 )
 

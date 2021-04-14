@@ -49,6 +49,10 @@ func (m *manager) checkCertManagerPreinstallation() (bool, error) {
 
 func (m *manager) testCertManager() (bool, error) {
 	ctx := context.TODO()
+	rc, err := m.getControllerRuntimeClient()
+	if err != nil {
+		return false, fmt.Errorf("kubernetes config error, %w", err)
+	}
 	issuer := &cm.Issuer{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-selfsigned",
@@ -64,11 +68,11 @@ func (m *manager) testCertManager() (bool, error) {
 	if err := scheme.Convert(issuer, uiss, nil); err != nil {
 		return false, err
 	}
-	err := m.rc.Create(ctx, uiss)
+	err = rc.Create(ctx, uiss)
 	if err != nil {
 		return false, fmt.Errorf("error creating test case, %w", err)
 	}
-	defer m.rc.Delete(ctx, uiss)
+	defer rc.Delete(ctx, uiss)
 
 	cert := &cm.Certificate{
 		ObjectMeta: metav1.ObjectMeta{
@@ -85,11 +89,11 @@ func (m *manager) testCertManager() (bool, error) {
 	if err := scheme.Convert(cert, uc, nil); err != nil {
 		return false, err
 	}
-	err = m.rc.Create(ctx, uc)
+	err = rc.Create(ctx, uc)
 	if err != nil {
 		return false, fmt.Errorf("error creating test case, %w", err)
 	}
-	defer m.rc.Delete(ctx, uc)
+	defer rc.Delete(ctx, uc)
 
 	key := types.NamespacedName{
 		Name:      cert.Name,
@@ -97,7 +101,7 @@ func (m *manager) testCertManager() (bool, error) {
 	}
 	err = wait.Poll(1*time.Second, 60*time.Second, func() (bool, error) {
 		obj := &cm.Certificate{}
-		err := m.rc.Get(ctx, key, obj)
+		err := rc.Get(ctx, key, obj)
 		if err != nil {
 			return false, err
 		}

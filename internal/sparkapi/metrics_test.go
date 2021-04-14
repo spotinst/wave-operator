@@ -25,7 +25,7 @@ func TestApplicationRegistry(t *testing.T) {
 	})
 	t.Run("RegistersApplicationAndCreatesCollector", func(tt *testing.T) {
 		info := &ApplicationInfo{
-			ID: "some-id",
+			ID:              "some-id",
 			ApplicationName: "some-name",
 		}
 		require.NoError(tt, registry.Register(info))
@@ -46,7 +46,7 @@ func TestApplicationRegistry(t *testing.T) {
 	})
 	t.Run("UpdatesCurrentlyRegisteredApplication", func(tt *testing.T) {
 		info := &ApplicationInfo{
-			ID: "update",
+			ID:              "update",
 			ApplicationName: "update",
 		}
 		info.Executors = []sparkapiclient.Executor{
@@ -94,11 +94,11 @@ func TestApplicationRegistry(t *testing.T) {
 		assert.NoError(tt, testutil.CollectAndCompare(collector, strings.NewReader(expectedOutput)))
 
 		info.Executors = append(info.Executors, sparkapiclient.Executor{
-			ID: "added-executor",
+			ID:          "added-executor",
 			ActiveTasks: 100,
 			FailedTasks: 200,
-			MaxMemory: 2000,
-			TotalCores: 128,
+			MaxMemory:   2000,
+			TotalCores:  128,
 		})
 
 		require.NoError(tt, registry.Register(info))

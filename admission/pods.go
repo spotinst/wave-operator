@@ -5,11 +5,10 @@ import (
 	"strconv"
 
 	"github.com/go-logr/logr"
-	admissionv1 "k8s.io/api/admission/v1"
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/spotinst/wave-operator/cloudstorage"
 	"github.com/spotinst/wave-operator/internal/storagesync"
+	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -66,27 +65,18 @@ var (
 	}
 )
 
-type PodMutator struct {
-	storageProvider cloudstorage.CloudStorageProvider
-	log             logr.Logger
-}
-
-func NewPodMutator(log logr.Logger, storageProvider cloudstorage.CloudStorageProvider) PodMutator {
-	return PodMutator{
-		storageProvider: storageProvider,
-		log:             log,
-	}
-}
-
-func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
+func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
 
 	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 	sourceObj := &corev1.Pod{}
 	_, _, err := deserializer.Decode(req.Object.Raw, &gvk, sourceObj)
 	if err != nil {
-		return nil, fmt.Errorf("deserialization failed: %w", err)
+		return nil, err
 	}
-	log := m.log.WithValues("pod", sourceObj.Name)
+	if sourceObj == nil {
+		return nil, fmt.Errorf("deserialization failed")
+	}
+	log = log.WithValues("pod", sourceObj.Name)
 
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
@@ -95,7 +85,7 @@ func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.Admi
 	if sourceObj.Labels[SparkRoleLabel] == "" {
 		return resp, nil
 	}
-	storageInfo, err := m.storageProvider.GetStorageInfo()
+	storageInfo, err := provider.GetStorageInfo()
 	if err != nil {
 		log.Error(err, "cannot get storage configuration, not patching pod")
 		return resp, nil
@@ -105,11 +95,11 @@ func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.Admi
 		return resp, nil
 	}
 
-	var modObj *corev1.Pod
+	modObj := &corev1.Pod{}
 	if sourceObj.Labels[SparkRoleLabel] == SparkRoleDriverValue {
-		modObj = m.mutateDriverPod(sourceObj, storageInfo)
+		modObj, err = mutateDriverPod(sourceObj, storageInfo, log)
 	} else {
-		modObj = m.mutateExecutorPod(sourceObj)
+		modObj, err = mutateExecutorPod(sourceObj, storageInfo, log)
 	}
 
 	patchBytes, err := GetJsonPatch(sourceObj, modObj)
@@ -125,13 +115,13 @@ func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.Admi
 	return resp, nil
 }
 
-func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInfo) *corev1.Pod {
+func mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInfo, log logr.Logger) (*corev1.Pod, error) {
 
 	modObj := sourceObj.DeepCopy()
 	newSpec := modObj.Spec
 	newSpec.Affinity = ondemandAffinity
 
-	m.log.Info("pod admission control", "mountPath", volumeMount.MountPath)
+	log.Info("pod admission control", "mountPath", volumeMount.MountPath)
 
 	webServerPort := strconv.Itoa(int(storagesync.Port))
 	storageContainer := corev1.Container{
@@ -202,11 +192,11 @@ func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudsto
 		newSpec.Volumes = append(newSpec.Volumes, volume)
 	}
 	modObj.Spec = newSpec
-	return modObj
+	return modObj, nil
 }
 
-func (m PodMutator) mutateExecutorPod(sourceObj *corev1.Pod) *corev1.Pod {
+func mutateExecutorPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInfo, log logr.Logger) (*corev1.Pod, error) {
 	modObj := sourceObj.DeepCopy()
 	modObj.Spec.Affinity = ondemandAntiAffinity
-	return modObj
+	return modObj, nil
 }
