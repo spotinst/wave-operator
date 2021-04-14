@@ -1,22 +1,10 @@
+OPERATOR_IMG = ${DOCKER_REGISTRY}/wave-opertator
+OPERATOR_IMG_VERSION = ${OPERATOR_IMG}:${VERSION}
 
-
-# Image URL to use all building/pushing image targets
-REGISTRY = public.ecr.aws/l8m2k1n1/netapp/wave-operator
-IMG ?= ${REGISTRY}:${VERSION}
-LATEST = ${REGISTRY}:latest
-
-TIDE_REGISTRY = public.ecr.aws/l8m2k1n1/netapp/tide
-TIDE_IMG ?= ${TIDE_REGISTRY}:${VERSION}
-TIDE_LATEST = ${TIDE_REGISTRY}:latest
+TIDE_IMG = ${DOCKER_REGISTRY}/tide
+TIDE_IMG_VERSION = ${TIDE_IMG}:${VERSION}
 
 CRD_OPTIONS ?= "crd:crdVersions=v1,preserveUnknownFields=false"
-
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
-else
-GOBIN=$(shell go env GOBIN)
-endif
 
 all: manager
 
@@ -27,7 +15,7 @@ version:  ## set VERSION file
 	$Q echo ${VERSION} > VERSION
 
 test: generate mocks fmt vet manifests  ## Run tests
-	go test ./... -coverprofile cover.out
+	$(GO) test ./... -coverprofile cover.out
 
 mocks: $(GOBIN)/mockgen ## Generate test mock code
 	mockgen -source=install/installer.go -destination controllers/internal/mock_install/installer_mock.go
@@ -37,17 +25,17 @@ mocks: $(GOBIN)/mockgen ## Generate test mock code
 	mockgen -source=internal/sparkapi/manager.go -destination internal/sparkapi/mock_sparkapi/manager_mock.go
 
 manager: generate fmt vet  ## Build manager binary
-	go build \
+	$(GO) build \
  	 -ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=${VERSION} -X github.com/spotinst/wave-operator/internal/version.BuildDate=${BUILD_DATE}" \
      -o bin/manager main.go
 
 tide: manifests generate fmt vet  ## Build tide binary
-	go build \
+	$(GO) build \
 	-ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=${VERSION} -X github.com/spotinst/wave-operator/internal/version.BuildDate=${BUILD_DATE}" \
 	-o bin/tide cmd/tide/main.go
 
 run: generate fmt vet manifests  ## Run against the configured Kubernetes cluster in ~/.kube/config
-	go run \
+	$(GO) run \
 	  -ldflags "-X github.com/spotinst/wave-operator/internal/version.BuildVersion=${VERSION} -X github.com/spotinst/wave-operator/internal/version.BuildDate=${BUILD_DATE}" \
 	  ./main.go
 
@@ -61,7 +49,7 @@ uninstall: manifests  ## Uninstall CRDs from a cluster
 
 
 deploy: manifests  ## Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-	cd config/manager && kustomize edit set image controller=${IMG}
+	cd config/manager && kustomize edit set image controller=${OPERATOR_IMG_VERSION}
 	kustomize build config/default | kubectl apply -f -
 
 
@@ -72,33 +60,31 @@ manifests: controller-gen  ## Generate manifests e.g. CRD, RBAC etc.
 
 
 fmt:  ## Run go fmt against code
-	go fmt ./...
+	$(GO) fmt ./...
 
 
 vet:  ## Run go vet against code
-	go vet ./...
+	$(GO) vet ./...
 
 
 generate: controller-gen  ## Generate code
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 
-docker-build: test version ## Build the docker image
-	docker build . -t ${IMG} -t ${LATEST}
-
+docker-build: test version ## Build the operator docker image
+	docker build . -t ${OPERATOR_IMG_VERSION} -t ${OPERATOR_IMG}
 
 docker-push:  ## Push the docker image
-	docker push ${IMG}
-	docker push ${LATEST}
+	docker push ${OPERATOR_IMG}
+	docker push ${OPERATOR_IMG_VERSION}
 
 
 docker-build-tide: test version ## Build the tide docker image
-	docker build --file Dockerfile.tide . -t ${TIDE_IMG} -t ${TIDE_LATEST}
+	docker build --file Dockerfile.tide . -t ${TIDE_IMG_VERSION} -t ${TIDE_IMG}
 
 docker-push-tide:  ## Push the tide docker image
 	docker push ${TIDE_IMG}
-	docker push ${TIDE_LATEST}
-
+	docker push ${TIDE_IMG_VERSION}
 
 # download controller-gen if necessary
 controller-gen:  ## find or download controller-gen
@@ -117,4 +103,4 @@ CONTROLLER_GEN=$(shell which controller-gen)
 endif
 
 $(GOBIN)/mockgen:
-	go install github.com/golang/mock/mockgen
+	$(GO) install github.com/golang/mock/mockgen
