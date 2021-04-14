@@ -112,9 +112,9 @@ func TestMutateDriverPod(t *testing.T) {
 			assert.Equal(t, len(driverPod.Spec.Volumes)+1, len(newPod.Spec.Volumes))
 			assert.Equal(t, "spark-logs", newPod.Spec.Volumes[0].Name)
 		} else {
-			assert.Equal(t, len(driverPod.Spec.Containers), len(newPod.Spec.Containers))
-			assert.Equal(t, driverPod.Spec.Containers[0].Name, newPod.Spec.Containers[0].Name)
-			assert.Equal(t, len(driverPod.Spec.Volumes), len(newPod.Spec.Volumes))
+			// No change to containers or volumes
+			assert.Equal(t, driverPod.Spec.Containers, newPod.Spec.Containers)
+			assert.Equal(t, driverPod.Spec.Volumes, newPod.Spec.Volumes)
 		}
 	}
 }
@@ -213,6 +213,7 @@ func TestMutatePodBadStorage(t *testing.T) {
 		assert.Equal(t, driverPod.Spec.Volumes, newPod.Spec.Volumes)
 
 		// We still want to add node affinity even though we have a failed storage provider
+		assert.Nil(t, driverPod.Spec.Affinity)
 		assert.Equal(t, onDemandAffinity, newPod.Spec.Affinity)
 	}
 
