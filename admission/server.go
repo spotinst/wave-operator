@@ -129,7 +129,6 @@ func (ac *AdmissionController) Start(ctx context.Context) error {
 	return nil
 }
 
-// TODO Opt-in or opt-out?
 func isEventLogSyncEnabled(annotations map[string]string) bool {
 	if annotations == nil {
 		return false

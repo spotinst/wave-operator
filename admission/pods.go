@@ -2,14 +2,15 @@ package admission
 
 import (
 	"fmt"
-	"k8s.io/client-go/kubernetes"
 	"strconv"
 
 	"github.com/go-logr/logr"
-	"github.com/spotinst/wave-operator/cloudstorage"
-	"github.com/spotinst/wave-operator/internal/storagesync"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
+
+	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/internal/storagesync"
 )
 
 const (
@@ -19,7 +20,7 @@ const (
 )
 
 var (
-	ondemandAffinity = &corev1.Affinity{
+	onDemandAffinity = &corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 				NodeSelectorTerms: []corev1.NodeSelectorTerm{
@@ -36,7 +37,7 @@ var (
 			},
 		},
 	}
-	ondemandAntiAffinity = &corev1.Affinity{
+	onDemandAntiAffinity = &corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{
 			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
 				{
@@ -70,37 +71,36 @@ func MutatePod(_ kubernetes.Interface, provider cloudstorage.CloudStorageProvide
 
 	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 	sourceObj := &corev1.Pod{}
+
 	_, _, err := deserializer.Decode(req.Object.Raw, &gvk, sourceObj)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("deserialization failed, %w", err)
 	}
-	if sourceObj == nil {
-		return nil, fmt.Errorf("deserialization failed")
-	}
+
 	log = log.WithValues("pod", sourceObj.Name)
 
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
 		Allowed: true,
 	}
-	if sourceObj.Labels[SparkRoleLabel] == "" {
+
+	if sourceObj.Labels == nil {
 		return resp, nil
 	}
-	storageInfo, err := provider.GetStorageInfo()
-	if err != nil {
-		log.Error(err, "cannot get storage configuration, not patching pod")
-		return resp, nil
-	}
-	if storageInfo == nil {
-		log.Error(fmt.Errorf("storage configuration is nil"), "not patching pod")
+
+	sparkRole := sourceObj.Labels[SparkRoleLabel]
+
+	if sparkRole == "" {
 		return resp, nil
 	}
 
 	modObj := &corev1.Pod{}
-	if sourceObj.Labels[SparkRoleLabel] == SparkRoleDriverValue {
-		modObj, err = mutateDriverPod(sourceObj, storageInfo, log)
+	if sparkRole == SparkRoleDriverValue {
+		log.Info("Mutating driver pod", "annotations", sourceObj.Annotations)
+		modObj = mutateDriverPod(sourceObj, provider, log)
 	} else {
-		modObj, err = mutateExecutorPod(sourceObj, storageInfo, log)
+		log.Info("Mutating executor pod")
+		modObj = mutateExecutorPod(sourceObj)
 	}
 
 	patchBytes, err := GetJsonPatch(sourceObj, modObj)
@@ -116,20 +116,29 @@ func MutatePod(_ kubernetes.Interface, provider cloudstorage.CloudStorageProvide
 	return resp, nil
 }
 
-func mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInfo, log logr.Logger) (*corev1.Pod, error) {
-
+func mutateDriverPod(sourceObj *corev1.Pod, provider cloudstorage.CloudStorageProvider, log logr.Logger) *corev1.Pod {
 	modObj := sourceObj.DeepCopy()
-	newSpec := modObj.Spec
-	newSpec.Affinity = ondemandAffinity
 
-	log.Info("Will mutate driver pod", "name", sourceObj.Name, "annotations", sourceObj.Annotations)
+	// node affinity
+	modObj.Spec.Affinity = onDemandAffinity
+
 	if !isEventLogSyncEnabled(sourceObj.Annotations) {
 		log.Info("Event log sync not enabled, will not add storage sync container")
-		modObj.Spec = newSpec
-		return modObj, nil
+		return modObj
 	}
 
-	log.Info("pod admission control", "mountPath", volumeMount.MountPath)
+	storageInfo, err := provider.GetStorageInfo()
+	if err != nil {
+		log.Error(err, "could not get storage info, will not add storage sync container")
+		return modObj
+	}
+
+	if storageInfo == nil {
+		log.Error(fmt.Errorf("storage configuration is nil"), "will not add storage sync container")
+		return modObj
+	}
+
+	log.Info("driver pod admission control", "mountPath", volumeMount.MountPath)
 
 	webServerPort := strconv.Itoa(int(storagesync.Port))
 	storageContainer := corev1.Container{
@@ -158,8 +167,9 @@ func mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInf
 		},
 	}
 
+	// add storage sync container
 	exists := false
-	for _, c := range newSpec.Containers {
+	for _, c := range modObj.Spec.Containers {
 		if c.Name == storageContainer.Name {
 			exists = true
 			break
@@ -169,42 +179,45 @@ func mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInf
 		// Add storage sidecar container to front of containers list so it gets started first
 		newContainers := make([]corev1.Container, 0)
 		newContainers = append(newContainers, storageContainer)
-		newContainers = append(newContainers, newSpec.Containers...)
-		newSpec.Containers = newContainers
+		newContainers = append(newContainers, modObj.Spec.Containers...)
+		modObj.Spec.Containers = newContainers
 	}
 
-	// mount shared volume to all
-	for i := range newSpec.Containers {
-		if newSpec.Containers[i].VolumeMounts == nil {
-			newSpec.Containers[i].VolumeMounts = []corev1.VolumeMount{}
+	// add volume mount to all containers
+	for i := range modObj.Spec.Containers {
+		if modObj.Spec.Containers[i].VolumeMounts == nil {
+			modObj.Spec.Containers[i].VolumeMounts = []corev1.VolumeMount{}
 		}
 		exists := false
-		for _, v := range newSpec.Containers[i].VolumeMounts {
+		for _, v := range modObj.Spec.Containers[i].VolumeMounts {
 			if v.Name == volumeMount.Name {
 				exists = true
 				break
 			}
 		}
 		if !exists {
-			newSpec.Containers[i].VolumeMounts = append(newSpec.Containers[i].VolumeMounts, volumeMount)
+			modObj.Spec.Containers[i].VolumeMounts = append(modObj.Spec.Containers[i].VolumeMounts, volumeMount)
 		}
 	}
+
+	// add volume
 	exists = false
-	for _, v := range newSpec.Volumes {
+	for _, v := range modObj.Spec.Volumes {
 		if v.Name == volume.Name {
 			exists = true
 			break
 		}
 	}
 	if !exists {
-		newSpec.Volumes = append(newSpec.Volumes, volume)
+		modObj.Spec.Volumes = append(modObj.Spec.Volumes, volume)
 	}
-	modObj.Spec = newSpec
-	return modObj, nil
+
+	return modObj
 }
 
-func mutateExecutorPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInfo, log logr.Logger) (*corev1.Pod, error) {
+func mutateExecutorPod(sourceObj *corev1.Pod) *corev1.Pod {
 	modObj := sourceObj.DeepCopy()
-	modObj.Spec.Affinity = ondemandAntiAffinity
-	return modObj, nil
+	// node affinity
+	modObj.Spec.Affinity = onDemandAntiAffinity
+	return modObj
 }

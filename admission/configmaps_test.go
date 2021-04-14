@@ -4,10 +4,14 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/spotinst/wave-operator/internal/util"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
+
+	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/controllers"
+	"github.com/spotinst/wave-operator/internal/util"
 )
 
 var (
@@ -21,7 +25,8 @@ var (
 			Name: "empty",
 		},
 	}
-	nonsparkConfigMap = &corev1.ConfigMap{
+
+	nonSparkConfigMap = &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
 			APIVersion: "v1",
@@ -79,9 +84,25 @@ var (
 	}
 )
 
+func getDriverPod(name string, namespace string, eventLogSyncEnabled bool) *corev1.Pod {
+	pod := getSimplePod()
+	pod.Name = name
+	pod.Namespace = namespace
+	pod.Labels = map[string]string{
+		SparkRoleLabel: SparkRoleDriverValue,
+	}
+	if eventLogSyncEnabled {
+		pod.Annotations[controllers.WaveConfigAnnotationSyncEventLogs] = "true"
+	}
+	return pod
+}
+
+// TODO when owner pod not found, when sync off, when sync on
+
 func TestMutateEmptyCM(t *testing.T) {
+	clientSet := k8sfake.NewSimpleClientset()
 	req := getAdmissionRequest(t, emptyConfigMap)
-	r, err := MutateConfigMap(&util.FakeStorageProvider{}, log, req)
+	r, err := MutateConfigMap(clientSet, &util.FakeStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, emptyConfigMap.UID, r.UID)
@@ -90,34 +111,41 @@ func TestMutateEmptyCM(t *testing.T) {
 	assert.True(t, r.Allowed)
 }
 
-func TestMutateNonsparkCM(t *testing.T) {
-	req := getAdmissionRequest(t, nonsparkConfigMap)
-	r, err := MutateConfigMap(&util.FakeStorageProvider{}, log, req)
+func TestMutateNonSparkCM(t *testing.T) {
+	clientSet := k8sfake.NewSimpleClientset()
+	req := getAdmissionRequest(t, nonSparkConfigMap)
+	r, err := MutateConfigMap(clientSet, &util.FakeStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
-	assert.Equal(t, nonsparkConfigMap.UID, r.UID)
+	assert.Equal(t, nonSparkConfigMap.UID, r.UID)
 	assert.Nil(t, r.PatchType)
 	assert.Nil(t, r.Patch)
 	assert.True(t, r.Allowed)
 }
 
 func TestMutateBadSparkCM(t *testing.T) {
-	req := getAdmissionRequest(t, badSparkConfigMap)
-	r, err := MutateConfigMap(&util.FakeStorageProvider{}, log, req)
+	cm := badSparkConfigMap
+	driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true)
+	clientSet := k8sfake.NewSimpleClientset(driver)
+	req := getAdmissionRequest(t, cm)
+	r, err := MutateConfigMap(clientSet, &util.FakeStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
-	assert.Equal(t, badSparkConfigMap.UID, r.UID)
+	assert.Equal(t, cm.UID, r.UID)
 	assert.Nil(t, r.PatchType)
 	assert.Nil(t, r.Patch)
 	assert.True(t, r.Allowed)
 }
 
 func TestMutateSparkCM(t *testing.T) {
-	req := getAdmissionRequest(t, sparkConfigMap)
-	r, err := MutateConfigMap(&util.FakeStorageProvider{}, log, req)
+	cm := sparkConfigMap
+	driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true)
+	clientSet := k8sfake.NewSimpleClientset(driver)
+	req := getAdmissionRequest(t, cm)
+	r, err := MutateConfigMap(clientSet, &util.FakeStorageProvider{}, log, req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
-	assert.Equal(t, sparkConfigMap.UID, r.UID)
+	assert.Equal(t, cm.UID, r.UID)
 	assert.Equal(t, &jsonPathType, r.PatchType)
 	assert.NotNil(t, r.Patch)
 	assert.True(t, r.Allowed)
@@ -129,20 +157,27 @@ func TestMutateSparkCM(t *testing.T) {
 }
 
 func TestMutateSparkBadStorageCM(t *testing.T) {
-	req := getAdmissionRequest(t, sparkConfigMap)
-	r, err := MutateConfigMap(&util.FailedStorageProvider{}, log, req)
-	assert.NoError(t, err)
-	assert.NotNil(t, r)
-	assert.Nil(t, r.PatchType)
-	assert.Nil(t, r.Patch)
-	assert.True(t, r.Allowed)
 
-	req = getAdmissionRequest(t, sparkConfigMap)
-	r, err = MutateConfigMap(&util.NilStorageProvider{}, log, req)
-	assert.NoError(t, err)
-	assert.NotNil(t, r)
-	assert.Nil(t, r.PatchType)
-	assert.Nil(t, r.Patch)
-	assert.True(t, r.Allowed)
+	testFunc := func(provider cloudstorage.CloudStorageProvider) {
+		cm := sparkConfigMap
+		driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true)
+		clientSet := k8sfake.NewSimpleClientset(driver)
+		req := getAdmissionRequest(t, cm)
+		r, err := MutateConfigMap(clientSet, provider, log, req)
+		assert.NoError(t, err)
+		assert.NotNil(t, r)
+		assert.Equal(t, cm.UID, r.UID)
+		assert.Nil(t, r.PatchType)
+		assert.Nil(t, r.Patch)
+		assert.True(t, r.Allowed)
+	}
+
+	t.Run("whenFailedStorageProvider", func(tt *testing.T) {
+		testFunc(&util.FailedStorageProvider{})
+	})
+
+	t.Run("testNilStorageProvider", func(tt *testing.T) {
+		testFunc(&util.NilStorageProvider{})
+	})
 
 }
