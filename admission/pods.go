@@ -5,10 +5,11 @@ import (
 	"strconv"
 
 	"github.com/go-logr/logr"
-	"github.com/spotinst/wave-operator/cloudstorage"
-	"github.com/spotinst/wave-operator/internal/storagesync"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/internal/storagesync"
 )
 
 const (
@@ -65,18 +66,27 @@ var (
 	}
 )
 
-func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
+type PodMutator struct {
+	storageProvider cloudstorage.CloudStorageProvider
+	log             logr.Logger
+}
+
+func NewPodMutator(log logr.Logger, storageProvider cloudstorage.CloudStorageProvider) PodMutator {
+	return PodMutator{
+		storageProvider: storageProvider,
+		log:             log,
+	}
+}
+
+func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
 
 	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 	sourceObj := &corev1.Pod{}
 	_, _, err := deserializer.Decode(req.Object.Raw, &gvk, sourceObj)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("deserialization failed: %w", err)
 	}
-	if sourceObj == nil {
-		return nil, fmt.Errorf("deserialization failed")
-	}
-	log = log.WithValues("pod", sourceObj.Name)
+	log := m.log.WithValues("pod", sourceObj.Name)
 
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
@@ -85,7 +95,7 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 	if sourceObj.Labels[SparkRoleLabel] == "" {
 		return resp, nil
 	}
-	storageInfo, err := provider.GetStorageInfo()
+	storageInfo, err := m.storageProvider.GetStorageInfo()
 	if err != nil {
 		log.Error(err, "cannot get storage configuration, not patching pod")
 		return resp, nil
@@ -95,11 +105,11 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 		return resp, nil
 	}
 
-	modObj := &corev1.Pod{}
+	var modObj *corev1.Pod
 	if sourceObj.Labels[SparkRoleLabel] == SparkRoleDriverValue {
-		modObj, err = mutateDriverPod(sourceObj, storageInfo, log)
+		modObj = m.mutateDriverPod(sourceObj, storageInfo)
 	} else {
-		modObj, err = mutateExecutorPod(sourceObj, storageInfo, log)
+		modObj = m.mutateExecutorPod(sourceObj)
 	}
 
 	patchBytes, err := GetJsonPatch(sourceObj, modObj)
@@ -115,13 +125,13 @@ func MutatePod(provider cloudstorage.CloudStorageProvider, log logr.Logger, req 
 	return resp, nil
 }
 
-func mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInfo, log logr.Logger) (*corev1.Pod, error) {
+func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInfo) *corev1.Pod {
 
 	modObj := sourceObj.DeepCopy()
 	newSpec := modObj.Spec
 	newSpec.Affinity = ondemandAffinity
 
-	log.Info("pod admission control", "mountPath", volumeMount.MountPath)
+	m.log.Info("pod admission control", "mountPath", volumeMount.MountPath)
 
 	webServerPort := strconv.Itoa(int(storagesync.Port))
 	storageContainer := corev1.Container{
@@ -192,11 +202,11 @@ func mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInf
 		newSpec.Volumes = append(newSpec.Volumes, volume)
 	}
 	modObj.Spec = newSpec
-	return modObj, nil
+	return modObj
 }
 
-func mutateExecutorPod(sourceObj *corev1.Pod, storageInfo *cloudstorage.StorageInfo, log logr.Logger) (*corev1.Pod, error) {
+func (m PodMutator) mutateExecutorPod(sourceObj *corev1.Pod) *corev1.Pod {
 	modObj := sourceObj.DeepCopy()
 	modObj.Spec.Affinity = ondemandAntiAffinity
-	return modObj, nil
+	return modObj
 }

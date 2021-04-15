@@ -6,23 +6,34 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/magiconair/properties"
-	"github.com/spotinst/wave-operator/cloudstorage"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/spotinst/wave-operator/cloudstorage"
 )
 
-func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
+type ConfigMapMutator struct {
+	log      logr.Logger
+	provider cloudstorage.CloudStorageProvider
+}
+
+func NewConfigMapMutator(log logr.Logger, provider cloudstorage.CloudStorageProvider) ConfigMapMutator {
+	return ConfigMapMutator{
+		log:      log,
+		provider: provider,
+	}
+}
+
+func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
 
 	gvk := corev1.SchemeGroupVersion.WithKind("ConfigMap")
 	sourceObj := &corev1.ConfigMap{}
 	_, _, err := deserializer.Decode(req.Object.Raw, &gvk, sourceObj)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("deserialization failed %w", err)
 	}
-	if sourceObj == nil {
-		return nil, fmt.Errorf("deserialization failed")
-	}
-	log = log.WithValues("configmap", sourceObj.Name)
+
+	log := m.log.WithValues("configmap", sourceObj.Name)
 
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
@@ -45,7 +56,7 @@ func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger
 		return resp, nil
 	}
 
-	storageInfo, err := provider.GetStorageInfo()
+	storageInfo, err := m.provider.GetStorageInfo()
 	if err != nil {
 		log.Error(err, "cannot get storage configuration")
 		return resp, nil
@@ -68,6 +79,7 @@ func MutateConfigMap(provider cloudstorage.CloudStorageProvider, log logr.Logger
 	}
 	props.Set("spark.eventLog.dir", "file:///var/log/spark") //storageInfo.Path)
 	props.Set("spark.eventLog.enabled", "true")
+
 	modObj.Data["spark.properties"] = props.String()
 
 	patch, err := GetJsonPatch(sourceObj, modObj)
