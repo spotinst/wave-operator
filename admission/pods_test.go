@@ -138,8 +138,7 @@ func TestMutatePodBadStorage(t *testing.T) {
 		SparkRoleLabel: SparkRoleDriverValue,
 	}
 	req := getAdmissionRequest(t, driverPod)
-	m := NewPodMutator(log, &util.FailedStorageProvider{})
-	r, err := m.Mutate(req)
+	r, err := NewPodMutator(log, &util.FailedStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, driverPod.UID, r.UID)
@@ -148,7 +147,7 @@ func TestMutatePodBadStorage(t *testing.T) {
 	assert.True(t, r.Allowed)
 
 	req = getAdmissionRequest(t, driverPod)
-	r, err = m.Mutate(req)
+	r, err = NewPodMutator(log, &util.NilStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, driverPod.UID, r.UID)
