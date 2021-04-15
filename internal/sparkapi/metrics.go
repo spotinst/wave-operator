@@ -46,8 +46,8 @@ func (ar ApplicationRegistry) Register(app *ApplicationInfo) error {
 type executorCollector struct {
 	count               *prometheus.Desc
 	inputBytesTotal     *prometheus.Desc
-	memoryUsedTotal     *prometheus.Desc
-	diskUsedTotal       *prometheus.Desc
+	memoryUsed          *prometheus.Desc
+	diskUsed            *prometheus.Desc
 	coresTotal          *prometheus.Desc
 	activeTasks         *prometheus.Desc
 	failedTasksTotal    *prometheus.Desc
@@ -64,13 +64,13 @@ func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollecto
 			"Total amount of bytes processed by executor",
 			[]string{"executor_id"},
 			applicationLabels),
-		memoryUsedTotal: prometheus.NewDesc(
-			"spark_executor_memory_used_bytes_total",
+		memoryUsed: prometheus.NewDesc(
+			"spark_executor_memory_used_bytes",
 			"Total amount of bytes of memory used by executor",
 			[]string{"executor_id"},
 			applicationLabels),
-		diskUsedTotal: prometheus.NewDesc(
-			"spark_executor_disk_used_bytes_total",
+		diskUsed: prometheus.NewDesc(
+			"spark_executor_disk_used_bytes",
 			"Total amount of bytes of space used by executor",
 			[]string{"executor_id"},
 			applicationLabels),
@@ -109,8 +109,8 @@ func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollecto
 
 func (e *executorCollector) Describe(descs chan<- *prometheus.Desc) {
 	descs <- e.inputBytesTotal
-	descs <- e.memoryUsedTotal
-	descs <- e.diskUsedTotal
+	descs <- e.memoryUsed
+	descs <- e.diskUsed
 	descs <- e.coresTotal
 	descs <- e.activeTasks
 	descs <- e.failedTasksTotal
@@ -120,17 +120,22 @@ func (e *executorCollector) Describe(descs chan<- *prometheus.Desc) {
 }
 
 func (e *executorCollector) Collect(executors []client.Executor, metrics chan<- prometheus.Metric) {
+	activeExectors := 0
 	for _, executor := range executors {
+		if !executor.IsActive || executor.RemoveTime != "" {
+			continue
+		}
+		activeExectors++
 		metrics <- prometheus.MustNewConstMetric(e.inputBytesTotal, prometheus.CounterValue, float64(executor.TotalInputBytes), executor.ID)
-		metrics <- prometheus.MustNewConstMetric(e.memoryUsedTotal, prometheus.CounterValue, float64(executor.MemoryUsed), executor.ID)
-		metrics <- prometheus.MustNewConstMetric(e.diskUsedTotal, prometheus.CounterValue, float64(executor.DiskUsed), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.memoryUsed, prometheus.GaugeValue, float64(executor.MemoryUsed), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.diskUsed, prometheus.GaugeValue, float64(executor.DiskUsed), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.coresTotal, prometheus.GaugeValue, float64(executor.TotalCores), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.activeTasks, prometheus.GaugeValue, float64(executor.ActiveTasks), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.failedTasksTotal, prometheus.CounterValue, float64(executor.FailedTasks), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.completedTasksTotal, prometheus.CounterValue, float64(executor.CompletedTasks), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.tasksTotal, prometheus.CounterValue, float64(executor.TotalTasks), executor.ID)
 	}
-	metrics <- prometheus.MustNewConstMetric(e.count, prometheus.GaugeValue, float64(len(executors)))
+	metrics <- prometheus.MustNewConstMetric(e.count, prometheus.GaugeValue, float64(activeExectors))
 }
 
 // applicationCollector is a prometheus collector that collects information for the specific spark application

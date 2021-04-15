@@ -51,7 +51,8 @@ func TestApplicationRegistry(t *testing.T) {
 		}
 		info.Executors = []sparkapiclient.Executor{
 			{
-				ID: "0",
+				ID:       "0",
+				IsActive: true,
 			},
 		}
 
@@ -74,18 +75,18 @@ func TestApplicationRegistry(t *testing.T) {
 			# HELP spark_executor_count Current executor count for the application
 			# TYPE spark_executor_count gauge
 			spark_executor_count{application_id="update",application_name="update"} 1
-			# HELP spark_executor_disk_used_bytes_total Total amount of bytes of space used by executor
-			# TYPE spark_executor_disk_used_bytes_total counter
-			spark_executor_disk_used_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
+			# HELP spark_executor_disk_used_bytes Total amount of bytes of space used by executor
+			# TYPE spark_executor_disk_used_bytes gauge
+			spark_executor_disk_used_bytes{application_id="update",application_name="update",executor_id="0"} 0
 			# HELP spark_executor_failed_tasks_total Total number of failed tasks on the executor
 			# TYPE spark_executor_failed_tasks_total counter
 			spark_executor_failed_tasks_total{application_id="update",application_name="update",executor_id="0"} 0
 			# HELP spark_executor_input_bytes_total Total amount of bytes processed by executor
 			# TYPE spark_executor_input_bytes_total counter
 			spark_executor_input_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
-			# HELP spark_executor_memory_used_bytes_total Total amount of bytes of memory used by executor
-			# TYPE spark_executor_memory_used_bytes_total counter
-			spark_executor_memory_used_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
+			# HELP spark_executor_memory_used_bytes Total amount of bytes of memory used by executor
+			# TYPE spark_executor_memory_used_bytes gauge
+			spark_executor_memory_used_bytes{application_id="update",application_name="update",executor_id="0"} 0
 			# HELP spark_executor_tasks_total Total number of tasks the executor has been assigned
 			# TYPE spark_executor_tasks_total counter
 			spark_executor_tasks_total{application_id="update",application_name="update",executor_id="0"} 0
@@ -95,6 +96,16 @@ func TestApplicationRegistry(t *testing.T) {
 
 		info.Executors = append(info.Executors, sparkapiclient.Executor{
 			ID:          "added-executor",
+			IsActive:    true,
+			ActiveTasks: 100,
+			FailedTasks: 200,
+			MaxMemory:   2000,
+			TotalCores:  128,
+		})
+
+		info.Executors = append(info.Executors, sparkapiclient.Executor{
+			ID:          "ignored-executor",
+			IsActive:    false,
 			ActiveTasks: 100,
 			FailedTasks: 200,
 			MaxMemory:   2000,
@@ -124,10 +135,10 @@ func TestApplicationRegistry(t *testing.T) {
 			# HELP spark_executor_count Current executor count for the application
 			# TYPE spark_executor_count gauge
 			spark_executor_count{application_id="update",application_name="update"} 2
-			# HELP spark_executor_disk_used_bytes_total Total amount of bytes of space used by executor
-			# TYPE spark_executor_disk_used_bytes_total counter
-			spark_executor_disk_used_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
-			spark_executor_disk_used_bytes_total{application_id="update",application_name="update",executor_id="added-executor"} 0
+			# HELP spark_executor_disk_used_bytes Total amount of bytes of space used by executor
+			# TYPE spark_executor_disk_used_bytes gauge
+			spark_executor_disk_used_bytes{application_id="update",application_name="update",executor_id="0"} 0
+			spark_executor_disk_used_bytes{application_id="update",application_name="update",executor_id="added-executor"} 0
 			# HELP spark_executor_failed_tasks_total Total number of failed tasks on the executor
 			# TYPE spark_executor_failed_tasks_total counter
 			spark_executor_failed_tasks_total{application_id="update",application_name="update",executor_id="0"} 0
@@ -136,10 +147,10 @@ func TestApplicationRegistry(t *testing.T) {
 			# TYPE spark_executor_input_bytes_total counter
 			spark_executor_input_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
 			spark_executor_input_bytes_total{application_id="update",application_name="update",executor_id="added-executor"} 0
-			# HELP spark_executor_memory_used_bytes_total Total amount of bytes of memory used by executor
-			# TYPE spark_executor_memory_used_bytes_total counter
-			spark_executor_memory_used_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
-			spark_executor_memory_used_bytes_total{application_id="update",application_name="update",executor_id="added-executor"} 0
+			# HELP spark_executor_memory_used_bytes Total amount of bytes of memory used by executor
+			# TYPE spark_executor_memory_used_bytes gauge
+			spark_executor_memory_used_bytes{application_id="update",application_name="update",executor_id="0"} 0
+			spark_executor_memory_used_bytes{application_id="update",application_name="update",executor_id="added-executor"} 0
 			# HELP spark_executor_tasks_total Total number of tasks the executor has been assigned
 			# TYPE spark_executor_tasks_total counter
 			spark_executor_tasks_total{application_id="update",application_name="update",executor_id="0"} 0
