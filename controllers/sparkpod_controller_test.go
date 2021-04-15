@@ -220,7 +220,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	defer ctrl.Finish()
 
 	m := mock_sparkapi.NewMockManager(ctrl)
-	m.EXPECT().GetApplicationInfo(sparkAppID, sparkapi.StageMetricsAggregationState{
+	m.EXPECT().GetApplicationInfo(sparkAppID, sparkapi.StageMetricsAggregatorState{
 		MaxProcessedFinalizedStageID: -1,
 		ActiveStageMetrics:           map[int]sparkapi.StageMetrics{},
 	}, gomock.Any()).Return(getTestApplicationInfo(), nil).Times(1)
@@ -1166,7 +1166,7 @@ func verifyCRAttempts(t *testing.T, attempts []sparkapiclient.Attempt, crAttempt
 	}
 }
 
-func verifyStageMetricsStateAnnotation(t *testing.T, expected sparkapi.StageMetricsAggregationState, cr *v1alpha1.SparkApplication) {
+func verifyStageMetricsStateAnnotation(t *testing.T, expected sparkapi.StageMetricsAggregatorState, cr *v1alpha1.SparkApplication) {
 	res, err := getStageMetricsAggregationState(cr)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, res)
@@ -1253,7 +1253,7 @@ func getTestPod(namespace string, name string, uid string, role string, applicat
 
 func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 	return &sparkapi.ApplicationInfo{
-		MetricsAggregationState: sparkapi.StageMetricsAggregationState{
+		MetricsAggregationState: sparkapi.StageMetricsAggregatorState{
 			MaxProcessedFinalizedStageID: 135,
 			ActiveStageMetrics: map[int]sparkapi.StageMetrics{
 				3: {

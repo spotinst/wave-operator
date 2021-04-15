@@ -225,7 +225,7 @@ func TestStageAggregation(t *testing.T) {
 
 	type testCase struct {
 		statuses       []string
-		oldState       StageMetricsAggregationState
+		oldState       StageMetricsAggregatorState
 		expectedResult stageWindowAggregationResult
 		message        string
 	}
@@ -249,7 +249,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     4 * outputBytesPerStage,
 				totalNewInputBytes:      4 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 2,
 					ActiveStageMetrics: map[int]StageMetrics{
 						3: {
@@ -264,7 +264,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 0,
 				ActiveStageMetrics:           make(map[int]StageMetrics),
 			},
@@ -272,7 +272,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     3 * outputBytesPerStage,
 				totalNewInputBytes:      3 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 3 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 2,
 					ActiveStageMetrics: map[int]StageMetrics{
 						3: {
@@ -287,7 +287,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 1,
 				ActiveStageMetrics:           make(map[int]StageMetrics),
 			},
@@ -295,7 +295,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     2 * outputBytesPerStage,
 				totalNewInputBytes:      2 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 2,
 					ActiveStageMetrics: map[int]StageMetrics{
 						3: {
@@ -310,7 +310,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 2,
 				ActiveStageMetrics:           make(map[int]StageMetrics),
 			},
@@ -318,7 +318,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     1 * outputBytesPerStage,
 				totalNewInputBytes:      1 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 2,
 					ActiveStageMetrics: map[int]StageMetrics{
 						3: {
@@ -333,7 +333,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 2,
 				ActiveStageMetrics:           make(map[int]StageMetrics),
 			},
@@ -341,7 +341,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     1 * outputBytesPerStage,
 				totalNewInputBytes:      1 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 3,
 					ActiveStageMetrics:           map[int]StageMetrics{},
 				},
@@ -350,7 +350,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 3,
 				ActiveStageMetrics:           make(map[int]StageMetrics),
 			},
@@ -358,7 +358,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     0,
 				totalNewInputBytes:      0,
 				totalNewExecutorCpuTime: 0,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 3,
 					ActiveStageMetrics:           map[int]StageMetrics{},
 				},
@@ -372,7 +372,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     4 * outputBytesPerStage,
 				totalNewInputBytes:      4 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 3,
 					ActiveStageMetrics:           map[int]StageMetrics{},
 				},
@@ -386,7 +386,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     6 * outputBytesPerStage,
 				totalNewInputBytes:      6 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 6 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 5,
 					ActiveStageMetrics: map[int]StageMetrics{
 						2: {
@@ -406,7 +406,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 0,
 				ActiveStageMetrics:           map[int]StageMetrics{},
 			},
@@ -414,7 +414,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     5 * outputBytesPerStage,
 				totalNewInputBytes:      5 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 5 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 5,
 					ActiveStageMetrics: map[int]StageMetrics{
 						2: {
@@ -434,7 +434,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 1,
 				ActiveStageMetrics:           map[int]StageMetrics{},
 			},
@@ -442,7 +442,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     4 * outputBytesPerStage,
 				totalNewInputBytes:      4 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 5,
 					ActiveStageMetrics: map[int]StageMetrics{
 						2: {
@@ -462,7 +462,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 1,
 				ActiveStageMetrics:           map[int]StageMetrics{},
 			},
@@ -470,7 +470,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     4 * outputBytesPerStage,
 				totalNewInputBytes:      4 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 5,
 					ActiveStageMetrics: map[int]StageMetrics{
 						4: {
@@ -485,7 +485,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 1,
 				ActiveStageMetrics:           map[int]StageMetrics{},
 			},
@@ -493,7 +493,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     4 * outputBytesPerStage,
 				totalNewInputBytes:      4 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 5,
 					ActiveStageMetrics:           map[int]StageMetrics{},
 				},
@@ -507,7 +507,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     6 * outputBytesPerStage,
 				totalNewInputBytes:      6 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 6 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 4,
 					ActiveStageMetrics: map[int]StageMetrics{
 						3: {
@@ -527,7 +527,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 100,
 				ActiveStageMetrics:           map[int]StageMetrics{},
 			},
@@ -535,7 +535,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     0,
 				totalNewInputBytes:      0,
 				totalNewExecutorCpuTime: 0,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 100,
 					ActiveStageMetrics:           map[int]StageMetrics{},
 				},
@@ -544,7 +544,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 100,
 				ActiveStageMetrics: map[int]StageMetrics{
 					3: {
@@ -563,7 +563,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     0,
 				totalNewInputBytes:      0,
 				totalNewExecutorCpuTime: 0,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 100,
 					ActiveStageMetrics: map[int]StageMetrics{
 						3: {
@@ -583,7 +583,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE", "ACTIVE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 2,
 				ActiveStageMetrics:           map[int]StageMetrics{},
 			},
@@ -591,7 +591,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     4 * outputBytesPerStage,
 				totalNewInputBytes:      4 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 5,
 					ActiveStageMetrics: map[int]StageMetrics{
 						3: {
@@ -616,7 +616,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregationState{
+			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStageID: 5,
 				ActiveStageMetrics: map[int]StageMetrics{
 					3: {
@@ -640,7 +640,7 @@ func TestStageAggregation(t *testing.T) {
 				totalNewOutputBytes:     outputBytesPerStage - 10,
 				totalNewInputBytes:      inputBytesPerStage - 20,
 				totalNewExecutorCpuTime: cpuTimePerStage - 30,
-				newState: StageMetricsAggregationState{
+				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStageID: 6,
 					ActiveStageMetrics: map[int]StageMetrics{
 						3: {
@@ -658,7 +658,8 @@ func TestStageAggregation(t *testing.T) {
 	for _, tc := range testCases {
 
 		stages := getStages(tc.statuses)
-		res := aggregateStagesWindow(stages, tc.oldState, logger)
+		aggregator := newStageMetricsAggregator(logger, tc.oldState)
+		res := aggregator.processWindow(stages)
 
 		assert.Equal(t, tc.expectedResult.newState, res.newState, tc.message)
 		assert.Equal(t, tc.expectedResult.totalNewExecutorCpuTime, res.totalNewExecutorCpuTime, tc.message)
@@ -672,7 +673,8 @@ func TestStageAggregation(t *testing.T) {
 		stages[0], stages[3] = stages[3], stages[0]
 		stages[2], stages[5] = stages[5], stages[2]
 
-		res := aggregateStagesWindow(stages, newMetricsAggregationState(), logger)
+		aggregator := newStageMetricsAggregator(logger, newMetricsAggregationState())
+		res := aggregator.processWindow(stages)
 		assert.Equal(tt, 4, res.newState.MaxProcessedFinalizedStageID)
 		assert.Equal(tt, map[int]StageMetrics{
 			3: {
@@ -696,32 +698,32 @@ func TestStageAggregation(t *testing.T) {
 		// Manual verification of error logging
 
 		// Should not log error, no stages received
-		aggregateStagesWindow([]sparkapiclient.Stage{}, newMetricsAggregationState(), logger)
+		newStageMetricsAggregator(logger, newMetricsAggregationState()).processWindow([]sparkapiclient.Stage{})
 
 		stages := getStages([]string{"COMPLETE", "COMPLETE"})
 
 		// Should not log error, no stages seen before
-		aggregateStagesWindow(stages, newMetricsAggregationState(), logger)
+		newStageMetricsAggregator(logger, newMetricsAggregationState()).processWindow(stages)
 
 		stages[0].StageID = 4
 		stages[1].StageID = 5
 
 		// Should not log error
-		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 3}, logger)
+		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStageID: 3}).processWindow(stages)
 		// Should not log error
-		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 4}, logger)
+		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStageID: 4}).processWindow(stages)
 		// Should not log error, no new stages received
-		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 5}, logger)
+		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStageID: 5}).processWindow(stages)
 		// Should not log error, no new stages received
-		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 6}, logger)
+		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStageID: 6}).processWindow(stages)
 		// Should log error, we missed stage 0
-		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: -1}, logger)
+		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStageID: -1}).processWindow(stages)
 		// Should log error, we missed stage 1
-		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 0}, logger)
+		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStageID: 0}).processWindow(stages)
 		// Should log error, we missed stage 2
-		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 1}, logger)
+		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStageID: 1}).processWindow(stages)
 		// Should log error, we missed stage 3
-		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 2}, logger)
+		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStageID: 2}).processWindow(stages)
 	})
 }
 
@@ -846,8 +848,8 @@ func newRunningDriverPod() *corev1.Pod {
 	}
 }
 
-func newMetricsAggregationState() StageMetricsAggregationState {
-	return StageMetricsAggregationState{
+func newMetricsAggregationState() StageMetricsAggregatorState {
+	return StageMetricsAggregatorState{
 		MaxProcessedFinalizedStageID: -1,
 		ActiveStageMetrics:           make(map[int]StageMetrics),
 	}

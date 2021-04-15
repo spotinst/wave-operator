@@ -28,7 +28,7 @@ type WorkloadType string
 // TODO Config object - should not try history server if event log sync not enabled
 
 type Manager interface {
-	GetApplicationInfo(applicationID string, metricsAggregationState StageMetricsAggregationState, log logr.Logger) (*ApplicationInfo, error)
+	GetApplicationInfo(applicationID string, metricsAggregationState StageMetricsAggregatorState, log logr.Logger) (*ApplicationInfo, error)
 }
 
 type manager struct {
@@ -37,7 +37,7 @@ type manager struct {
 }
 
 type ApplicationInfo struct {
-	MetricsAggregationState StageMetricsAggregationState
+	MetricsAggregationState StageMetricsAggregatorState
 	ApplicationName         string
 	SparkProperties         map[string]string
 	TotalNewInputBytes      int64
@@ -80,7 +80,7 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 	return sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
 }
 
-func (m manager) GetApplicationInfo(applicationID string, metricsAggregationState StageMetricsAggregationState, log logr.Logger) (*ApplicationInfo, error) {
+func (m manager) GetApplicationInfo(applicationID string, metricsAggregationState StageMetricsAggregatorState, log logr.Logger) (*ApplicationInfo, error) {
 
 	applicationInfo := &ApplicationInfo{}
 
@@ -117,7 +117,8 @@ func (m manager) GetApplicationInfo(applicationID string, metricsAggregationStat
 		return nil, fmt.Errorf("stages are nil")
 	}
 
-	stageAggregationResult := aggregateStagesWindow(stages, metricsAggregationState, log)
+	stageMetricsAggregator := newStageMetricsAggregator(log, metricsAggregationState)
+	stageAggregationResult := stageMetricsAggregator.processWindow(stages)
 	applicationInfo.TotalNewOutputBytes = stageAggregationResult.totalNewOutputBytes
 	applicationInfo.TotalNewInputBytes = stageAggregationResult.totalNewInputBytes
 	applicationInfo.TotalNewExecutorCpuTime = stageAggregationResult.totalNewExecutorCpuTime

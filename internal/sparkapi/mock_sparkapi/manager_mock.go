@@ -35,7 +35,7 @@ func (m *MockManager) EXPECT() *MockManagerMockRecorder {
 }
 
 // GetApplicationInfo mocks base method
-func (m *MockManager) GetApplicationInfo(applicationID string, metricsAggregationState sparkapi.StageMetricsAggregationState, log logr.Logger) (*sparkapi.ApplicationInfo, error) {
+func (m *MockManager) GetApplicationInfo(applicationID string, metricsAggregationState sparkapi.StageMetricsAggregatorState, log logr.Logger) (*sparkapi.ApplicationInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetApplicationInfo", applicationID, metricsAggregationState, log)
 	ret0, _ := ret[0].(*sparkapi.ApplicationInfo)

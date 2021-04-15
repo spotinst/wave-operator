@@ -549,7 +549,7 @@ func podStateHistoryEntryEqual(a v1alpha1.PodStateHistoryEntry, b v1alpha1.PodSt
 	return true
 }
 
-func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationID string, metricsAggregationState sparkapi.StageMetricsAggregationState, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
+func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationID string, metricsAggregationState sparkapi.StageMetricsAggregatorState, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
 
 	manager, err := r.getSparkApiManager(clientSet, driverPod, logger)
 	if err != nil {
@@ -697,8 +697,8 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 	return nil
 }
 
-func getStageMetricsAggregationState(cr *v1alpha1.SparkApplication) (sparkapi.StageMetricsAggregationState, error) {
-	newState := sparkapi.StageMetricsAggregationState{
+func getStageMetricsAggregationState(cr *v1alpha1.SparkApplication) (sparkapi.StageMetricsAggregatorState, error) {
+	newState := sparkapi.StageMetricsAggregatorState{
 		MaxProcessedFinalizedStageID: -1,
 		ActiveStageMetrics:           make(map[int]sparkapi.StageMetrics),
 	}
@@ -711,7 +711,7 @@ func getStageMetricsAggregationState(cr *v1alpha1.SparkApplication) (sparkapi.St
 		// We haven't processed any stages yet
 		return newState, nil
 	}
-	state := sparkapi.StageMetricsAggregationState{}
+	state := sparkapi.StageMetricsAggregatorState{}
 	err := json.Unmarshal([]byte(val), &state)
 	if err != nil {
 		return newState, fmt.Errorf("could not unmarshal state %s, %w", val, err)
@@ -719,7 +719,7 @@ func getStageMetricsAggregationState(cr *v1alpha1.SparkApplication) (sparkapi.St
 	return state, nil
 }
 
-func setStageMetricsAggregationState(cr *v1alpha1.SparkApplication, state sparkapi.StageMetricsAggregationState) error {
+func setStageMetricsAggregationState(cr *v1alpha1.SparkApplication, state sparkapi.StageMetricsAggregatorState) error {
 	if cr.Annotations == nil {
 		cr.Annotations = make(map[string]string)
 	}
