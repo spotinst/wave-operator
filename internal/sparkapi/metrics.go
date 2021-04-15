@@ -120,12 +120,12 @@ func (e *executorCollector) Describe(descs chan<- *prometheus.Desc) {
 }
 
 func (e *executorCollector) Collect(executors []client.Executor, metrics chan<- prometheus.Metric) {
-	activeExectors := 0
+	activeExecutors := 0
 	for _, executor := range executors {
 		if !executor.IsActive || executor.RemoveTime != "" {
 			continue
 		}
-		activeExectors++
+		activeExecutors++
 		metrics <- prometheus.MustNewConstMetric(e.inputBytesTotal, prometheus.CounterValue, float64(executor.TotalInputBytes), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.memoryUsed, prometheus.GaugeValue, float64(executor.MemoryUsed), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.diskUsed, prometheus.GaugeValue, float64(executor.DiskUsed), executor.ID)
@@ -135,7 +135,7 @@ func (e *executorCollector) Collect(executors []client.Executor, metrics chan<- 
 		metrics <- prometheus.MustNewConstMetric(e.completedTasksTotal, prometheus.CounterValue, float64(executor.CompletedTasks), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.tasksTotal, prometheus.CounterValue, float64(executor.TotalTasks), executor.ID)
 	}
-	metrics <- prometheus.MustNewConstMetric(e.count, prometheus.GaugeValue, float64(activeExectors))
+	metrics <- prometheus.MustNewConstMetric(e.count, prometheus.GaugeValue, float64(activeExecutors))
 }
 
 // applicationCollector is a prometheus collector that collects information for the specific spark application
