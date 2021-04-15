@@ -87,7 +87,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		_, err := manager.GetApplicationInfo(applicationID, -1, logger)
+		_, err := manager.GetApplicationInfo(applicationID, newMetricsAggregationState(), logger)
 		assert.Error(tt, err)
 		assert.Contains(tt, err.Error(), "test error")
 
@@ -108,7 +108,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, -1, logger)
+		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregationState(), logger)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, "my-test-application", res.ApplicationName)
@@ -116,7 +116,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		assert.Equal(tt, int64(900), res.TotalNewExecutorCpuTime)
 		assert.Equal(tt, int64(500), res.TotalNewInputBytes)
 		assert.Equal(tt, int64(700), res.TotalNewOutputBytes)
-		assert.Equal(tt, 2, res.MaxProcessedStageID)
+		assert.Equal(tt, 2, res.MetricsAggregationState.MaxProcessedFinalizedStageID)
 
 		assert.Equal(tt, 2, len(res.SparkProperties))
 		assert.Equal(tt, "val1", res.SparkProperties["prop1"])
@@ -149,7 +149,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, -1, logger)
+		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregationState(), logger)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, WorkloadType(""), res.WorkloadType)
@@ -170,7 +170,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, -1, logger)
+		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregationState(), logger)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, SparkStreaming, res.WorkloadType)
@@ -191,7 +191,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, -1, logger)
+		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregationState(), logger)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, WorkloadType(""), res.WorkloadType)
@@ -224,175 +224,443 @@ func TestStageAggregation(t *testing.T) {
 	}
 
 	type testCase struct {
-		statuses               []string
-		oldMaxProcessedStageID int
-		expectedResult         stageWindowAggregationResult
-		message                string
+		statuses       []string
+		oldState       StageMetricsAggregationState
+		expectedResult stageWindowAggregationResult
+		message        string
 	}
 
 	testCases := []testCase{
 		{
-			statuses:               []string{},
-			oldMaxProcessedStageID: -1,
+			statuses: []string{},
+			oldState: newMetricsAggregationState(),
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     0,
 				totalNewInputBytes:      0,
 				totalNewExecutorCpuTime: 0,
-				newMaxProcessedStageID:  -1,
+				newState:                newMetricsAggregationState(),
 			},
 			message: "whenNoStagesReceived",
 		},
 		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldMaxProcessedStageID: -1,
+			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
+			oldState: newMetricsAggregationState(),
 			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     3 * outputBytesPerStage,
-				totalNewInputBytes:      3 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 3 * cpuTimePerStage,
-				newMaxProcessedStageID:  2,
+				totalNewOutputBytes:     4 * outputBytesPerStage,
+				totalNewInputBytes:      4 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 2,
+					ActiveStageMetrics: map[int]StageMetrics{
+						3: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
 			},
 			message: "whenStagesCompleteInOrder_1",
 		},
 		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldMaxProcessedStageID: 0,
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     2 * outputBytesPerStage,
-				totalNewInputBytes:      2 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
-				newMaxProcessedStageID:  2,
+			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 0,
+				ActiveStageMetrics:           make(map[int]StageMetrics),
 			},
-			message: "whenStagesCompleteInOrder_2",
-		},
-		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldMaxProcessedStageID: 1,
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     1 * outputBytesPerStage,
-				totalNewInputBytes:      1 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newMaxProcessedStageID:  2,
-			},
-			message: "whenStagesCompleteInOrder_3",
-		},
-		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldMaxProcessedStageID: 2,
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     0,
-				totalNewInputBytes:      0,
-				totalNewExecutorCpuTime: 0,
-				newMaxProcessedStageID:  2,
-			},
-			message: "whenStagesCompleteInOrder_4",
-		},
-		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldMaxProcessedStageID: 2,
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     1 * outputBytesPerStage,
-				totalNewInputBytes:      1 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newMaxProcessedStageID:  3,
-			},
-			message: "whenStagesCompleteInOrder_5",
-		},
-		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldMaxProcessedStageID: -1,
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     4 * outputBytesPerStage,
-				totalNewInputBytes:      4 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newMaxProcessedStageID:  3,
-			},
-			message: "whenStagesCompleteInOrder_6",
-		},
-		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageID: -1,
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     2 * outputBytesPerStage,
-				totalNewInputBytes:      2 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
-				newMaxProcessedStageID:  1,
-			},
-			message: "whenStagesCompleteOutOfOrder_1",
-		},
-		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageID: 0,
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     1 * outputBytesPerStage,
-				totalNewInputBytes:      1 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newMaxProcessedStageID:  1,
-			},
-			message: "whenStagesCompleteOutOfOrder_2",
-		},
-		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageID: 1,
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     0,
-				totalNewInputBytes:      0,
-				totalNewExecutorCpuTime: 0,
-				newMaxProcessedStageID:  1,
-			},
-			message: "whenStagesCompleteOutOfOrder_3",
-		},
-		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageID: 1,
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     2 * outputBytesPerStage,
-				totalNewInputBytes:      2 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
-				newMaxProcessedStageID:  3,
-			},
-			message: "whenStagesCompleteOutOfOrder_4",
-		},
-		{
-			statuses:               []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "COMPLETE", "COMPLETE"},
-			oldMaxProcessedStageID: 1,
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     4 * outputBytesPerStage,
-				totalNewInputBytes:      4 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newMaxProcessedStageID:  5,
-			},
-			message: "whenStagesCompleteOutOfOrder_5",
-		},
-		{
-			statuses:               []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageID: -1,
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     3 * outputBytesPerStage,
 				totalNewInputBytes:      3 * inputBytesPerStage,
 				totalNewExecutorCpuTime: 3 * cpuTimePerStage,
-				newMaxProcessedStageID:  2,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 2,
+					ActiveStageMetrics: map[int]StageMetrics{
+						3: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
 			},
-			message: "whenStagesCompleteOutOfOrder_6",
+			message: "whenStagesCompleteInOrder_2",
 		},
 		{
-			statuses:               []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE"},
-			oldMaxProcessedStageID: 100,
+			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 1,
+				ActiveStageMetrics:           make(map[int]StageMetrics),
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     2 * outputBytesPerStage,
+				totalNewInputBytes:      2 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 2,
+					ActiveStageMetrics: map[int]StageMetrics{
+						3: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
+			},
+			message: "whenStagesCompleteInOrder_3",
+		},
+		{
+			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 2,
+				ActiveStageMetrics:           make(map[int]StageMetrics),
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     1 * outputBytesPerStage,
+				totalNewInputBytes:      1 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 2,
+					ActiveStageMetrics: map[int]StageMetrics{
+						3: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
+			},
+			message: "whenStagesCompleteInOrder_4",
+		},
+		{
+			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 2,
+				ActiveStageMetrics:           make(map[int]StageMetrics),
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     1 * outputBytesPerStage,
+				totalNewInputBytes:      1 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 3,
+					ActiveStageMetrics:           map[int]StageMetrics{},
+				},
+			},
+			message: "whenStagesCompleteInOrder_5",
+		},
+		{
+			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 3,
+				ActiveStageMetrics:           make(map[int]StageMetrics),
+			},
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     0,
 				totalNewInputBytes:      0,
 				totalNewExecutorCpuTime: 0,
-				newMaxProcessedStageID:  100,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 3,
+					ActiveStageMetrics:           map[int]StageMetrics{},
+				},
+			},
+			message: "whenStagesCompleteInOrder_6",
+		},
+		{
+			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
+			oldState: newMetricsAggregationState(),
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     4 * outputBytesPerStage,
+				totalNewInputBytes:      4 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 3,
+					ActiveStageMetrics:           map[int]StageMetrics{},
+				},
+			},
+			message: "whenStagesCompleteInOrder_7",
+		},
+		{
+			statuses: []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
+			oldState: newMetricsAggregationState(),
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     6 * outputBytesPerStage,
+				totalNewInputBytes:      6 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 6 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 5,
+					ActiveStageMetrics: map[int]StageMetrics{
+						2: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+						4: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
+			},
+			message: "whenStagesCompleteOutOfOrder_1",
+		},
+		{
+			statuses: []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 0,
+				ActiveStageMetrics:           map[int]StageMetrics{},
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     5 * outputBytesPerStage,
+				totalNewInputBytes:      5 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 5 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 5,
+					ActiveStageMetrics: map[int]StageMetrics{
+						2: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+						4: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
+			},
+			message: "whenStagesCompleteOutOfOrder_2",
+		},
+		{
+			statuses: []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 1,
+				ActiveStageMetrics:           map[int]StageMetrics{},
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     4 * outputBytesPerStage,
+				totalNewInputBytes:      4 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 5,
+					ActiveStageMetrics: map[int]StageMetrics{
+						2: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+						4: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
+			},
+			message: "whenStagesCompleteOutOfOrder_3",
+		},
+		{
+			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "ACTIVE", "COMPLETE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 1,
+				ActiveStageMetrics:           map[int]StageMetrics{},
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     4 * outputBytesPerStage,
+				totalNewInputBytes:      4 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 5,
+					ActiveStageMetrics: map[int]StageMetrics{
+						4: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
+			},
+			message: "whenStagesCompleteOutOfOrder_4",
+		},
+		{
+			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "COMPLETE", "COMPLETE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 1,
+				ActiveStageMetrics:           map[int]StageMetrics{},
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     4 * outputBytesPerStage,
+				totalNewInputBytes:      4 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 5,
+					ActiveStageMetrics:           map[int]StageMetrics{},
+				},
+			},
+			message: "whenStagesCompleteOutOfOrder_5",
+		},
+		{
+			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "COMPLETE", "ACTIVE"},
+			oldState: newMetricsAggregationState(),
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     6 * outputBytesPerStage,
+				totalNewInputBytes:      6 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 6 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 4,
+					ActiveStageMetrics: map[int]StageMetrics{
+						3: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+						5: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
+			},
+			message: "whenStagesCompleteOutOfOrder_6",
+		},
+		{
+			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "COMPLETE", "COMPLETE", "COMPLETE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 100,
+				ActiveStageMetrics:           map[int]StageMetrics{},
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     0,
+				totalNewInputBytes:      0,
+				totalNewExecutorCpuTime: 0,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 100,
+					ActiveStageMetrics:           map[int]StageMetrics{},
+				},
 			},
 			message: "whenOnlyOldStagesReceived",
+		},
+		{
+			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 100,
+				ActiveStageMetrics: map[int]StageMetrics{
+					3: {
+						OutputBytes: outputBytesPerStage,
+						InputBytes:  inputBytesPerStage,
+						CPUTime:     cpuTimePerStage,
+					},
+					4: {
+						OutputBytes: outputBytesPerStage,
+						InputBytes:  inputBytesPerStage,
+						CPUTime:     cpuTimePerStage,
+					},
+				},
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     0,
+				totalNewInputBytes:      0,
+				totalNewExecutorCpuTime: 0,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 100,
+					ActiveStageMetrics: map[int]StageMetrics{
+						3: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+						4: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
+			},
+			message: "shouldNotAddActiveStagesTwice",
+		},
+		{
+			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE", "ACTIVE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 2,
+				ActiveStageMetrics:           map[int]StageMetrics{},
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     4 * outputBytesPerStage,
+				totalNewInputBytes:      4 * inputBytesPerStage,
+				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 5,
+					ActiveStageMetrics: map[int]StageMetrics{
+						3: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+						4: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+						6: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
+			},
+			message: "whenStagesCompleteOutOfOrder_oldStagesFinalize_1",
+		},
+		{
+			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "COMPLETE", "COMPLETE", "COMPLETE"},
+			oldState: StageMetricsAggregationState{
+				MaxProcessedFinalizedStageID: 5,
+				ActiveStageMetrics: map[int]StageMetrics{
+					3: {
+						OutputBytes: outputBytesPerStage,
+						InputBytes:  inputBytesPerStage,
+						CPUTime:     cpuTimePerStage,
+					},
+					4: {
+						OutputBytes: 10,
+						InputBytes:  20,
+						CPUTime:     30,
+					},
+					6: {
+						OutputBytes: outputBytesPerStage,
+						InputBytes:  inputBytesPerStage,
+						CPUTime:     cpuTimePerStage,
+					},
+				},
+			},
+			expectedResult: stageWindowAggregationResult{
+				totalNewOutputBytes:     outputBytesPerStage - 10,
+				totalNewInputBytes:      inputBytesPerStage - 20,
+				totalNewExecutorCpuTime: cpuTimePerStage - 30,
+				newState: StageMetricsAggregationState{
+					MaxProcessedFinalizedStageID: 6,
+					ActiveStageMetrics: map[int]StageMetrics{
+						3: {
+							OutputBytes: outputBytesPerStage,
+							InputBytes:  inputBytesPerStage,
+							CPUTime:     cpuTimePerStage,
+						},
+					},
+				},
+			},
+			message: "whenStagesCompleteOutOfOrder_oldStagesFinalize_2",
 		},
 	}
 
 	for _, tc := range testCases {
 
 		stages := getStages(tc.statuses)
-		res := aggregateStagesWindow(stages, tc.oldMaxProcessedStageID, logger)
+		res := aggregateStagesWindow(stages, tc.oldState, logger)
 
-		assert.Equal(t, tc.expectedResult.newMaxProcessedStageID, res.newMaxProcessedStageID, tc.message)
+		assert.Equal(t, tc.expectedResult.newState, res.newState, tc.message)
 		assert.Equal(t, tc.expectedResult.totalNewExecutorCpuTime, res.totalNewExecutorCpuTime, tc.message)
 		assert.Equal(t, tc.expectedResult.totalNewInputBytes, res.totalNewInputBytes, tc.message)
 		assert.Equal(t, tc.expectedResult.totalNewOutputBytes, res.totalNewOutputBytes, tc.message)
@@ -404,42 +672,56 @@ func TestStageAggregation(t *testing.T) {
 		stages[0], stages[3] = stages[3], stages[0]
 		stages[2], stages[5] = stages[5], stages[2]
 
-		res := aggregateStagesWindow(stages, -1, logger)
-		assert.Equal(t, 2, res.newMaxProcessedStageID)
-		assert.Equal(t, int64(3*cpuTimePerStage), res.totalNewExecutorCpuTime)
-		assert.Equal(t, int64(3*inputBytesPerStage), res.totalNewInputBytes)
-		assert.Equal(t, int64(3*outputBytesPerStage), res.totalNewOutputBytes)
+		res := aggregateStagesWindow(stages, newMetricsAggregationState(), logger)
+		assert.Equal(tt, 4, res.newState.MaxProcessedFinalizedStageID)
+		assert.Equal(tt, map[int]StageMetrics{
+			3: {
+				OutputBytes: outputBytesPerStage,
+				InputBytes:  inputBytesPerStage,
+				CPUTime:     cpuTimePerStage,
+			},
+			5: {
+				OutputBytes: outputBytesPerStage,
+				InputBytes:  inputBytesPerStage,
+				CPUTime:     cpuTimePerStage,
+			},
+		}, res.newState.ActiveStageMetrics)
+		assert.Equal(tt, int64(6*cpuTimePerStage), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(6*inputBytesPerStage), res.totalNewInputBytes)
+		assert.Equal(tt, int64(6*outputBytesPerStage), res.totalNewOutputBytes)
 	})
 
 	t.Run("whenStagesMissed", func(tt *testing.T) {
 
+		// Manual verification of error logging
+
 		// Should not log error, no stages received
-		aggregateStagesWindow([]sparkapiclient.Stage{}, -1, logger)
+		aggregateStagesWindow([]sparkapiclient.Stage{}, newMetricsAggregationState(), logger)
 
 		stages := getStages([]string{"COMPLETE", "COMPLETE"})
 
 		// Should not log error, no stages seen before
-		aggregateStagesWindow(stages, -1, logger)
+		aggregateStagesWindow(stages, newMetricsAggregationState(), logger)
 
 		stages[0].StageID = 4
 		stages[1].StageID = 5
 
 		// Should not log error
-		aggregateStagesWindow(stages, 3, logger)
+		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 3}, logger)
 		// Should not log error
-		aggregateStagesWindow(stages, 4, logger)
+		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 4}, logger)
 		// Should not log error, no new stages received
-		aggregateStagesWindow(stages, 5, logger)
+		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 5}, logger)
 		// Should not log error, no new stages received
-		aggregateStagesWindow(stages, 6, logger)
+		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 6}, logger)
 		// Should log error, we missed stage 0
-		aggregateStagesWindow(stages, -1, logger)
+		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: -1}, logger)
 		// Should log error, we missed stage 1
-		aggregateStagesWindow(stages, 0, logger)
+		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 0}, logger)
 		// Should log error, we missed stage 2
-		aggregateStagesWindow(stages, 1, logger)
+		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 1}, logger)
 		// Should log error, we missed stage 3
-		aggregateStagesWindow(stages, 2, logger)
+		aggregateStagesWindow(stages, StageMetricsAggregationState{MaxProcessedFinalizedStageID: 2}, logger)
 	})
 }
 
@@ -561,5 +843,12 @@ func newRunningDriverPod() *corev1.Pod {
 				},
 			},
 		},
+	}
+}
+
+func newMetricsAggregationState() StageMetricsAggregationState {
+	return StageMetricsAggregationState{
+		MaxProcessedFinalizedStageID: -1,
+		ActiveStageMetrics:           make(map[int]StageMetrics),
 	}
 }
