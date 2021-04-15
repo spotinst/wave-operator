@@ -84,7 +84,7 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 				continue
 			}
 		}
-		a.addStageToMetrics(windowAggregate, a.state, stage)
+		a.addStageToMetrics(windowAggregate, stage)
 		// Remember new max processed stage ID
 		if stage.StageID > newState.MaxProcessedFinalizedStageID {
 			newState.MaxProcessedFinalizedStageID = stage.StageID
@@ -93,7 +93,7 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 
 	// Aggregate active stages
 	for _, stage := range active {
-		a.addStageToMetrics(windowAggregate, a.state, stage)
+		a.addStageToMetrics(windowAggregate, stage)
 		newState.ActiveStageMetrics[stage.StageID] = StageMetrics{
 			OutputBytes: stage.OutputBytes,
 			InputBytes:  stage.InputBytes,
@@ -114,13 +114,13 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 	}
 }
 
-func (a aggregator) addStageToMetrics(aggregatedMetrics *StageMetrics, oldState StageMetricsAggregatorState, stage sparkapiclient.Stage) {
+func (a aggregator) addStageToMetrics(aggregatedMetrics *StageMetrics, stage sparkapiclient.Stage) {
 	aggregatedMetrics.CPUTime += stage.ExecutorCpuTime
 	aggregatedMetrics.InputBytes += stage.InputBytes
 	aggregatedMetrics.OutputBytes += stage.OutputBytes
 
 	// Subtract values that we may have added to the aggregate previously
-	alreadyAdded, ok := oldState.ActiveStageMetrics[stage.StageID]
+	alreadyAdded, ok := a.state.ActiveStageMetrics[stage.StageID]
 	if ok {
 		aggregatedMetrics.CPUTime -= alreadyAdded.CPUTime
 		aggregatedMetrics.InputBytes -= alreadyAdded.InputBytes
