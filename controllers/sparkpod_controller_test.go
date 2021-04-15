@@ -290,7 +290,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	assert.Equal(t, getTestApplicationInfo().TotalNewOutputBytes, createdCR.Status.Data.RunStatistics.TotalOutputBytes)
 	assert.Equal(t, getTestApplicationInfo().TotalNewInputBytes, createdCR.Status.Data.RunStatistics.TotalInputBytes)
 	assert.Equal(t, getTestApplicationInfo().TotalNewExecutorCpuTime, createdCR.Status.Data.RunStatistics.TotalExecutorCpuTime)
-	verifyStageMetricsStateAnnotation(t, getTestApplicationInfo().MetricsAggregationState, createdCR)
+	verifyStageMetricsStateAnnotation(t, getTestApplicationInfo().MetricsAggregatorState, createdCR)
 	assert.Equal(t, string(getTestApplicationInfo().WorkloadType), createdCR.Annotations[workloadTypeAnnotation])
 	verifyCRAttempts(t, getTestApplicationInfo().Attempts, createdCR.Status.Data.RunStatistics.Attempts)
 	verifyCRExecutors(t, getTestApplicationInfo().Executors, createdCR.Status.Data.RunStatistics.Executors)
@@ -1167,7 +1167,7 @@ func verifyCRAttempts(t *testing.T, attempts []sparkapiclient.Attempt, crAttempt
 }
 
 func verifyStageMetricsStateAnnotation(t *testing.T, expected sparkapi.StageMetricsAggregatorState, cr *v1alpha1.SparkApplication) {
-	res, err := getStageMetricsAggregationState(cr)
+	res, err := getStageMetricsAggregatorState(cr)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, res)
 }
@@ -1253,7 +1253,7 @@ func getTestPod(namespace string, name string, uid string, role string, applicat
 
 func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 	return &sparkapi.ApplicationInfo{
-		MetricsAggregationState: sparkapi.StageMetricsAggregatorState{
+		MetricsAggregatorState: sparkapi.StageMetricsAggregatorState{
 			MaxProcessedFinalizedStageID: 135,
 			ActiveStageMetrics: map[int]sparkapi.StageMetrics{
 				3: {

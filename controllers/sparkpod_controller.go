@@ -286,13 +286,13 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 	// Fetch information from Spark API
 	// Let's update the driver pod information even though the Spark API call fails
 
-	stageMetricsAggregationState, err := getStageMetricsAggregationState(deepCopy)
+	stageMetricsAggregatorState, err := getStageMetricsAggregatorState(deepCopy)
 	if err != nil {
 		return fmt.Errorf("could not get stage metrics aggregation state, %w", err)
 	}
 
 	var sparkApiError error
-	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationID, stageMetricsAggregationState, log)
+	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationID, stageMetricsAggregatorState, log)
 	if err != nil {
 		sparkApiError = fmt.Errorf("could not get spark api application information, %w", err)
 	} else {
@@ -549,14 +549,14 @@ func podStateHistoryEntryEqual(a v1alpha1.PodStateHistoryEntry, b v1alpha1.PodSt
 	return true
 }
 
-func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationID string, metricsAggregationState sparkapi.StageMetricsAggregatorState, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
+func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationID string, metricsAggregatorState sparkapi.StageMetricsAggregatorState, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
 
 	manager, err := r.getSparkApiManager(clientSet, driverPod, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api manager, %w", err)
 	}
 
-	applicationInfo, err := manager.GetApplicationInfo(applicationID, metricsAggregationState, logger)
+	applicationInfo, err := manager.GetApplicationInfo(applicationID, metricsAggregatorState, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api application info, %w", err)
 	}
@@ -573,10 +573,10 @@ func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	deepCopy.Status.Data.RunStatistics.TotalInputBytes += sparkApiInfo.TotalNewInputBytes
 	deepCopy.Status.Data.RunStatistics.TotalOutputBytes += sparkApiInfo.TotalNewOutputBytes
 
-	err := setStageMetricsAggregationState(deepCopy, sparkApiInfo.MetricsAggregationState)
+	err := setStageMetricsAggregatorState(deepCopy, sparkApiInfo.MetricsAggregatorState)
 	if err != nil {
 		// Best effort
-		log.Error(err, "Could not set stage metrics annotation")
+		log.Error(err, "Could not set stage metrics aggregation state annotation")
 	}
 
 	attempts := make([]v1alpha1.Attempt, 0, len(sparkApiInfo.Attempts))
@@ -697,7 +697,7 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 	return nil
 }
 
-func getStageMetricsAggregationState(cr *v1alpha1.SparkApplication) (sparkapi.StageMetricsAggregatorState, error) {
+func getStageMetricsAggregatorState(cr *v1alpha1.SparkApplication) (sparkapi.StageMetricsAggregatorState, error) {
 	newState := sparkapi.StageMetricsAggregatorState{
 		MaxProcessedFinalizedStageID: -1,
 		ActiveStageMetrics:           make(map[int]sparkapi.StageMetrics),
@@ -719,7 +719,7 @@ func getStageMetricsAggregationState(cr *v1alpha1.SparkApplication) (sparkapi.St
 	return state, nil
 }
 
-func setStageMetricsAggregationState(cr *v1alpha1.SparkApplication, state sparkapi.StageMetricsAggregatorState) error {
+func setStageMetricsAggregatorState(cr *v1alpha1.SparkApplication, state sparkapi.StageMetricsAggregatorState) error {
 	if cr.Annotations == nil {
 		cr.Annotations = make(map[string]string)
 	}

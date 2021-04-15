@@ -87,7 +87,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		_, err := manager.GetApplicationInfo(applicationID, newMetricsAggregationState(), logger)
+		_, err := manager.GetApplicationInfo(applicationID, newMetricsAggregatorState(), logger)
 		assert.Error(tt, err)
 		assert.Contains(tt, err.Error(), "test error")
 
@@ -108,7 +108,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregationState(), logger)
+		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregatorState(), logger)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, "my-test-application", res.ApplicationName)
@@ -116,7 +116,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		assert.Equal(tt, int64(900), res.TotalNewExecutorCpuTime)
 		assert.Equal(tt, int64(500), res.TotalNewInputBytes)
 		assert.Equal(tt, int64(700), res.TotalNewOutputBytes)
-		assert.Equal(tt, 2, res.MetricsAggregationState.MaxProcessedFinalizedStageID)
+		assert.Equal(tt, 2, res.MetricsAggregatorState.MaxProcessedFinalizedStageID)
 
 		assert.Equal(tt, 2, len(res.SparkProperties))
 		assert.Equal(tt, "val1", res.SparkProperties["prop1"])
@@ -149,7 +149,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregationState(), logger)
+		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregatorState(), logger)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, WorkloadType(""), res.WorkloadType)
@@ -170,7 +170,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregationState(), logger)
+		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregatorState(), logger)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, SparkStreaming, res.WorkloadType)
@@ -191,7 +191,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregationState(), logger)
+		res, err := manager.GetApplicationInfo(applicationID, newMetricsAggregatorState(), logger)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, WorkloadType(""), res.WorkloadType)
@@ -233,18 +233,18 @@ func TestStageAggregation(t *testing.T) {
 	testCases := []testCase{
 		{
 			statuses: []string{},
-			oldState: newMetricsAggregationState(),
+			oldState: newMetricsAggregatorState(),
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     0,
 				totalNewInputBytes:      0,
 				totalNewExecutorCpuTime: 0,
-				newState:                newMetricsAggregationState(),
+				newState:                newMetricsAggregatorState(),
 			},
 			message: "whenNoStagesReceived",
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldState: newMetricsAggregationState(),
+			oldState: newMetricsAggregatorState(),
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     4 * outputBytesPerStage,
 				totalNewInputBytes:      4 * inputBytesPerStage,
@@ -367,7 +367,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldState: newMetricsAggregationState(),
+			oldState: newMetricsAggregatorState(),
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     4 * outputBytesPerStage,
 				totalNewInputBytes:      4 * inputBytesPerStage,
@@ -381,7 +381,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldState: newMetricsAggregationState(),
+			oldState: newMetricsAggregatorState(),
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     6 * outputBytesPerStage,
 				totalNewInputBytes:      6 * inputBytesPerStage,
@@ -502,7 +502,7 @@ func TestStageAggregation(t *testing.T) {
 		},
 		{
 			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "COMPLETE", "ACTIVE"},
-			oldState: newMetricsAggregationState(),
+			oldState: newMetricsAggregatorState(),
 			expectedResult: stageWindowAggregationResult{
 				totalNewOutputBytes:     6 * outputBytesPerStage,
 				totalNewInputBytes:      6 * inputBytesPerStage,
@@ -673,7 +673,7 @@ func TestStageAggregation(t *testing.T) {
 		stages[0], stages[3] = stages[3], stages[0]
 		stages[2], stages[5] = stages[5], stages[2]
 
-		aggregator := newStageMetricsAggregator(logger, newMetricsAggregationState())
+		aggregator := newStageMetricsAggregator(logger, newMetricsAggregatorState())
 		res := aggregator.processWindow(stages)
 		assert.Equal(tt, 4, res.newState.MaxProcessedFinalizedStageID)
 		assert.Equal(tt, map[int]StageMetrics{
@@ -698,12 +698,12 @@ func TestStageAggregation(t *testing.T) {
 		// Manual verification of error logging
 
 		// Should not log error, no stages received
-		newStageMetricsAggregator(logger, newMetricsAggregationState()).processWindow([]sparkapiclient.Stage{})
+		newStageMetricsAggregator(logger, newMetricsAggregatorState()).processWindow([]sparkapiclient.Stage{})
 
 		stages := getStages([]string{"COMPLETE", "COMPLETE"})
 
 		// Should not log error, no stages seen before
-		newStageMetricsAggregator(logger, newMetricsAggregationState()).processWindow(stages)
+		newStageMetricsAggregator(logger, newMetricsAggregatorState()).processWindow(stages)
 
 		stages[0].StageID = 4
 		stages[1].StageID = 5
@@ -848,7 +848,7 @@ func newRunningDriverPod() *corev1.Pod {
 	}
 }
 
-func newMetricsAggregationState() StageMetricsAggregatorState {
+func newMetricsAggregatorState() StageMetricsAggregatorState {
 	return StageMetricsAggregatorState{
 		MaxProcessedFinalizedStageID: -1,
 		ActiveStageMetrics:           make(map[int]StageMetrics),
