@@ -48,7 +48,7 @@ func TestMutateDriverPod(t *testing.T) {
 		SparkRoleLabel: SparkRoleDriverValue,
 	}
 	req := getAdmissionRequest(t, driverPod)
-	r, err := MutatePod(&util.FakeStorageProvider{}, log, req)
+	r, err := NewPodMutator(log, &util.FakeStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, driverPod.UID, r.UID)
@@ -73,7 +73,7 @@ func TestMutateExecutorPod(t *testing.T) {
 		SparkRoleLabel: SparkRoleExecutorValue,
 	}
 	req := getAdmissionRequest(t, execPod)
-	r, err := MutatePod(&util.FakeStorageProvider{}, log, req)
+	r, err := NewPodMutator(log, &util.FakeStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, execPod.UID, r.UID)
@@ -96,22 +96,23 @@ func TestIdempotency(t *testing.T) {
 		SparkRoleLabel: SparkRoleDriverValue,
 	}
 	req := getAdmissionRequest(t, driverPod)
-	r, err := MutatePod(&util.FakeStorageProvider{}, log, req)
+	m := NewPodMutator(log, &util.FakeStorageProvider{})
+	r, err := m.Mutate(req)
 	require.NoError(t, err)
 
 	obj, err := ApplyJsonPatch(r.Patch, driverPod)
 	require.NoError(t, err)
-	newPod, ok := obj.(*(corev1.Pod))
+	newPod, ok := obj.(*corev1.Pod)
 	require.True(t, ok)
 
 	req = getAdmissionRequest(t, newPod)
-	r, err = MutatePod(&util.FakeStorageProvider{}, log, req)
+	r, err = m.Mutate(req)
 	assert.NoError(t, err)
 	assert.Equal(t, "[]", string(r.Patch))
 
 	obj2, err := ApplyJsonPatch(r.Patch, newPod)
 	assert.NoError(t, err)
-	pod2, ok := obj2.(*(corev1.Pod))
+	pod2, ok := obj2.(*corev1.Pod)
 	require.True(t, ok)
 
 	assert.Equal(t, 2, len(pod2.Spec.Containers))
@@ -122,7 +123,7 @@ func TestIdempotency(t *testing.T) {
 
 func TestSkipNonSparkPod(t *testing.T) {
 	req := getAdmissionRequest(t, simplePod)
-	r, err := MutatePod(&util.FailedStorageProvider{}, log, req)
+	r, err := NewPodMutator(log, &util.FailedStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, simplePod.UID, r.UID)
@@ -137,7 +138,7 @@ func TestMutatePodBadStorage(t *testing.T) {
 		SparkRoleLabel: SparkRoleDriverValue,
 	}
 	req := getAdmissionRequest(t, driverPod)
-	r, err := MutatePod(&util.FailedStorageProvider{}, log, req)
+	r, err := NewPodMutator(log, &util.FailedStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, driverPod.UID, r.UID)
@@ -146,7 +147,7 @@ func TestMutatePodBadStorage(t *testing.T) {
 	assert.True(t, r.Allowed)
 
 	req = getAdmissionRequest(t, driverPod)
-	r, err = MutatePod(&util.NilStorageProvider{}, log, req)
+	r, err = NewPodMutator(log, &util.NilStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, driverPod.UID, r.UID)
