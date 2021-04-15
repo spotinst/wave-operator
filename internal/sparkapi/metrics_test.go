@@ -34,9 +34,6 @@ func TestApplicationRegistry(t *testing.T) {
 		assert.NotNil(tt, collector)
 
 		expectedOutput := `
-			# HELP spark_attempts_total Count of total attempts
-        	# TYPE spark_attempts_total counter
-        	spark_attempts_total{application_id="some-id",application_name="some-name"} 0
         	# HELP spark_executor_count Current executor count for the application
         	# TYPE spark_executor_count gauge
         	spark_executor_count{application_id="some-id",application_name="some-name"} 0
@@ -60,9 +57,6 @@ func TestApplicationRegistry(t *testing.T) {
 		collector := registry[info.ID]
 
 		expectedOutput := `
-			# HELP spark_attempts_total Count of total attempts
-			# TYPE spark_attempts_total counter
-			spark_attempts_total{application_id="update",application_name="update"} 0
 			# HELP spark_executor_active_tasks Current count of active tasks on the executor
 			# TYPE spark_executor_active_tasks gauge
 			spark_executor_active_tasks{application_id="update",application_name="update",executor_id="0"} 0
@@ -117,9 +111,6 @@ func TestApplicationRegistry(t *testing.T) {
 		assert.NotNil(tt, collector)
 
 		expectedOutput = `
-			# HELP spark_attempts_total Count of total attempts
-			# TYPE spark_attempts_total counter
-			spark_attempts_total{application_id="update",application_name="update"} 0
 			# HELP spark_executor_active_tasks Current count of active tasks on the executor
 			# TYPE spark_executor_active_tasks gauge
 			spark_executor_active_tasks{application_id="update",application_name="update",executor_id="0"} 0

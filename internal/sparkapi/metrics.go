@@ -140,9 +140,8 @@ func (e *executorCollector) Collect(executors []client.Executor, metrics chan<- 
 
 // applicationCollector is a prometheus collector that collects information for the specific spark application
 type applicationCollector struct {
-	app           *ApplicationInfo
-	executors     *executorCollector
-	attemptsTotal *prometheus.Desc
+	app       *ApplicationInfo
+	executors *executorCollector
 }
 
 func newApplicationCollector(info *ApplicationInfo) *applicationCollector {
@@ -154,20 +153,13 @@ func newApplicationCollector(info *ApplicationInfo) *applicationCollector {
 	return &applicationCollector{
 		app:       info,
 		executors: newExecutorCollector(applicationLabels),
-		attemptsTotal: prometheus.NewDesc(
-			"spark_attempts_total",
-			"Count of total attempts",
-			nil,
-			applicationLabels),
 	}
 }
 
 func (a *applicationCollector) Describe(descs chan<- *prometheus.Desc) {
-	descs <- a.attemptsTotal
 	a.executors.Describe(descs)
 }
 
 func (a *applicationCollector) Collect(metrics chan<- prometheus.Metric) {
-	metrics <- prometheus.MustNewConstMetric(a.attemptsTotal, prometheus.CounterValue, float64(len(a.app.Attempts)))
 	a.executors.Collect(a.app.Executors, metrics)
 }
