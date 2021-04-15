@@ -25,8 +25,6 @@ const (
 
 type WorkloadType string
 
-// TODO Config object - should not try history server if event log sync not enabled
-
 type Manager interface {
 	GetApplicationInfo(applicationID string, metricsAggregatorState StageMetricsAggregatorState, log logr.Logger) (*ApplicationInfo, error)
 }
@@ -68,6 +66,8 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 	if isSparkDriverRunning(driverPod) {
 		return sparkapiclient.NewDriverPodClient(driverPod, clientSet), nil
 	}
+
+	// Check annotations for if history server is configured
 
 	logger.Info("Driver pod/container not running, will use history server Spark API client")
 

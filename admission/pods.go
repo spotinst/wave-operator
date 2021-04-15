@@ -7,7 +7,6 @@ import (
 	"github.com/go-logr/logr"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
 	"github.com/spotinst/wave-operator/internal/storagesync"
@@ -67,7 +66,19 @@ var (
 	}
 )
 
-func MutatePod(_ kubernetes.Interface, provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
+type PodMutator struct {
+	storageProvider cloudstorage.CloudStorageProvider
+	log             logr.Logger
+}
+
+func NewPodMutator(log logr.Logger, storageProvider cloudstorage.CloudStorageProvider) PodMutator {
+	return PodMutator{
+		storageProvider: storageProvider,
+		log:             log,
+	}
+}
+
+func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
 
 	gvk := corev1.SchemeGroupVersion.WithKind("Pod")
 	sourceObj := &corev1.Pod{}
@@ -76,8 +87,7 @@ func MutatePod(_ kubernetes.Interface, provider cloudstorage.CloudStorageProvide
 	if err != nil {
 		return nil, fmt.Errorf("deserialization failed, %w", err)
 	}
-
-	log = log.WithValues("pod", sourceObj.Name)
+	log := m.log.WithValues("pod", sourceObj.Name)
 
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
@@ -97,10 +107,10 @@ func MutatePod(_ kubernetes.Interface, provider cloudstorage.CloudStorageProvide
 	modObj := &corev1.Pod{}
 	if sparkRole == SparkRoleDriverValue {
 		log.Info("Mutating driver pod", "annotations", sourceObj.Annotations)
-		modObj = mutateDriverPod(sourceObj, provider, log)
+		modObj = m.mutateDriverPod(sourceObj)
 	} else {
 		log.Info("Mutating executor pod")
-		modObj = mutateExecutorPod(sourceObj)
+		modObj = m.mutateExecutorPod(sourceObj)
 	}
 
 	patchBytes, err := GetJsonPatch(sourceObj, modObj)
@@ -116,29 +126,30 @@ func MutatePod(_ kubernetes.Interface, provider cloudstorage.CloudStorageProvide
 	return resp, nil
 }
 
-func mutateDriverPod(sourceObj *corev1.Pod, provider cloudstorage.CloudStorageProvider, log logr.Logger) *corev1.Pod {
+func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod) *corev1.Pod {
+
 	modObj := sourceObj.DeepCopy()
 
 	// node affinity
 	modObj.Spec.Affinity = onDemandAffinity
 
 	if !isEventLogSyncEnabled(sourceObj.Annotations) {
-		log.Info("Event log sync not enabled, will not add storage sync container")
+		m.log.Info("Event log sync not enabled, will not add storage sync container")
 		return modObj
 	}
 
-	storageInfo, err := provider.GetStorageInfo()
+	storageInfo, err := m.storageProvider.GetStorageInfo()
 	if err != nil {
-		log.Error(err, "could not get storage info, will not add storage sync container")
+		m.log.Error(err, "could not get storage info, will not add storage sync container")
 		return modObj
 	}
 
 	if storageInfo == nil {
-		log.Error(fmt.Errorf("storage configuration is nil"), "will not add storage sync container")
+		m.log.Error(fmt.Errorf("storage configuration is nil"), "will not add storage sync container")
 		return modObj
 	}
 
-	log.Info("driver pod admission control", "mountPath", volumeMount.MountPath)
+	m.log.Info("driver pod admission control", "mountPath", volumeMount.MountPath)
 
 	webServerPort := strconv.Itoa(int(storagesync.Port))
 	storageContainer := corev1.Container{
@@ -215,7 +226,7 @@ func mutateDriverPod(sourceObj *corev1.Pod, provider cloudstorage.CloudStoragePr
 	return modObj
 }
 
-func mutateExecutorPod(sourceObj *corev1.Pod) *corev1.Pod {
+func (m PodMutator) mutateExecutorPod(sourceObj *corev1.Pod) *corev1.Pod {
 	modObj := sourceObj.DeepCopy()
 	// node affinity
 	modObj.Spec.Affinity = onDemandAntiAffinity

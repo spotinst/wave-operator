@@ -105,7 +105,7 @@ func getDriverPod(name string, namespace string, eventLogSyncEnabled bool, event
 func TestMutateEmptyCM(t *testing.T) {
 	clientSet := k8sfake.NewSimpleClientset()
 	req := getAdmissionRequest(t, emptyConfigMap)
-	r, err := MutateConfigMap(clientSet, &util.FakeStorageProvider{}, log, req)
+	r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, emptyConfigMap.UID, r.UID)
@@ -117,7 +117,7 @@ func TestMutateEmptyCM(t *testing.T) {
 func TestMutateNonSparkCM(t *testing.T) {
 	clientSet := k8sfake.NewSimpleClientset()
 	req := getAdmissionRequest(t, nonSparkConfigMap)
-	r, err := MutateConfigMap(clientSet, &util.FakeStorageProvider{}, log, req)
+	r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, nonSparkConfigMap.UID, r.UID)
@@ -131,7 +131,7 @@ func TestMutateBadSparkCM(t *testing.T) {
 	driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
 	clientSet := k8sfake.NewSimpleClientset(driver)
 	req := getAdmissionRequest(t, cm)
-	r, err := MutateConfigMap(clientSet, &util.FakeStorageProvider{}, log, req)
+	r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, cm.UID, r.UID)
@@ -145,7 +145,7 @@ func TestMutateSparkCM(t *testing.T) {
 	driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
 	clientSet := k8sfake.NewSimpleClientset(driver)
 	req := getAdmissionRequest(t, cm)
-	r, err := MutateConfigMap(clientSet, &util.FakeStorageProvider{}, log, req)
+	r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, cm.UID, r.UID)
@@ -166,7 +166,7 @@ func TestMutateSparkBadStorageCM(t *testing.T) {
 		driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
 		clientSet := k8sfake.NewSimpleClientset(driver)
 		req := getAdmissionRequest(t, cm)
-		r, err := MutateConfigMap(clientSet, provider, log, req)
+		r, err := NewConfigMapMutator(log, clientSet, provider).Mutate(req)
 		assert.NoError(t, err)
 		assert.NotNil(t, r)
 		assert.Equal(t, cm.UID, r.UID)
@@ -206,7 +206,7 @@ func TestEventLogSyncConfiguration(t *testing.T) {
 
 		req := getAdmissionRequest(tt, cm)
 
-		r, err := MutateConfigMap(clientSet, &util.FakeStorageProvider{}, log, req)
+		r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, r)
 		assert.Equal(tt, cm.UID, r.UID)

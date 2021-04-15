@@ -15,7 +15,21 @@ import (
 	"github.com/spotinst/wave-operator/cloudstorage"
 )
 
-func MutateConfigMap(client kubernetes.Interface, provider cloudstorage.CloudStorageProvider, log logr.Logger, req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
+type ConfigMapMutator struct {
+	log      logr.Logger
+	client   kubernetes.Interface
+	provider cloudstorage.CloudStorageProvider
+}
+
+func NewConfigMapMutator(log logr.Logger, client kubernetes.Interface, provider cloudstorage.CloudStorageProvider) ConfigMapMutator {
+	return ConfigMapMutator{
+		log:      log,
+		client:   client,
+		provider: provider,
+	}
+}
+
+func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
 
 	ctx := context.TODO()
 
@@ -27,7 +41,7 @@ func MutateConfigMap(client kubernetes.Interface, provider cloudstorage.CloudSto
 		return nil, fmt.Errorf("deserialization failed, %w", err)
 	}
 
-	log = log.WithValues("configmap", sourceObj.Name)
+	log := m.log.WithValues("configmap", sourceObj.Name)
 
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
@@ -50,7 +64,7 @@ func MutateConfigMap(client kubernetes.Interface, provider cloudstorage.CloudSto
 		return resp, nil
 	}
 
-	ownerPod, err := client.CoreV1().Pods(sourceObj.Namespace).Get(ctx, sourceObj.OwnerReferences[0].Name, v1.GetOptions{})
+	ownerPod, err := m.client.CoreV1().Pods(sourceObj.Namespace).Get(ctx, sourceObj.OwnerReferences[0].Name, v1.GetOptions{})
 	if err != nil {
 		log.Error(err, "could not get owner pod")
 		return resp, nil
@@ -64,7 +78,7 @@ func MutateConfigMap(client kubernetes.Interface, provider cloudstorage.CloudSto
 		return resp, nil
 	}
 
-	storageInfo, err := provider.GetStorageInfo()
+	storageInfo, err := m.provider.GetStorageInfo()
 	if err != nil {
 		log.Error(err, "cannot get storage configuration")
 		return resp, nil
@@ -88,6 +102,7 @@ func MutateConfigMap(client kubernetes.Interface, provider cloudstorage.CloudSto
 	}
 	props.Set("spark.eventLog.dir", "file:///var/log/spark") //storageInfo.Path)
 	props.Set("spark.eventLog.enabled", "true")
+
 	modObj.Data["spark.properties"] = props.String()
 
 	patch, err := GetJsonPatch(sourceObj, modObj)
