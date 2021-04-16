@@ -163,7 +163,7 @@ func (a aggregator) groupStages(stages []sparkapiclient.Stage) (finalizedStages,
 	for _, stage := range stages {
 		if a.isStageFinalized(stage) {
 			finalizedStages = append(finalizedStages, stage)
-		} else {
+		} else if a.isStageActive(stage) {
 			activeStages = append(activeStages, stage)
 		}
 	}
@@ -179,4 +179,8 @@ func (a aggregator) isStageFinalized(stage sparkapiclient.Stage) bool {
 	default:
 		return false
 	}
+}
+
+func (a aggregator) isStageActive(stage sparkapiclient.Stage) bool {
+	return stage.Status == "ACTIVE"
 }
