@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/internal/config"
 )
 
 type ConfigMapMutator struct {
@@ -73,7 +74,7 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 	log.Info("Got config map owner pod",
 		"name", ownerPod.Name, "namespace", ownerPod.Namespace, "annotations", ownerPod.Annotations)
 
-	if !isEventLogSyncEnabled(ownerPod.Annotations) {
+	if !config.IsEventLogSyncEnabled(ownerPod.Annotations) {
 		log.Info("Event log sync not enabled, will not mutate config map")
 		return resp, nil
 	}

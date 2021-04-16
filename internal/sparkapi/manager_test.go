@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/internal/config"
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 	"github.com/spotinst/wave-operator/internal/sparkapi/client/mock_client"
 )
@@ -24,7 +25,21 @@ func TestGetSparkApiClient(t *testing.T) {
 	t.Run("whenDriverAvailable", func(tt *testing.T) {
 
 		svc := newHistoryServerService()
-		pod := newRunningDriverPod()
+		pod := newRunningDriverPod(true)
+
+		clientSet := k8sfake.NewSimpleClientset(svc, pod)
+
+		c, err := getSparkApiClient(clientSet, pod, logger)
+		assert.NoError(tt, err)
+		assert.NotNil(tt, c)
+		assert.Equal(tt, sparkapiclient.DriverClient, c.GetClientType())
+
+	})
+
+	t.Run("whenDriverAvailable_eventLogSyncOff", func(tt *testing.T) {
+
+		svc := newHistoryServerService()
+		pod := newRunningDriverPod(false)
 
 		clientSet := k8sfake.NewSimpleClientset(svc, pod)
 
@@ -38,7 +53,7 @@ func TestGetSparkApiClient(t *testing.T) {
 	t.Run("whenDriverNotAvailableHistoryServerAvailable", func(tt *testing.T) {
 
 		svc := newHistoryServerService()
-		pod := newRunningDriverPod()
+		pod := newRunningDriverPod(true)
 		pod.Status.Phase = corev1.PodSucceeded // Driver not running
 
 		clientSet := k8sfake.NewSimpleClientset(svc, pod)
@@ -50,9 +65,24 @@ func TestGetSparkApiClient(t *testing.T) {
 
 	})
 
+	t.Run("whenDriverNotAvailable_eventLogSyncOff", func(tt *testing.T) {
+
+		svc := newHistoryServerService()
+		pod := newRunningDriverPod(false)
+		pod.Status.Phase = corev1.PodSucceeded // Driver not running
+
+		clientSet := k8sfake.NewSimpleClientset(svc, pod)
+
+		c, err := getSparkApiClient(clientSet, pod, logger)
+		assert.Error(tt, err)
+		assert.Nil(tt, c)
+		assert.True(tt, IsApiNotAvailableError(err))
+
+	})
+
 	t.Run("whenHistoryServerNotAvailableDriverNotAvailable", func(tt *testing.T) {
 
-		pod := newRunningDriverPod()
+		pod := newRunningDriverPod(true)
 		pod.Status.Phase = corev1.PodSucceeded // Driver not running
 
 		clientSet := k8sfake.NewSimpleClientset(pod)
@@ -831,8 +861,8 @@ func newHistoryServerService() *corev1.Service {
 	}
 }
 
-func newRunningDriverPod() *corev1.Pod {
-	return &corev1.Pod{
+func newRunningDriverPod(eventLogSyncEnabled bool) *corev1.Pod {
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			DeletionTimestamp: nil,
 		},
@@ -846,6 +876,11 @@ func newRunningDriverPod() *corev1.Pod {
 			},
 		},
 	}
+	if eventLogSyncEnabled {
+		pod.Annotations = make(map[string]string)
+		pod.Annotations[config.WaveConfigAnnotationSyncEventLogs] = "true"
+	}
+	return pod
 }
 
 func newMetricsAggregatorState() StageMetricsAggregatorState {

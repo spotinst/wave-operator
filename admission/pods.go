@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/internal/config"
 	"github.com/spotinst/wave-operator/internal/storagesync"
 )
 
@@ -133,7 +134,7 @@ func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod) *corev1.Pod {
 	// node affinity
 	modObj.Spec.Affinity = onDemandAffinity
 
-	if !isEventLogSyncEnabled(sourceObj.Annotations) {
+	if !config.IsEventLogSyncEnabled(sourceObj.Annotations) {
 		m.log.Info("Event log sync not enabled, will not add storage sync container")
 		return modObj
 	}

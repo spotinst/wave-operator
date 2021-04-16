@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -17,7 +16,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
-	"github.com/spotinst/wave-operator/controllers"
 )
 
 type AdmissionController struct {
@@ -135,18 +133,4 @@ func (ac *AdmissionController) Start(ctx context.Context) error {
 
 	ac.log.Info("admission controller exited properly")
 	return nil
-}
-
-func isEventLogSyncEnabled(annotations map[string]string) bool {
-	if annotations == nil {
-		return false
-	}
-	storageSyncOn, ok := annotations[controllers.WaveConfigAnnotationSyncEventLogs]
-	if !ok {
-		return false
-	}
-	if strings.ToUpper(storageSyncOn) == "TRUE" {
-		return true
-	}
-	return false
 }

@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
-	"github.com/spotinst/wave-operator/controllers"
+	"github.com/spotinst/wave-operator/internal/config"
 	"github.com/spotinst/wave-operator/internal/util"
 )
 
@@ -88,7 +88,7 @@ func TestMutateDriverPod(t *testing.T) {
 			SparkRoleLabel: SparkRoleDriverValue,
 		}
 		if tc.eventLogSyncAnnotationPresent {
-			driverPod.Annotations[controllers.WaveConfigAnnotationSyncEventLogs] = tc.eventLogSyncAnnotationValue
+			driverPod.Annotations[config.WaveConfigAnnotationSyncEventLogs] = tc.eventLogSyncAnnotationValue
 		}
 
 		req := getAdmissionRequest(t, driverPod)
@@ -147,7 +147,7 @@ func TestIdempotency(t *testing.T) {
 	driverPod.Labels = map[string]string{
 		SparkRoleLabel: SparkRoleDriverValue,
 	}
-	driverPod.Annotations[controllers.WaveConfigAnnotationSyncEventLogs] = "true"
+	driverPod.Annotations[config.WaveConfigAnnotationSyncEventLogs] = "true"
 	req := getAdmissionRequest(t, driverPod)
 	m := NewPodMutator(log, &util.FakeStorageProvider{})
 	r, err := m.Mutate(req)
@@ -193,7 +193,7 @@ func TestMutatePodBadStorage(t *testing.T) {
 		driverPod.Labels = map[string]string{
 			SparkRoleLabel: SparkRoleDriverValue,
 		}
-		driverPod.Annotations[controllers.WaveConfigAnnotationSyncEventLogs] = "true"
+		driverPod.Annotations[config.WaveConfigAnnotationSyncEventLogs] = "true"
 
 		req := getAdmissionRequest(t, driverPod)
 		r, err := NewPodMutator(log, provider).Mutate(req)

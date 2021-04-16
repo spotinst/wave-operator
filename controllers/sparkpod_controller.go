@@ -31,8 +31,6 @@ const (
 	AppEnterpriseGatewayLabelValue = "enterprise-gateway"
 	SparkOperatorLaunchedByLabel   = "sparkoperator.k8s.io/launched-by-spark-operator"
 
-	WaveConfigAnnotationSyncEventLogs = "wave.spot.io/synceventlogs"
-
 	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
 
 	apiVersion             = "wave.spot.io/v1alpha1"
@@ -218,6 +216,9 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 					Requeue:      true,
 					RequeueAfter: requeueAfterTimeout,
 				}, nil
+			} else if sparkapi.IsApiNotAvailableError(err) {
+				// Spark API is not available, don't want to requeue
+				log.Info(fmt.Sprintf("Spark API not available: %s", err.Error()))
 			} else {
 				log.Error(err, "error handling driver pod")
 				return ctrl.Result{}, err

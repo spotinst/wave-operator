@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/spotinst/wave-operator/catalog"
+	"github.com/spotinst/wave-operator/internal/config"
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 	"github.com/spotinst/wave-operator/internal/sparkapi/client/transport"
 )
@@ -22,6 +23,8 @@ const (
 
 	SparkStreaming WorkloadType = "spark-streaming"
 )
+
+var ErrApiNotAvailable = errors.New("spark api not available")
 
 type WorkloadType string
 
@@ -67,7 +70,10 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 		return sparkapiclient.NewDriverPodClient(driverPod, clientSet), nil
 	}
 
-	// Check annotations for if history server is configured
+	// Check if the event log sync feature is on
+	if !config.IsEventLogSyncEnabled(driverPod.Annotations) {
+		return nil, ErrApiNotAvailable
+	}
 
 	logger.Info("Driver pod/container not running, will use history server Spark API client")
 
@@ -225,4 +231,8 @@ func IsNotFoundError(err error) bool {
 		return true
 	}
 	return false
+}
+
+func IsApiNotAvailableError(err error) bool {
+	return errors.Is(err, ErrApiNotAvailable)
 }

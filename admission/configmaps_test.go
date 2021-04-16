@@ -11,7 +11,7 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
-	"github.com/spotinst/wave-operator/controllers"
+	"github.com/spotinst/wave-operator/internal/config"
 	"github.com/spotinst/wave-operator/internal/util"
 )
 
@@ -97,7 +97,7 @@ func getDriverPod(name string, namespace string, eventLogSyncEnabled bool, event
 		if eventLogSyncValueOverride != "" {
 			eventLogSyncValue = eventLogSyncValueOverride
 		}
-		pod.Annotations[controllers.WaveConfigAnnotationSyncEventLogs] = eventLogSyncValue
+		pod.Annotations[config.WaveConfigAnnotationSyncEventLogs] = eventLogSyncValue
 	}
 	return pod
 }
