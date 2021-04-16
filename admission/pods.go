@@ -105,7 +105,7 @@ func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.Admi
 		return resp, nil
 	}
 
-	modObj := &corev1.Pod{}
+	var modObj *corev1.Pod
 	if sparkRole == SparkRoleDriverValue {
 		log.Info("Mutating driver pod", "annotations", sourceObj.Annotations)
 		modObj = m.mutateDriverPod(sourceObj)
