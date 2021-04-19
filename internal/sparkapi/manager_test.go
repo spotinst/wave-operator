@@ -815,6 +815,60 @@ func TestStageAggregation(t *testing.T) {
 		// Should log error, we missed stage 3
 		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0}}).processWindow(stages)
 	})
+
+	t.Run("testAttemptIDs", func(tt *testing.T) {
+
+		stages := getStages([]string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE", "COMPLETE", "ACTIVE", "PENDING"})
+		stages[2].StageID = 1
+		stages[2].AttemptID = 1
+		stages[3].StageID = 1
+		stages[3].AttemptID = 2
+		stages[4].StageID = 1
+		stages[4].AttemptID = 3
+		stages[5].StageID = 1
+		stages[5].AttemptID = 4
+		stages[6].StageID = 2
+		stages[6].AttemptID = 99
+
+		aggregator := newStageMetricsAggregator(logger, NewStageMetricsAggregatorState())
+		res := aggregator.processWindow(stages)
+		assert.Equal(tt, StageKey{StageID: 1, AttemptID: 3}, res.newState.MaxProcessedFinalizedStage)
+		assert.Equal(tt, map[StageKey]StageMetrics{
+			StageKey{StageID: 1, AttemptID: 2}: {
+				OutputBytes: outputBytesPerStage,
+				InputBytes:  inputBytesPerStage,
+				CPUTime:     cpuTimePerStage,
+			},
+			StageKey{StageID: 1, AttemptID: 4}: {
+				OutputBytes: outputBytesPerStage,
+				InputBytes:  inputBytesPerStage,
+				CPUTime:     cpuTimePerStage,
+			},
+		}, res.newState.ActiveStageMetrics)
+		assert.Equal(tt, []StageKey{{StageID: 2, AttemptID: 99}}, res.newState.PendingStages)
+		assert.Equal(tt, int64(6*cpuTimePerStage), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(6*inputBytesPerStage), res.totalNewInputBytes)
+		assert.Equal(tt, int64(6*outputBytesPerStage), res.totalNewOutputBytes)
+
+		aggregator = newStageMetricsAggregator(logger, res.newState)
+		stages[3].Status = "COMPLETE"
+		stages[5].Status = "COMPLETE"
+		stages[6].Status = "ACTIVE"
+		res = aggregator.processWindow(stages)
+		assert.Equal(tt, StageKey{StageID: 1, AttemptID: 4}, res.newState.MaxProcessedFinalizedStage)
+		assert.Equal(tt, map[StageKey]StageMetrics{
+			StageKey{StageID: 2, AttemptID: 99}: {
+				OutputBytes: outputBytesPerStage,
+				InputBytes:  inputBytesPerStage,
+				CPUTime:     cpuTimePerStage,
+			},
+		}, res.newState.ActiveStageMetrics)
+		assert.Equal(tt, []StageKey{}, res.newState.PendingStages)
+		assert.Equal(tt, int64(1*cpuTimePerStage), res.totalNewExecutorCpuTime)
+		assert.Equal(tt, int64(1*inputBytesPerStage), res.totalNewInputBytes)
+		assert.Equal(tt, int64(1*outputBytesPerStage), res.totalNewOutputBytes)
+
+	})
 }
 
 func getTestLogger() logr.Logger {

@@ -147,12 +147,13 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 		_, ok := a.getStageByKey(stages, expected)
 		if ok {
 			foundExpectedStage = true
+			break
 		}
 	}
 
 	if !foundExpectedStage && windowHasAdvanced {
 		// Let's just log an error
-		err := fmt.Errorf("did not find expected stage %+v in stage window", expectedStages)
+		err := fmt.Errorf("did not find expected stages %+v in stage window", expectedStages)
 		a.log.Error(err, "missing stage metrics")
 	}
 
