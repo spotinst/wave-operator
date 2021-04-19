@@ -1251,19 +1251,19 @@ func getTestPod(namespace string, name string, uid string, role string, applicat
 func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 	return &sparkapi.ApplicationInfo{
 		MetricsAggregatorState: sparkapi.StageMetricsAggregatorState{
-			MaxProcessedFinalizedStageID: 135,
-			ActiveStageMetrics: map[int]sparkapi.StageMetrics{
-				3: {
+			MaxProcessedFinalizedStage: sparkapi.StageKey{StageID: 135, AttemptID: 0},
+			ActiveStageMetrics: map[sparkapi.StageKey]sparkapi.StageMetrics{
+				sparkapi.StageKey{StageID: 3, AttemptID: 0}: {
 					OutputBytes: 1, InputBytes: 2, CPUTime: 3,
 				},
-				9: {
+				sparkapi.StageKey{StageID: 9, AttemptID: 0}: {
 					OutputBytes: 45, InputBytes: 55, CPUTime: 65,
 				},
-				99: {
+				sparkapi.StageKey{StageID: 99, AttemptID: 0}: {
 					OutputBytes: 4590, InputBytes: 552425, CPUTime: 6345245636478595,
 				},
 			},
-			PendingStages: []int{100, 101, 102},
+			PendingStages: []sparkapi.StageKey{{StageID: 100, AttemptID: 0}, {StageID: 101, AttemptID: 0}, {StageID: 102, AttemptID: 0}},
 		},
 		ApplicationName: "The application name",
 		SparkProperties: map[string]string{

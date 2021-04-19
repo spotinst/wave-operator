@@ -2,13 +2,13 @@ package sparkapi
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/go-logr/logr"
 
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 )
-
-// TODO Do I need to handle StageID,attemptID separately?
 
 type stageMetricsAggregator interface {
 	processWindow(stages []sparkapiclient.Stage) stageWindowAggregationResult
@@ -34,9 +34,9 @@ type stageWindowAggregationResult struct {
 }
 
 type StageMetricsAggregatorState struct {
-	MaxProcessedFinalizedStageID int                  `json:"maxProcessedFinalizedStageId"`
-	ActiveStageMetrics           map[int]StageMetrics `json:"activeStageMetrics"`
-	PendingStages                []int                `json:"pendingStages"`
+	MaxProcessedFinalizedStage StageKey                  `json:"maxProcessedFinalizedStage"`
+	ActiveStageMetrics         map[StageKey]StageMetrics `json:"activeStageMetrics"`
+	PendingStages              []StageKey                `json:"pendingStages"`
 }
 
 type StageMetrics struct {
@@ -45,11 +45,73 @@ type StageMetrics struct {
 	CPUTime     int64 `json:"cpuTime"`
 }
 
+// StageKey uniquely identifies a stage attempt
+type StageKey struct {
+	StageID   int `json:"stageId"`
+	AttemptID int `json:"attemptId"`
+}
+
+func (k StageKey) MarshalText() (text []byte, err error) {
+	s := fmt.Sprintf("%d_%d", k.StageID, k.AttemptID)
+	return []byte(s), nil
+}
+
+func (k *StageKey) UnmarshalText(text []byte) error {
+	s := string(text)
+	split := strings.Split(s, "_")
+	if len(split) != 2 {
+		return fmt.Errorf("illegal value %q", s)
+	}
+	stageID, err := strconv.Atoi(split[0])
+	if err != nil {
+		return err
+	}
+	attemptID, err := strconv.Atoi(split[1])
+	if err != nil {
+		return err
+	}
+	k.StageID = stageID
+	k.AttemptID = attemptID
+	return nil
+}
+
+func (k StageKey) compare(that StageKey) int {
+	if k.StageID < that.StageID {
+		return -1
+	}
+	if k.StageID > that.StageID {
+		return 1
+	}
+	// Stage IDs are equal, check attempt IDs
+	if k.AttemptID < that.AttemptID {
+		return -1
+	}
+	if k.AttemptID > that.AttemptID {
+		return 1
+	}
+	// Stage IDs and attempt IDs are equal
+	return 0
+}
+
+func getStageKey(s sparkapiclient.Stage) StageKey {
+	return StageKey{
+		StageID:   s.StageID,
+		AttemptID: s.AttemptID,
+	}
+}
+
+func newStageKey() StageKey {
+	return StageKey{
+		StageID:   -1,
+		AttemptID: -1,
+	}
+}
+
 func NewStageMetricsAggregatorState() StageMetricsAggregatorState {
 	return StageMetricsAggregatorState{
-		MaxProcessedFinalizedStageID: -1,
-		ActiveStageMetrics:           make(map[int]StageMetrics),
-		PendingStages:                make([]int, 0),
+		MaxProcessedFinalizedStage: newStageKey(),
+		ActiveStageMetrics:         make(map[StageKey]StageMetrics),
+		PendingStages:              make([]StageKey, 0),
 	}
 }
 
@@ -60,34 +122,50 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 	// Let's only aggregate stage metrics from the stages we have not processed yet
 
 	finalized, active, pending := a.groupStages(stages)
-	minID, maxID := a.getMinMaxIds(stages)
+	minStage, maxStage := a.getMinMaxStages(stages)
 
 	windowHasAdvanced := false
-	_, maxFinalizedId := a.getMinMaxIds(finalized)
-	if maxFinalizedId > a.state.MaxProcessedFinalizedStageID {
+	_, maxFinalized := a.getMinMaxStages(finalized)
+	if maxFinalized.compare(a.state.MaxProcessedFinalizedStage) > 0 {
 		windowHasAdvanced = true
 	}
 
-	// If the stage window has advanced and we don't find this stage ID in the window
+	// If the stage window has advanced and we don't find one of these stages in the window
 	// it means we have missed some stages
-	expectedStageID := a.state.MaxProcessedFinalizedStageID + 1
-	_, foundExpectedStageID := a.getStageById(stages, expectedStageID)
+	var foundExpectedStage bool
+	expectedStages := []StageKey{
+		{
+			StageID:   a.state.MaxProcessedFinalizedStage.StageID + 1,
+			AttemptID: 0,
+		},
+		{
+			StageID:   a.state.MaxProcessedFinalizedStage.StageID,
+			AttemptID: a.state.MaxProcessedFinalizedStage.AttemptID + 1,
+		},
+	}
+	for _, expected := range expectedStages {
+		_, ok := a.getStageByKey(stages, expected)
+		if ok {
+			foundExpectedStage = true
+		}
+	}
 
-	if !foundExpectedStageID && windowHasAdvanced {
+	if !foundExpectedStage && windowHasAdvanced {
 		// Let's just log an error
-		err := fmt.Errorf("did not find expected stage ID %d in stage window", expectedStageID)
+		err := fmt.Errorf("did not find expected stage %+v in stage window", expectedStages)
 		a.log.Error(err, "missing stage metrics")
 	}
 
 	windowAggregate := &StageMetrics{}
 	newState := NewStageMetricsAggregatorState()
-	newState.MaxProcessedFinalizedStageID = a.state.MaxProcessedFinalizedStageID
+	newState.MaxProcessedFinalizedStage = a.state.MaxProcessedFinalizedStage
 
 	// Aggregate finalized stages
 	for _, stage := range finalized {
-		if stage.StageID <= a.state.MaxProcessedFinalizedStageID {
+		key := getStageKey(stage)
+		if key.compare(a.state.MaxProcessedFinalizedStage) <= 0 {
 			// Was this stage previously active or pending, and just finalized? (stages finalize out of order)
-			_, stageWasActive := a.state.ActiveStageMetrics[stage.StageID]
+			_, stageWasActive := a.state.ActiveStageMetrics[key]
 			stageWasPending := a.wasStagePending(stage)
 			if !(stageWasActive || stageWasPending) {
 				continue
@@ -95,15 +173,15 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 		}
 		a.addStageToMetrics(windowAggregate, stage)
 		// Remember new max processed stage ID
-		if stage.StageID > newState.MaxProcessedFinalizedStageID {
-			newState.MaxProcessedFinalizedStageID = stage.StageID
+		if key.compare(newState.MaxProcessedFinalizedStage) > 0 {
+			newState.MaxProcessedFinalizedStage = key
 		}
 	}
 
 	// Aggregate active stages
 	for _, stage := range active {
 		a.addStageToMetrics(windowAggregate, stage)
-		newState.ActiveStageMetrics[stage.StageID] = StageMetrics{
+		newState.ActiveStageMetrics[getStageKey(stage)] = StageMetrics{
 			OutputBytes: stage.OutputBytes,
 			InputBytes:  stage.InputBytes,
 			CPUTime:     stage.ExecutorCpuTime,
@@ -112,13 +190,13 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 
 	// Aggregate pending stages
 	for _, stage := range pending {
-		newState.PendingStages = append(newState.PendingStages, stage.StageID)
+		newState.PendingStages = append(newState.PendingStages, getStageKey(stage))
 	}
 
 	a.log.Info("Finished processing stage window", "stageCount", len(stages),
-		"minStageID", minID, "maxStageID", maxID,
-		"oldMaxProcessedFinalizedStageID", a.state.MaxProcessedFinalizedStageID,
-		"newMaxProcessedFinalizedStageID", newState.MaxProcessedFinalizedStageID)
+		"minStage", minStage, "maxStage", maxStage,
+		"oldMaxProcessedFinalizedStage", a.state.MaxProcessedFinalizedStage,
+		"newMaxProcessedFinalizedStage", newState.MaxProcessedFinalizedStage)
 
 	return stageWindowAggregationResult{
 		totalNewOutputBytes:     windowAggregate.OutputBytes,
@@ -134,7 +212,7 @@ func (a aggregator) addStageToMetrics(aggregatedMetrics *StageMetrics, stage spa
 	aggregatedMetrics.OutputBytes += stage.OutputBytes
 
 	// Subtract values that we may have added to the aggregate previously
-	alreadyAdded, ok := a.state.ActiveStageMetrics[stage.StageID]
+	alreadyAdded, ok := a.state.ActiveStageMetrics[getStageKey(stage)]
 	if ok {
 		aggregatedMetrics.CPUTime -= alreadyAdded.CPUTime
 		aggregatedMetrics.InputBytes -= alreadyAdded.InputBytes
@@ -142,33 +220,34 @@ func (a aggregator) addStageToMetrics(aggregatedMetrics *StageMetrics, stage spa
 	}
 }
 
-func (a aggregator) getStageById(stages []sparkapiclient.Stage, id int) (sparkapiclient.Stage, bool) {
+func (a aggregator) getStageByKey(stages []sparkapiclient.Stage, key StageKey) (sparkapiclient.Stage, bool) {
 	for _, stage := range stages {
-		if stage.StageID == id {
+		if getStageKey(stage).compare(key) == 0 {
 			return stage, true
 		}
 	}
 	return sparkapiclient.Stage{}, false
 }
 
-func (a aggregator) getMinMaxIds(stages []sparkapiclient.Stage) (minID, maxID int) {
-	minID = -1
-	maxID = -1
+func (a aggregator) getMinMaxStages(stages []sparkapiclient.Stage) (min, max StageKey) {
+	min = newStageKey()
+	max = newStageKey()
 	for _, stage := range stages {
-		if minID == -1 {
-			minID = stage.StageID
+		current := getStageKey(stage)
+		if min.compare(newStageKey()) == 0 {
+			min = current
 		}
-		if stage.StageID < minID {
-			minID = stage.StageID
+		if current.compare(min) < 0 {
+			min = current
 		}
-		if maxID == -1 {
-			maxID = stage.StageID
+		if max.compare(newStageKey()) == 0 {
+			max = current
 		}
-		if stage.StageID > maxID {
-			maxID = stage.StageID
+		if current.compare(max) > 0 {
+			max = current
 		}
 	}
-	return minID, maxID
+	return min, max
 }
 
 func (a aggregator) groupStages(stages []sparkapiclient.Stage) (finalizedStages, activeStages, pendingStages []sparkapiclient.Stage) {
@@ -188,8 +267,8 @@ func (a aggregator) groupStages(stages []sparkapiclient.Stage) (finalizedStages,
 }
 
 func (a aggregator) wasStagePending(stage sparkapiclient.Stage) bool {
-	for _, pendingStageID := range a.state.PendingStages {
-		if stage.StageID == pendingStageID {
+	for _, pending := range a.state.PendingStages {
+		if getStageKey(stage).compare(pending) == 0 {
 			return true
 		}
 	}
