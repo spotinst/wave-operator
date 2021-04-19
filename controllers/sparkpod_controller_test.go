@@ -223,6 +223,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	m.EXPECT().GetApplicationInfo(sparkAppID, sparkapi.StageMetricsAggregatorState{
 		MaxProcessedFinalizedStageID: -1,
 		ActiveStageMetrics:           map[int]sparkapi.StageMetrics{},
+		PendingStages:                []int{},
 	}, gomock.Any()).Return(getTestApplicationInfo(), nil).Times(1)
 
 	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
@@ -1266,6 +1267,7 @@ func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 					OutputBytes: 4590, InputBytes: 552425, CPUTime: 6345245636478595,
 				},
 			},
+			PendingStages: []int{100, 101, 102},
 		},
 		ApplicationName: "The application name",
 		SparkProperties: map[string]string{

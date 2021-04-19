@@ -8,6 +8,8 @@ import (
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 )
 
+// TODO Do I need to handle StageID,attemptID separately?
+
 type stageMetricsAggregator interface {
 	processWindow(stages []sparkapiclient.Stage) stageWindowAggregationResult
 }
@@ -34,6 +36,7 @@ type stageWindowAggregationResult struct {
 type StageMetricsAggregatorState struct {
 	MaxProcessedFinalizedStageID int                  `json:"maxProcessedFinalizedStageId"`
 	ActiveStageMetrics           map[int]StageMetrics `json:"activeStageMetrics"`
+	PendingStages                []int                `json:"pendingStages"`
 }
 
 type StageMetrics struct {
@@ -48,7 +51,7 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 	// The REST API only gives us the last ~1000 stages by default.
 	// Let's only aggregate stage metrics from the stages we have not processed yet
 
-	finalized, active := a.groupStages(stages)
+	finalized, active, pending := a.groupStages(stages)
 	minID, maxID := a.getMinMaxIds(stages)
 
 	windowHasAdvanced := false
@@ -72,15 +75,16 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 	newState := StageMetricsAggregatorState{
 		MaxProcessedFinalizedStageID: a.state.MaxProcessedFinalizedStageID,
 		ActiveStageMetrics:           make(map[int]StageMetrics),
+		PendingStages:                make([]int, 0),
 	}
 
 	// Aggregate finalized stages
 	for _, stage := range finalized {
 		if stage.StageID <= a.state.MaxProcessedFinalizedStageID {
-			// Was this stage previously active, and just finalized? (stages finalize out of order)
-			_, ok := a.state.ActiveStageMetrics[stage.StageID]
-			if !ok {
-				// We have already fully processed this stage
+			// Was this stage previously active or pending, and just finalized? (stages finalize out of order)
+			_, stageWasActive := a.state.ActiveStageMetrics[stage.StageID]
+			stageWasPending := a.wasStagePending(stage)
+			if !(stageWasActive || stageWasPending) {
 				continue
 			}
 		}
@@ -99,6 +103,11 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 			InputBytes:  stage.InputBytes,
 			CPUTime:     stage.ExecutorCpuTime,
 		}
+	}
+
+	// Aggregate pending stages
+	for _, stage := range pending {
+		newState.PendingStages = append(newState.PendingStages, stage.StageID)
 	}
 
 	a.log.Info("Finished processing stage window", "stageCount", len(stages),
@@ -157,17 +166,29 @@ func (a aggregator) getMinMaxIds(stages []sparkapiclient.Stage) (minID, maxID in
 	return minID, maxID
 }
 
-func (a aggregator) groupStages(stages []sparkapiclient.Stage) (finalizedStages, activeStages []sparkapiclient.Stage) {
+func (a aggregator) groupStages(stages []sparkapiclient.Stage) (finalizedStages, activeStages, pendingStages []sparkapiclient.Stage) {
 	finalizedStages = make([]sparkapiclient.Stage, 0)
 	activeStages = make([]sparkapiclient.Stage, 0)
+	pendingStages = make([]sparkapiclient.Stage, 0)
 	for _, stage := range stages {
 		if a.isStageFinalized(stage) {
 			finalizedStages = append(finalizedStages, stage)
 		} else if a.isStageActive(stage) {
 			activeStages = append(activeStages, stage)
+		} else if a.isStagePending(stage) {
+			pendingStages = append(pendingStages, stage)
 		}
 	}
-	return finalizedStages, activeStages
+	return finalizedStages, activeStages, pendingStages
+}
+
+func (a aggregator) wasStagePending(stage sparkapiclient.Stage) bool {
+	for _, pendingStageID := range a.state.PendingStages {
+		if stage.StageID == pendingStageID {
+			return true
+		}
+	}
+	return false
 }
 
 func (a aggregator) isStageFinalized(stage sparkapiclient.Stage) bool {
@@ -183,4 +204,8 @@ func (a aggregator) isStageFinalized(stage sparkapiclient.Stage) bool {
 
 func (a aggregator) isStageActive(stage sparkapiclient.Stage) bool {
 	return stage.Status == "ACTIVE"
+}
+
+func (a aggregator) isStagePending(stage sparkapiclient.Stage) bool {
+	return stage.Status == "PENDING"
 }

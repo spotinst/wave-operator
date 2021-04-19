@@ -702,6 +702,7 @@ func getStageMetricsAggregatorState(cr *v1alpha1.SparkApplication) (sparkapi.Sta
 	newState := sparkapi.StageMetricsAggregatorState{
 		MaxProcessedFinalizedStageID: -1,
 		ActiveStageMetrics:           make(map[int]sparkapi.StageMetrics),
+		PendingStages:                make([]int, 0),
 	}
 	if cr.Annotations == nil {
 		// We haven't processed any stages yet
