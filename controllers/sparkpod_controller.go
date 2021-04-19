@@ -699,11 +699,7 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 }
 
 func getStageMetricsAggregatorState(cr *v1alpha1.SparkApplication) (sparkapi.StageMetricsAggregatorState, error) {
-	newState := sparkapi.StageMetricsAggregatorState{
-		MaxProcessedFinalizedStageID: -1,
-		ActiveStageMetrics:           make(map[int]sparkapi.StageMetrics),
-		PendingStages:                make([]int, 0),
-	}
+	newState := sparkapi.NewStageMetricsAggregatorState()
 	if cr.Annotations == nil {
 		// We haven't processed any stages yet
 		return newState, nil

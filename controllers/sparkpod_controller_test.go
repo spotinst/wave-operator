@@ -220,11 +220,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	defer ctrl.Finish()
 
 	m := mock_sparkapi.NewMockManager(ctrl)
-	m.EXPECT().GetApplicationInfo(sparkAppID, sparkapi.StageMetricsAggregatorState{
-		MaxProcessedFinalizedStageID: -1,
-		ActiveStageMetrics:           map[int]sparkapi.StageMetrics{},
-		PendingStages:                []int{},
-	}, gomock.Any()).Return(getTestApplicationInfo(), nil).Times(1)
+	m.EXPECT().GetApplicationInfo(sparkAppID, sparkapi.NewStageMetricsAggregatorState(), gomock.Any()).Return(getTestApplicationInfo(), nil).Times(1)
 
 	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
 		return m, nil

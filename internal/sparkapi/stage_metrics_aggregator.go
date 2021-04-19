@@ -45,6 +45,14 @@ type StageMetrics struct {
 	CPUTime     int64 `json:"cpuTime"`
 }
 
+func NewStageMetricsAggregatorState() StageMetricsAggregatorState {
+	return StageMetricsAggregatorState{
+		MaxProcessedFinalizedStageID: -1,
+		ActiveStageMetrics:           make(map[int]StageMetrics),
+		PendingStages:                make([]int, 0),
+	}
+}
+
 func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggregationResult {
 
 	// TODO Use proper metrics, not the REST API
@@ -72,11 +80,8 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 	}
 
 	windowAggregate := &StageMetrics{}
-	newState := StageMetricsAggregatorState{
-		MaxProcessedFinalizedStageID: a.state.MaxProcessedFinalizedStageID,
-		ActiveStageMetrics:           make(map[int]StageMetrics),
-		PendingStages:                make([]int, 0),
-	}
+	newState := NewStageMetricsAggregatorState()
+	newState.MaxProcessedFinalizedStageID = a.state.MaxProcessedFinalizedStageID
 
 	// Aggregate finalized stages
 	for _, stage := range finalized {
