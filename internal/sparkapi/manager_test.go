@@ -152,7 +152,7 @@ func TestGetApplicationInfo(t *testing.T) {
 				AttemptID: 3,
 			},
 			ActiveStageMetrics: map[StageKey]StageMetrics{
-				StageKey{
+				{
 					StageID:   2,
 					AttemptID: 4,
 				}: {
@@ -303,7 +303,7 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 3, AttemptID: 0}: {
+						{StageID: 3, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -328,7 +328,7 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 3, AttemptID: 0}: {
+						{StageID: 3, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -353,7 +353,7 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 3, AttemptID: 0}: {
+						{StageID: 3, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -378,7 +378,7 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 3, AttemptID: 0}: {
+						{StageID: 3, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -452,12 +452,12 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 2, AttemptID: 0}: {
+						{StageID: 2, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
 						},
-						StageKey{StageID: 4, AttemptID: 0}: {
+						{StageID: 4, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -482,12 +482,12 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 2, AttemptID: 0}: {
+						{StageID: 2, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
 						},
-						StageKey{StageID: 4, AttemptID: 0}: {
+						{StageID: 4, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -512,12 +512,12 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 2, AttemptID: 0}: {
+						{StageID: 2, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
 						},
-						StageKey{StageID: 4, AttemptID: 0}: {
+						{StageID: 4, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -542,7 +542,7 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 4, AttemptID: 0}: {
+						{StageID: 4, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -582,7 +582,7 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 4, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 5, AttemptID: 0}: {
+						{StageID: 5, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -617,7 +617,7 @@ func TestStageAggregation(t *testing.T) {
 			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStage: StageKey{StageID: 100, AttemptID: 0},
 				ActiveStageMetrics: map[StageKey]StageMetrics{
-					StageKey{StageID: 4, AttemptID: 0}: {
+					{StageID: 4, AttemptID: 0}: {
 						OutputBytes: outputBytesPerStage,
 						InputBytes:  inputBytesPerStage,
 						CPUTime:     cpuTimePerStage,
@@ -632,7 +632,7 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 100, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 4, AttemptID: 0}: {
+						{StageID: 4, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -657,12 +657,12 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 4, AttemptID: 0}: {
+						{StageID: 4, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
 						},
-						StageKey{StageID: 6, AttemptID: 0}: {
+						{StageID: 6, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -678,12 +678,12 @@ func TestStageAggregation(t *testing.T) {
 			oldState: StageMetricsAggregatorState{
 				MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
 				ActiveStageMetrics: map[StageKey]StageMetrics{
-					StageKey{StageID: 4, AttemptID: 0}: {
+					{StageID: 4, AttemptID: 0}: {
 						OutputBytes: 10,
 						InputBytes:  20,
 						CPUTime:     30,
 					},
-					StageKey{StageID: 6, AttemptID: 0}: {
+					{StageID: 6, AttemptID: 0}: {
 						OutputBytes: outputBytesPerStage,
 						InputBytes:  inputBytesPerStage,
 						CPUTime:     cpuTimePerStage,
@@ -697,7 +697,7 @@ func TestStageAggregation(t *testing.T) {
 				newState: StageMetricsAggregatorState{
 					MaxProcessedFinalizedStage: StageKey{StageID: 6, AttemptID: 0},
 					ActiveStageMetrics: map[StageKey]StageMetrics{
-						StageKey{StageID: 3, AttemptID: 0}: {
+						{StageID: 3, AttemptID: 0}: {
 							OutputBytes: outputBytesPerStage,
 							InputBytes:  inputBytesPerStage,
 							CPUTime:     cpuTimePerStage,
@@ -766,12 +766,12 @@ func TestStageAggregation(t *testing.T) {
 		res := aggregator.processWindow(stages)
 		assert.Equal(tt, StageKey{StageID: 4, AttemptID: 0}, res.newState.MaxProcessedFinalizedStage)
 		assert.Equal(tt, map[StageKey]StageMetrics{
-			StageKey{StageID: 3, AttemptID: 0}: {
+			{StageID: 3, AttemptID: 0}: {
 				OutputBytes: outputBytesPerStage,
 				InputBytes:  inputBytesPerStage,
 				CPUTime:     cpuTimePerStage,
 			},
-			StageKey{StageID: 5, AttemptID: 0}: {
+			{StageID: 5, AttemptID: 0}: {
 				OutputBytes: outputBytesPerStage,
 				InputBytes:  inputBytesPerStage,
 				CPUTime:     cpuTimePerStage,
@@ -834,12 +834,12 @@ func TestStageAggregation(t *testing.T) {
 		res := aggregator.processWindow(stages)
 		assert.Equal(tt, StageKey{StageID: 1, AttemptID: 3}, res.newState.MaxProcessedFinalizedStage)
 		assert.Equal(tt, map[StageKey]StageMetrics{
-			StageKey{StageID: 1, AttemptID: 2}: {
+			{StageID: 1, AttemptID: 2}: {
 				OutputBytes: outputBytesPerStage,
 				InputBytes:  inputBytesPerStage,
 				CPUTime:     cpuTimePerStage,
 			},
-			StageKey{StageID: 1, AttemptID: 4}: {
+			{StageID: 1, AttemptID: 4}: {
 				OutputBytes: outputBytesPerStage,
 				InputBytes:  inputBytesPerStage,
 				CPUTime:     cpuTimePerStage,
@@ -857,7 +857,7 @@ func TestStageAggregation(t *testing.T) {
 		res = aggregator.processWindow(stages)
 		assert.Equal(tt, StageKey{StageID: 1, AttemptID: 4}, res.newState.MaxProcessedFinalizedStage)
 		assert.Equal(tt, map[StageKey]StageMetrics{
-			StageKey{StageID: 2, AttemptID: 99}: {
+			{StageID: 2, AttemptID: 99}: {
 				OutputBytes: outputBytesPerStage,
 				InputBytes:  inputBytesPerStage,
 				CPUTime:     cpuTimePerStage,
