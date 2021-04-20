@@ -102,7 +102,7 @@ func TestMutateDriverPod(t *testing.T) {
 
 		obj, err := ApplyJsonPatch(r.Patch, driverPod)
 		assert.NoError(t, err)
-		newPod, ok := obj.(*(corev1.Pod))
+		newPod, ok := obj.(*corev1.Pod)
 		assert.True(t, ok)
 		assert.Equal(t, onDemandAffinity, newPod.Spec.Affinity)
 
@@ -222,7 +222,7 @@ func TestMutatePodBadStorage(t *testing.T) {
 		testFunc(&util.FailedStorageProvider{})
 	})
 
-	t.Run("testNilStorageProvider", func(tt *testing.T) {
+	t.Run("whenNilStorageProvider", func(tt *testing.T) {
 		testFunc(&util.NilStorageProvider{})
 	})
 }
