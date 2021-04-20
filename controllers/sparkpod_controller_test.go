@@ -1253,13 +1253,13 @@ func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 		MetricsAggregatorState: sparkapi.StageMetricsAggregatorState{
 			MaxProcessedFinalizedStage: sparkapi.StageKey{StageID: 135, AttemptID: 0},
 			ActiveStageMetrics: map[sparkapi.StageKey]sparkapi.StageMetrics{
-				sparkapi.StageKey{StageID: 3, AttemptID: 0}: {
+				{StageID: 3, AttemptID: 0}: {
 					OutputBytes: 1, InputBytes: 2, CPUTime: 3,
 				},
-				sparkapi.StageKey{StageID: 9, AttemptID: 0}: {
+				{StageID: 9, AttemptID: 0}: {
 					OutputBytes: 45, InputBytes: 55, CPUTime: 65,
 				},
-				sparkapi.StageKey{StageID: 99, AttemptID: 0}: {
+				{StageID: 99, AttemptID: 0}: {
 					OutputBytes: 4590, InputBytes: 552425, CPUTime: 6345245636478595,
 				},
 			},
