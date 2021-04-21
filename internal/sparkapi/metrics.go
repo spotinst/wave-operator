@@ -2,6 +2,7 @@ package sparkapi
 
 import (
 	"errors"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spotinst/wave-operator/internal/sparkapi/client"
@@ -9,37 +10,47 @@ import (
 )
 
 var (
-	registry = make(ApplicationRegistry)
+	registry = NewApplicationRegistry(time.Now)
 
 	ErrNoApp   = errors.New("metrics: application to register can not be nil")
 	ErrNoAppID = errors.New("metrics: application to register has to have an application id specified")
 )
 
+func NewApplicationRegistry(timeProvider func() time.Time) *ApplicationRegistry {
+	return &ApplicationRegistry{
+		collectors:   make(map[string]*applicationCollector),
+		timeProvider: timeProvider,
+	}
+}
+
 // ApplicationRegistry contains all registered application collectors indexed by ID
-type ApplicationRegistry map[string]*applicationCollector
+type ApplicationRegistry struct {
+	collectors   map[string]*applicationCollector
+	timeProvider func() time.Time
+}
 
 // Register creates a prometheus metrics collector for the specified application
 // in the case the application has already been registered the collector is updated
 // with the current application information
-func (ar ApplicationRegistry) Register(app *ApplicationInfo) error {
+func (ar ApplicationRegistry) Register(app *ApplicationInfo) (prometheus.Collector, error) {
 	if app == nil {
-		return ErrNoApp
+		return nil, ErrNoApp
 	}
 	if app.ID == "" {
-		return ErrNoAppID
+		return nil, ErrNoAppID
 	}
 
 	// If if a collector has already been created for the application
 	// Then we just update the app for the application
-	if collector, ok := ar[app.ID]; ok {
+	if collector, ok := ar.collectors[app.ID]; ok {
 		collector.app = app
-		return nil
+		return collector, nil
 	}
 
-	collector := newApplicationCollector(app)
-	ar[app.ID] = collector
+	collector := newApplicationCollector(app, ar.timeProvider)
+	ar.collectors[app.ID] = collector
 	metrics.Registry.MustRegister(collector)
-	return nil
+	return collector, nil
 }
 
 // executorCollector is a prometheus collector for spark executors
@@ -80,17 +91,17 @@ func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollecto
 			[]string{"executor_id"},
 			applicationLabels),
 		activeTasks: prometheus.NewDesc(
-			"spark_executor_active_tasks",
+			"spark_executor_tasks_active_count",
 			"Current count of active tasks on the executor",
 			[]string{"executor_id"},
 			applicationLabels),
 		failedTasksTotal: prometheus.NewDesc(
-			"spark_executor_failed_tasks_total",
+			"spark_executor_tasks_failed_total",
 			"Total number of failed tasks on the executor",
 			[]string{"executor_id"},
 			applicationLabels),
 		completedTasksTotal: prometheus.NewDesc(
-			"spark_executor_completed_tasks_total",
+			"spark_executor_tasks_completed_total",
 			"Total number of tasks the executor has completed",
 			[]string{"executor_id"},
 			applicationLabels),
@@ -140,26 +151,42 @@ func (e *executorCollector) Collect(executors []client.Executor, metrics chan<- 
 
 // applicationCollector is a prometheus collector that collects information for the specific spark application
 type applicationCollector struct {
-	app       *ApplicationInfo
-	executors *executorCollector
+	app             *ApplicationInfo
+	timeProvider    func() time.Time
+	info            *prometheus.Desc
+	durationSeconds *prometheus.Desc
+	executors       *executorCollector
 }
 
-func newApplicationCollector(info *ApplicationInfo) *applicationCollector {
+func newApplicationCollector(info *ApplicationInfo, timeProvider func() time.Time) *applicationCollector {
 	applicationLabels := prometheus.Labels{
 		"application_name": info.ApplicationName,
 		"application_id":   info.ID,
 	}
 
 	return &applicationCollector{
-		app:       info,
+		app: info,
+		timeProvider: timeProvider,
+		info: prometheus.NewDesc("spark_app_info",
+			"Spark application version information",
+			[]string{"version"},
+			applicationLabels),
+		durationSeconds: prometheus.NewDesc("spark_app_duration_seconds",
+			"Spark application running duration in seconds",
+			nil,
+			applicationLabels),
 		executors: newExecutorCollector(applicationLabels),
 	}
 }
 
 func (a *applicationCollector) Describe(descs chan<- *prometheus.Desc) {
+	descs <- a.info
+	descs <- a.durationSeconds
 	a.executors.Describe(descs)
 }
 
 func (a *applicationCollector) Collect(metrics chan<- prometheus.Metric) {
+	metrics <- prometheus.MustNewConstMetric(a.info, prometheus.GaugeValue, 1, a.app.Attempts[0].AppSparkVersion)
+	metrics <- prometheus.MustNewConstMetric(a.durationSeconds, prometheus.GaugeValue, float64(a.timeProvider().Unix()-(a.app.Attempts[0].StartTimeEpoch/1000)))
 	a.executors.Collect(a.app.Executors, metrics)
 }

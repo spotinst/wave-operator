@@ -133,7 +133,7 @@ func (m manager) GetApplicationInfo(applicationID string, maxProcessedStageID in
 	workloadType := m.getWorkloadType(applicationID)
 	applicationInfo.WorkloadType = workloadType
 
-	if err := registry.Register(applicationInfo); err != nil {
+	if _, err := registry.Register(applicationInfo); err != nil {
 		m.logger.Error(err, "Unable to register application for metrics collection")
 	}
 
