@@ -13,10 +13,13 @@ import (
 )
 
 const (
-	Port               int32  = 23174
-	SyncContainerName  string = "storage-sync"
-	syncTimeoutError          = 1 * time.Minute
-	syncTimeoutSuccess        = 10 * time.Minute
+	Port              int32  = 23174
+	SyncContainerName string = "storage-sync"
+
+	// Note that an in-progress sync operation will not be terminated
+	// even if we tell the storage sync container to stop
+	syncTimeoutError   = 1 * time.Minute
+	syncTimeoutSuccess = 5 * time.Minute
 )
 
 func ShouldStopSync(pod *corev1.Pod) bool {
