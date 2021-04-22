@@ -135,7 +135,7 @@ func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod, storageInfo *cloudsto
 
 	webServerPort := strconv.Itoa(int(storagesync.Port))
 	storageContainer := corev1.Container{
-		Name:            storagesync.ContainerName,
+		Name:            storagesync.SyncContainerName,
 		Image:           "public.ecr.aws/l8m2k1n1/netapp/cloud-storage-sync:v0.4.0",
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		Command:         []string{"/tini"},

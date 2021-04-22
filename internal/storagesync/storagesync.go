@@ -13,38 +13,48 @@ import (
 )
 
 const (
-	Port          int32  = 23174
-	ContainerName string = "storage-sync"
-	syncTimeout          = 1 * time.Minute
+	Port               int32  = 23174
+	SyncContainerName  string = "storage-sync"
+	syncTimeoutError          = 1 * time.Minute
+	syncTimeoutSuccess        = 10 * time.Minute
 )
 
 func ShouldStopSync(pod *corev1.Pod) bool {
 
 	var storageSyncRunning bool
+	var driverTerminated bool
+	var driverTerminationTime metav1.Time
 	var driverFailed bool
-	var driverFailureTime metav1.Time
 
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		switch containerStatus.Name {
-		case ContainerName:
+		case SyncContainerName:
 			if containerStatus.State.Running != nil {
 				storageSyncRunning = true
 			}
 		case sparkapi.SparkDriverContainerName:
 			if containerStatus.State.Terminated != nil {
+				driverTerminated = true
+				driverTerminationTime = containerStatus.State.Terminated.FinishedAt
 				if containerStatus.State.Terminated.ExitCode != 0 {
 					driverFailed = true
-					driverFailureTime = containerStatus.State.Terminated.FinishedAt
 				}
 			}
 		}
 	}
 
-	if storageSyncRunning && driverFailed {
+	if storageSyncRunning && driverTerminated {
 		// Let's allow the storage sync container a bit of time
 		// before we tell it to stop, in case it is able to finish on its own
 		currentTime := time.Now().Unix()
-		timeoutTime := driverFailureTime.Add(syncTimeout).Unix()
+
+		var timeoutTime int64
+		if driverFailed {
+			timeoutTime = driverTerminationTime.Add(syncTimeoutError).Unix()
+		} else {
+			timeoutTime = driverTerminationTime.Add(syncTimeoutSuccess).Unix()
+		}
+
 		if currentTime >= timeoutTime {
 			return true
 		}
