@@ -115,17 +115,23 @@ func NewStageMetricsAggregatorState() StageMetricsAggregatorState {
 	}
 }
 
+type stageGrouping struct {
+	finalizedStages []sparkapiclient.Stage
+	activeStages    []sparkapiclient.Stage
+	pendingStages   []sparkapiclient.Stage
+}
+
 func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggregationResult {
 
 	// TODO Use proper metrics, not the REST API
 	// The REST API only gives us the last ~1000 stages by default.
 	// Let's only aggregate stage metrics from the stages we have not processed yet
 
-	finalized, active, pending := a.groupStages(stages)
+	stageGroups := a.groupStages(stages)
 	minStage, maxStage := a.getMinMaxStages(stages)
 
 	windowHasAdvanced := false
-	_, maxFinalized := a.getMinMaxStages(finalized)
+	_, maxFinalized := a.getMinMaxStages(stageGroups.finalizedStages)
 	if maxFinalized.compare(a.state.MaxProcessedFinalizedStage) > 0 {
 		windowHasAdvanced = true
 	}
@@ -162,7 +168,7 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 	newState.MaxProcessedFinalizedStage = a.state.MaxProcessedFinalizedStage
 
 	// Aggregate finalized stages
-	for _, stage := range finalized {
+	for _, stage := range stageGroups.finalizedStages {
 		key := getStageKey(stage)
 		if key.compare(a.state.MaxProcessedFinalizedStage) <= 0 {
 			// Was this stage previously active or pending, and just finalized? (stages finalize out of order)
@@ -180,7 +186,7 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 	}
 
 	// Aggregate active stages
-	for _, stage := range active {
+	for _, stage := range stageGroups.activeStages {
 		a.addStageToMetrics(windowAggregate, stage)
 		newState.ActiveStageMetrics[getStageKey(stage)] = StageMetrics{
 			OutputBytes: stage.OutputBytes,
@@ -190,7 +196,7 @@ func (a aggregator) processWindow(stages []sparkapiclient.Stage) stageWindowAggr
 	}
 
 	// Aggregate pending stages
-	for _, stage := range pending {
+	for _, stage := range stageGroups.pendingStages {
 		newState.PendingStages = append(newState.PendingStages, getStageKey(stage))
 	}
 
@@ -251,10 +257,10 @@ func (a aggregator) getMinMaxStages(stages []sparkapiclient.Stage) (min, max Sta
 	return min, max
 }
 
-func (a aggregator) groupStages(stages []sparkapiclient.Stage) (finalizedStages, activeStages, pendingStages []sparkapiclient.Stage) {
-	finalizedStages = make([]sparkapiclient.Stage, 0)
-	activeStages = make([]sparkapiclient.Stage, 0)
-	pendingStages = make([]sparkapiclient.Stage, 0)
+func (a aggregator) groupStages(stages []sparkapiclient.Stage) stageGrouping {
+	finalizedStages := make([]sparkapiclient.Stage, 0)
+	activeStages := make([]sparkapiclient.Stage, 0)
+	pendingStages := make([]sparkapiclient.Stage, 0)
 	for _, stage := range stages {
 		if a.isStageFinalized(stage) {
 			finalizedStages = append(finalizedStages, stage)
@@ -264,7 +270,11 @@ func (a aggregator) groupStages(stages []sparkapiclient.Stage) (finalizedStages,
 			pendingStages = append(pendingStages, stage)
 		}
 	}
-	return finalizedStages, activeStages, pendingStages
+	return stageGrouping{
+		finalizedStages: finalizedStages,
+		activeStages:    activeStages,
+		pendingStages:   pendingStages,
+	}
 }
 
 func (a aggregator) wasStagePending(stage sparkapiclient.Stage) bool {
