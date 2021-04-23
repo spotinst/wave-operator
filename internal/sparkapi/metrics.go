@@ -60,10 +60,15 @@ type executorCollector struct {
 	memoryUsed          *prometheus.Desc
 	diskUsed            *prometheus.Desc
 	coresTotal          *prometheus.Desc
+	maxTasksTotal       *prometheus.Desc
 	activeTasks         *prometheus.Desc
 	failedTasksTotal    *prometheus.Desc
 	completedTasksTotal *prometheus.Desc
 	tasksTotal          *prometheus.Desc
+	gcTimeTotal         *prometheus.Desc
+	shuffleReadTotal    *prometheus.Desc
+	shuffleWriteTotal   *prometheus.Desc
+	memoryMax           *prometheus.Desc
 }
 
 // newExecutorCollector creates a new executorCollector where the specified applicationLabels
@@ -73,6 +78,11 @@ func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollecto
 		inputBytesTotal: prometheus.NewDesc(
 			"spark_executor_input_bytes_total",
 			"Total amount of bytes processed by executor",
+			[]string{"executor_id"},
+			applicationLabels),
+		memoryMax: prometheus.NewDesc(
+			"spark_executor_memory_bytes_max",
+			"Total amount of memory available for storage",
 			[]string{"executor_id"},
 			applicationLabels),
 		memoryUsed: prometheus.NewDesc(
@@ -88,6 +98,11 @@ func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollecto
 		coresTotal: prometheus.NewDesc(
 			"spark_executor_cores_total",
 			"Total amount of cpu cores available to executor",
+			[]string{"executor_id"},
+			applicationLabels),
+		maxTasksTotal: prometheus.NewDesc(
+			"spark_executor_tasks_max",
+			"Maximum number of tasks that can be run concurrently in this executor",
 			[]string{"executor_id"},
 			applicationLabels),
 		activeTasks: prometheus.NewDesc(
@@ -115,19 +130,39 @@ func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollecto
 			"Current executor count for the application",
 			nil,
 			applicationLabels),
+		gcTimeTotal: prometheus.NewDesc(
+			"spark_executor_gc_time_total_milliseconds",
+			"Total elapsed time the JVM spent in garbage collection",
+			[]string{"executor_id"},
+			applicationLabels),
+		shuffleReadTotal: prometheus.NewDesc(
+			"spark_executor_shuffle_read_bytes_total",
+			"Total shuffle read bytes",
+			[]string{"executor_id"},
+			applicationLabels),
+		shuffleWriteTotal: prometheus.NewDesc(
+			"spark_executor_shuffle_write_bytes_total",
+			"Total shuffle write bytes",
+			[]string{"executor_id"},
+			applicationLabels),
 	}
 }
 
 func (e *executorCollector) Describe(descs chan<- *prometheus.Desc) {
 	descs <- e.inputBytesTotal
+	descs <- e.memoryMax
 	descs <- e.memoryUsed
 	descs <- e.diskUsed
 	descs <- e.coresTotal
+	descs <- e.maxTasksTotal
 	descs <- e.activeTasks
 	descs <- e.failedTasksTotal
 	descs <- e.completedTasksTotal
 	descs <- e.tasksTotal
 	descs <- e.count
+	descs <- e.gcTimeTotal
+	descs <- e.shuffleReadTotal
+	descs <- e.shuffleWriteTotal
 }
 
 func (e *executorCollector) Collect(executors []client.Executor, metrics chan<- prometheus.Metric) {
@@ -138,13 +173,18 @@ func (e *executorCollector) Collect(executors []client.Executor, metrics chan<- 
 		}
 		activeExecutors++
 		metrics <- prometheus.MustNewConstMetric(e.inputBytesTotal, prometheus.CounterValue, float64(executor.TotalInputBytes), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.memoryMax, prometheus.GaugeValue, float64(executor.MaxMemory), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.memoryUsed, prometheus.GaugeValue, float64(executor.MemoryUsed), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.diskUsed, prometheus.GaugeValue, float64(executor.DiskUsed), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.coresTotal, prometheus.GaugeValue, float64(executor.TotalCores), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.maxTasksTotal, prometheus.GaugeValue, float64(executor.MaxTasks), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.activeTasks, prometheus.GaugeValue, float64(executor.ActiveTasks), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.failedTasksTotal, prometheus.CounterValue, float64(executor.FailedTasks), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.completedTasksTotal, prometheus.CounterValue, float64(executor.CompletedTasks), executor.ID)
 		metrics <- prometheus.MustNewConstMetric(e.tasksTotal, prometheus.CounterValue, float64(executor.TotalTasks), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.gcTimeTotal, prometheus.CounterValue, float64(executor.TotalGCTime), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.shuffleReadTotal, prometheus.CounterValue, float64(executor.TotalShuffleRead), executor.ID)
+		metrics <- prometheus.MustNewConstMetric(e.shuffleWriteTotal, prometheus.CounterValue, float64(executor.TotalShuffleWrite), executor.ID)
 	}
 	metrics <- prometheus.MustNewConstMetric(e.count, prometheus.GaugeValue, float64(activeExecutors))
 }
@@ -165,7 +205,7 @@ func newApplicationCollector(info *ApplicationInfo, timeProvider func() time.Tim
 	}
 
 	return &applicationCollector{
-		app: info,
+		app:          info,
 		timeProvider: timeProvider,
 		info: prometheus.NewDesc("spark_app_info",
 			"Spark application version information",
@@ -187,6 +227,14 @@ func (a *applicationCollector) Describe(descs chan<- *prometheus.Desc) {
 
 func (a *applicationCollector) Collect(metrics chan<- prometheus.Metric) {
 	metrics <- prometheus.MustNewConstMetric(a.info, prometheus.GaugeValue, 1, a.app.Attempts[0].AppSparkVersion)
-	metrics <- prometheus.MustNewConstMetric(a.durationSeconds, prometheus.GaugeValue, float64(a.timeProvider().Unix()-(a.app.Attempts[0].StartTimeEpoch/1000)))
+	metrics <- prometheus.MustNewConstMetric(a.durationSeconds, prometheus.GaugeValue, float64(a.calculateDuration()))
 	a.executors.Collect(a.app.Executors, metrics)
+}
+
+func (a *applicationCollector) calculateDuration() int64 {
+	if a.app.Attempts[0].Duration != 0 {
+		return a.app.Attempts[0].Duration
+	}
+
+	return a.timeProvider().Unix() - (a.app.Attempts[0].StartTimeEpoch / 1000)
 }

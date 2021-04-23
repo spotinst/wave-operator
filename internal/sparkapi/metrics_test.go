@@ -93,12 +93,24 @@ func TestApplicationRegistry(t *testing.T) {
 			# HELP spark_executor_disk_used_bytes Total amount of bytes of space used by executor
 			# TYPE spark_executor_disk_used_bytes gauge
 			spark_executor_disk_used_bytes{application_id="update",application_name="update",executor_id="0"} 0
+			# HELP spark_executor_gc_time_total_milliseconds Total elapsed time the JVM spent in garbage collection
+			# TYPE spark_executor_gc_time_total_milliseconds counter
+			spark_executor_gc_time_total_milliseconds{application_id="update",application_name="update",executor_id="0"} 0
 			# HELP spark_executor_input_bytes_total Total amount of bytes processed by executor
 			# TYPE spark_executor_input_bytes_total counter
 			spark_executor_input_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
+			# HELP spark_executor_memory_bytes_max Total amount of memory available for storage
+			# TYPE spark_executor_memory_bytes_max gauge
+			spark_executor_memory_bytes_max{application_id="update",application_name="update",executor_id="0"} 0
 			# HELP spark_executor_memory_used_bytes Total amount of bytes of memory used by executor
 			# TYPE spark_executor_memory_used_bytes gauge
 			spark_executor_memory_used_bytes{application_id="update",application_name="update",executor_id="0"} 0
+			# HELP spark_executor_shuffle_read_bytes_total Total shuffle read bytes
+			# TYPE spark_executor_shuffle_read_bytes_total counter
+			spark_executor_shuffle_read_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
+			# HELP spark_executor_shuffle_write_bytes_total Total shuffle write bytes
+			# TYPE spark_executor_shuffle_write_bytes_total counter
+			spark_executor_shuffle_write_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
 			# HELP spark_executor_tasks_active_count Current count of active tasks on the executor
 			# TYPE spark_executor_tasks_active_count gauge
 			spark_executor_tasks_active_count{application_id="update",application_name="update",executor_id="0"} 0
@@ -108,6 +120,9 @@ func TestApplicationRegistry(t *testing.T) {
 			# HELP spark_executor_tasks_failed_total Total number of failed tasks on the executor
 			# TYPE spark_executor_tasks_failed_total counter
 			spark_executor_tasks_failed_total{application_id="update",application_name="update",executor_id="0"} 0
+			# HELP spark_executor_tasks_max Maximum number of tasks that can be run concurrently in this executor
+			# TYPE spark_executor_tasks_max gauge
+			spark_executor_tasks_max{application_id="update",application_name="update",executor_id="0"} 0
 			# HELP spark_executor_tasks_total Total number of tasks the executor has been assigned
 			# TYPE spark_executor_tasks_total counter
 			spark_executor_tasks_total{application_id="update",application_name="update",executor_id="0"} 0
@@ -134,7 +149,7 @@ func TestApplicationRegistry(t *testing.T) {
 		})
 
 		collector, err = registry.Register(info)
-		require.NoError(tt,err)
+		require.NoError(tt, err)
 		assert.NotNil(tt, collector)
 
 		expectedOutput = `
@@ -155,14 +170,30 @@ func TestApplicationRegistry(t *testing.T) {
 			# TYPE spark_executor_disk_used_bytes gauge
 			spark_executor_disk_used_bytes{application_id="update",application_name="update",executor_id="0"} 0
 			spark_executor_disk_used_bytes{application_id="update",application_name="update",executor_id="added-executor"} 0
+			# HELP spark_executor_gc_time_total_milliseconds Total elapsed time the JVM spent in garbage collection
+			# TYPE spark_executor_gc_time_total_milliseconds counter
+			spark_executor_gc_time_total_milliseconds{application_id="update",application_name="update",executor_id="0"} 0
+			spark_executor_gc_time_total_milliseconds{application_id="update",application_name="update",executor_id="added-executor"} 0
 			# HELP spark_executor_input_bytes_total Total amount of bytes processed by executor
 			# TYPE spark_executor_input_bytes_total counter
 			spark_executor_input_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
 			spark_executor_input_bytes_total{application_id="update",application_name="update",executor_id="added-executor"} 0
+			# HELP spark_executor_memory_bytes_max Total amount of memory available for storage
+			# TYPE spark_executor_memory_bytes_max gauge
+			spark_executor_memory_bytes_max{application_id="update",application_name="update",executor_id="0"} 0
+			spark_executor_memory_bytes_max{application_id="update",application_name="update",executor_id="added-executor"} 2000
 			# HELP spark_executor_memory_used_bytes Total amount of bytes of memory used by executor
 			# TYPE spark_executor_memory_used_bytes gauge
 			spark_executor_memory_used_bytes{application_id="update",application_name="update",executor_id="0"} 0
 			spark_executor_memory_used_bytes{application_id="update",application_name="update",executor_id="added-executor"} 0
+			# HELP spark_executor_shuffle_read_bytes_total Total shuffle read bytes
+			# TYPE spark_executor_shuffle_read_bytes_total counter
+			spark_executor_shuffle_read_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
+			spark_executor_shuffle_read_bytes_total{application_id="update",application_name="update",executor_id="added-executor"} 0
+			# HELP spark_executor_shuffle_write_bytes_total Total shuffle write bytes
+			# TYPE spark_executor_shuffle_write_bytes_total counter
+			spark_executor_shuffle_write_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
+			spark_executor_shuffle_write_bytes_total{application_id="update",application_name="update",executor_id="added-executor"} 0
 			# HELP spark_executor_tasks_active_count Current count of active tasks on the executor
 			# TYPE spark_executor_tasks_active_count gauge
 			spark_executor_tasks_active_count{application_id="update",application_name="update",executor_id="0"} 0
@@ -175,6 +206,10 @@ func TestApplicationRegistry(t *testing.T) {
 			# TYPE spark_executor_tasks_failed_total counter
 			spark_executor_tasks_failed_total{application_id="update",application_name="update",executor_id="0"} 0
 			spark_executor_tasks_failed_total{application_id="update",application_name="update",executor_id="added-executor"} 200
+			# HELP spark_executor_tasks_max Maximum number of tasks that can be run concurrently in this executor
+			# TYPE spark_executor_tasks_max gauge
+			spark_executor_tasks_max{application_id="update",application_name="update",executor_id="0"} 0
+			spark_executor_tasks_max{application_id="update",application_name="update",executor_id="added-executor"} 0
 			# HELP spark_executor_tasks_total Total number of tasks the executor has been assigned
 			# TYPE spark_executor_tasks_total counter
 			spark_executor_tasks_total{application_id="update",application_name="update",executor_id="0"} 0
