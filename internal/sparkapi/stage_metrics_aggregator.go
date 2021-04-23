@@ -100,7 +100,7 @@ func getStageKey(s sparkapiclient.Stage) StageKey {
 	}
 }
 
-func newStageKey() StageKey {
+func getEmptyStageKey() StageKey {
 	return StageKey{
 		StageID:   -1,
 		AttemptID: -1,
@@ -109,7 +109,7 @@ func newStageKey() StageKey {
 
 func NewStageMetricsAggregatorState() StageMetricsAggregatorState {
 	return StageMetricsAggregatorState{
-		MaxProcessedFinalizedStage: newStageKey(),
+		MaxProcessedFinalizedStage: getEmptyStageKey(),
 		ActiveStageMetrics:         make(map[StageKey]StageMetrics),
 		PendingStages:              make([]StageKey, 0),
 	}
@@ -231,17 +231,17 @@ func (a aggregator) getStageByKey(stages []sparkapiclient.Stage, key StageKey) (
 }
 
 func (a aggregator) getMinMaxStages(stages []sparkapiclient.Stage) (min, max StageKey) {
-	min = newStageKey()
-	max = newStageKey()
+	min = getEmptyStageKey()
+	max = getEmptyStageKey()
 	for _, stage := range stages {
 		current := getStageKey(stage)
-		if min.compare(newStageKey()) == 0 {
+		if min.compare(getEmptyStageKey()) == 0 {
 			min = current
 		}
 		if current.compare(min) < 0 {
 			min = current
 		}
-		if max.compare(newStageKey()) == 0 {
+		if max.compare(getEmptyStageKey()) == 0 {
 			max = current
 		}
 		if current.compare(max) > 0 {

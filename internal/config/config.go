@@ -1,7 +1,7 @@
 package config
 
 import (
-	"strings"
+	"strconv"
 )
 
 const (
@@ -12,12 +12,9 @@ func IsEventLogSyncEnabled(annotations map[string]string) bool {
 	if annotations == nil {
 		return false
 	}
-	storageSyncOn, ok := annotations[WaveConfigAnnotationSyncEventLogs]
-	if !ok {
+	enabled, err := strconv.ParseBool(annotations[WaveConfigAnnotationSyncEventLogs])
+	if err != nil {
 		return false
 	}
-	if strings.ToUpper(storageSyncOn) == "TRUE" {
-		return true
-	}
-	return false
+	return enabled
 }

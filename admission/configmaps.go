@@ -9,7 +9,7 @@ import (
 	"github.com/magiconair/properties"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
@@ -65,7 +65,7 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 		return resp, nil
 	}
 
-	ownerPod, err := m.client.CoreV1().Pods(sourceObj.Namespace).Get(ctx, sourceObj.OwnerReferences[0].Name, v1.GetOptions{})
+	ownerPod, err := m.client.CoreV1().Pods(sourceObj.Namespace).Get(ctx, sourceObj.OwnerReferences[0].Name, metav1.GetOptions{})
 	if err != nil {
 		log.Error(err, "could not get owner pod")
 		return resp, nil
