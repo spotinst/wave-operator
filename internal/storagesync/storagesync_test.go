@@ -29,7 +29,7 @@ func TestShouldStopSync(t *testing.T) {
 	t.Run("whenDriverRunning_storageSyncTerminated_shouldNotStopSync", func(tt *testing.T) {
 
 		containerStatuses := []corev1.ContainerStatus{
-			getTerminatedContainerStatus(SyncContainerName, time.Now()),
+			getTerminatedContainerStatus(SyncContainerName, 0, time.Now()),
 			getRunningContainerStatus(sparkapi.SparkDriverContainerName),
 		}
 
@@ -39,11 +39,46 @@ func TestShouldStopSync(t *testing.T) {
 
 	})
 
-	t.Run("whenDriverTerminated_storageSyncRunning_timeoutNotPassed_shouldNotStopSync", func(tt *testing.T) {
+	t.Run("whenDriverTerminated_storageSyncRunning_driverSuccess_timeoutNotPassed_shouldNotStopSync", func(tt *testing.T) {
 
 		containerStatuses := []corev1.ContainerStatus{
 			getRunningContainerStatus(SyncContainerName),
-			getTerminatedContainerStatus(sparkapi.SparkDriverContainerName, time.Now()),
+			getTerminatedContainerStatus(sparkapi.SparkDriverContainerName, 0, time.Now()),
+		}
+
+		pod := getTestPod(containerStatuses)
+		res := ShouldStopSync(pod)
+		assert.False(tt, res)
+
+		containerStatuses = []corev1.ContainerStatus{
+			getRunningContainerStatus(SyncContainerName),
+			getTerminatedContainerStatus(sparkapi.SparkDriverContainerName, 0, time.Now().Add(-syncTimeoutError)),
+		}
+
+		pod = getTestPod(containerStatuses)
+		res = ShouldStopSync(pod)
+		assert.False(tt, res)
+
+	})
+
+	t.Run("whenDriverTerminated_storageSyncRunning_driverSuccess_timeoutPassed_shouldStopSync", func(tt *testing.T) {
+
+		containerStatuses := []corev1.ContainerStatus{
+			getRunningContainerStatus(SyncContainerName),
+			getTerminatedContainerStatus(sparkapi.SparkDriverContainerName, 0, time.Now().Add(-syncTimeoutSuccess)),
+		}
+
+		pod := getTestPod(containerStatuses)
+		res := ShouldStopSync(pod)
+		assert.True(tt, res)
+
+	})
+
+	t.Run("whenDriverTerminated_storageSyncRunning_driverFailure_timeoutNotPassed_shouldNotStopSync", func(tt *testing.T) {
+
+		containerStatuses := []corev1.ContainerStatus{
+			getRunningContainerStatus(SyncContainerName),
+			getTerminatedContainerStatus(sparkapi.SparkDriverContainerName, 1, time.Now()),
 		}
 
 		pod := getTestPod(containerStatuses)
@@ -52,11 +87,11 @@ func TestShouldStopSync(t *testing.T) {
 
 	})
 
-	t.Run("whenDriverTerminated_storageSyncRunning_timeoutPassed_shouldStopSync", func(tt *testing.T) {
+	t.Run("whenDriverTerminated_storageSyncRunning_driverFailure_timeoutPassed_shouldStopSync", func(tt *testing.T) {
 
 		containerStatuses := []corev1.ContainerStatus{
 			getRunningContainerStatus(SyncContainerName),
-			getTerminatedContainerStatus(sparkapi.SparkDriverContainerName, time.Now().Add(-syncTimeout)),
+			getTerminatedContainerStatus(sparkapi.SparkDriverContainerName, 1, time.Now().Add(-syncTimeoutError)),
 		}
 
 		pod := getTestPod(containerStatuses)
@@ -81,8 +116,8 @@ func TestShouldStopSync(t *testing.T) {
 	t.Run("whenDriverTerminated_storageSyncTerminated_timeoutPassed_shouldNotStopSync", func(tt *testing.T) {
 
 		containerStatuses := []corev1.ContainerStatus{
-			getTerminatedContainerStatus(SyncContainerName, time.Now()),
-			getTerminatedContainerStatus(sparkapi.SparkDriverContainerName, time.Now().Add(-syncTimeout)),
+			getTerminatedContainerStatus(SyncContainerName, 0, time.Now()),
+			getTerminatedContainerStatus(sparkapi.SparkDriverContainerName, 0, time.Now().Add(-syncTimeoutSuccess)),
 		}
 
 		pod := getTestPod(containerStatuses)
@@ -111,12 +146,12 @@ func getWaitingContainerStatus(containerName string) corev1.ContainerStatus {
 	}
 }
 
-func getTerminatedContainerStatus(containerName string, terminationTime time.Time) corev1.ContainerStatus {
+func getTerminatedContainerStatus(containerName string, exitCode int, terminationTime time.Time) corev1.ContainerStatus {
 	return corev1.ContainerStatus{
 		Name: containerName,
 		State: corev1.ContainerState{
 			Terminated: &corev1.ContainerStateTerminated{
-				ExitCode: int32(0),
+				ExitCode: int32(exitCode),
 				FinishedAt: metav1.Time{
 					Time: terminationTime,
 				},
