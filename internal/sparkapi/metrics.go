@@ -2,6 +2,7 @@ package sparkapi
 
 import (
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -56,6 +57,7 @@ func (ar ApplicationRegistry) Register(app *ApplicationInfo) (prometheus.Collect
 // executorCollector is a prometheus collector for spark executors
 type executorCollector struct {
 	count               *prometheus.Desc
+	info                *prometheus.Desc
 	inputBytesTotal     *prometheus.Desc
 	memoryUsed          *prometheus.Desc
 	diskUsed            *prometheus.Desc
@@ -79,6 +81,11 @@ func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollecto
 			"spark_executor_input_bytes_total",
 			"Total amount of bytes processed by executor",
 			[]string{"executor_id"},
+			applicationLabels),
+		info: prometheus.NewDesc(
+			"spark_executor_info",
+			"General executor info",
+			[]string{"executor_id", "active", "add_time", "removed_time", "blacklisted"},
 			applicationLabels),
 		memoryMax: prometheus.NewDesc(
 			"spark_executor_memory_bytes_max",
@@ -150,6 +157,7 @@ func newExecutorCollector(applicationLabels prometheus.Labels) *executorCollecto
 
 func (e *executorCollector) Describe(descs chan<- *prometheus.Desc) {
 	descs <- e.inputBytesTotal
+	descs <- e.info
 	descs <- e.memoryMax
 	descs <- e.memoryUsed
 	descs <- e.diskUsed
@@ -168,6 +176,13 @@ func (e *executorCollector) Describe(descs chan<- *prometheus.Desc) {
 func (e *executorCollector) Collect(executors []client.Executor, metrics chan<- prometheus.Metric) {
 	activeExecutors := 0
 	for _, executor := range executors {
+		metrics <- prometheus.MustNewConstMetric(e.info, prometheus.GaugeValue, 1,
+			executor.ID,
+			strconv.FormatBool(executor.IsActive),
+			executor.AddTime,
+			executor.RemoveTime,
+			strconv.FormatBool(executor.IsBlacklisted))
+
 		if !executor.IsActive || executor.RemoveTime != "" {
 			continue
 		}

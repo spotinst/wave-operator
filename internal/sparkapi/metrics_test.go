@@ -96,6 +96,9 @@ func TestApplicationRegistry(t *testing.T) {
 			# HELP spark_executor_gc_time_total_milliseconds Total elapsed time the JVM spent in garbage collection
 			# TYPE spark_executor_gc_time_total_milliseconds counter
 			spark_executor_gc_time_total_milliseconds{application_id="update",application_name="update",executor_id="0"} 0
+			# HELP spark_executor_info General executor info
+			# TYPE spark_executor_info gauge
+			spark_executor_info{active="true",add_time="",application_id="update",application_name="update",blacklisted="false",executor_id="0",removed_time=""} 1
 			# HELP spark_executor_input_bytes_total Total amount of bytes processed by executor
 			# TYPE spark_executor_input_bytes_total counter
 			spark_executor_input_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
@@ -174,6 +177,11 @@ func TestApplicationRegistry(t *testing.T) {
 			# TYPE spark_executor_gc_time_total_milliseconds counter
 			spark_executor_gc_time_total_milliseconds{application_id="update",application_name="update",executor_id="0"} 0
 			spark_executor_gc_time_total_milliseconds{application_id="update",application_name="update",executor_id="added-executor"} 0
+			# HELP spark_executor_info General executor info
+			# TYPE spark_executor_info gauge
+			spark_executor_info{active="false",add_time="",application_id="update",application_name="update",blacklisted="false",executor_id="ignored-executor",removed_time=""} 1
+			spark_executor_info{active="true",add_time="",application_id="update",application_name="update",blacklisted="false",executor_id="0",removed_time=""} 1
+			spark_executor_info{active="true",add_time="",application_id="update",application_name="update",blacklisted="false",executor_id="added-executor",removed_time=""} 1
 			# HELP spark_executor_input_bytes_total Total amount of bytes processed by executor
 			# TYPE spark_executor_input_bytes_total counter
 			spark_executor_input_bytes_total{application_id="update",application_name="update",executor_id="0"} 0
