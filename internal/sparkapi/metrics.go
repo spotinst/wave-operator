@@ -33,7 +33,7 @@ type ApplicationRegistry struct {
 // Register creates a prometheus metrics collector for the specified application
 // in the case the application has already been registered the collector is updated
 // with the current application information
-func (ar ApplicationRegistry) Register(app *ApplicationInfo) (prometheus.Collector, error) {
+func (ar *ApplicationRegistry) Register(app *ApplicationInfo) (prometheus.Collector, error) {
 	if app == nil {
 		return nil, ErrNoApp
 	}
