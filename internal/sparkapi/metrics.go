@@ -246,7 +246,9 @@ func (a *applicationCollector) Collect(metrics chan<- prometheus.Metric) {
 	a.executors.Collect(a.app.Executors, metrics)
 }
 
+// calculateDuration returns the application duration in seconds
 func (a *applicationCollector) calculateDuration() int64 {
+	// Use the spark provided duration if it has been set
 	if a.app.Attempts[0].Duration != 0 {
 		return a.app.Attempts[0].Duration
 	}
