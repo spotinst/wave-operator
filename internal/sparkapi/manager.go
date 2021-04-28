@@ -38,6 +38,7 @@ type manager struct {
 }
 
 type ApplicationInfo struct {
+	ID                      string
 	MetricsAggregatorState  StageMetricsAggregatorState
 	ApplicationName         string
 	SparkProperties         map[string]string
@@ -99,6 +100,7 @@ func (m manager) GetApplicationInfo(applicationID string, metricsAggregatorState
 		return nil, fmt.Errorf("application is nil")
 	}
 
+	applicationInfo.ID = application.ID
 	applicationInfo.ApplicationName = application.Name
 	applicationInfo.Attempts = application.Attempts
 
@@ -139,6 +141,10 @@ func (m manager) GetApplicationInfo(applicationID string, metricsAggregatorState
 
 	workloadType := m.getWorkloadType(applicationID)
 	applicationInfo.WorkloadType = workloadType
+
+	if _, err := registry.Register(applicationInfo); err != nil {
+		m.logger.Error(err, "Unable to register application for metrics collection")
+	}
 
 	return applicationInfo, nil
 }

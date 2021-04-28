@@ -25,6 +25,7 @@ VERSION
 .gradle/
 scratch
 venv/
+telepresence.log
 
 # MacOS
 .DS_Store
