@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -221,7 +220,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	defer ctrl.Finish()
 
 	m := mock_sparkapi.NewMockManager(ctrl)
-	m.EXPECT().GetApplicationInfo(sparkAppID, -1, gomock.Any()).Return(getTestApplicationInfo(), nil).Times(1)
+	m.EXPECT().GetApplicationInfo(sparkAppID, sparkapi.NewStageMetricsAggregatorState(), gomock.Any()).Return(getTestApplicationInfo(), nil).Times(1)
 
 	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
 		return m, nil
@@ -288,7 +287,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	assert.Equal(t, getTestApplicationInfo().TotalNewOutputBytes, createdCR.Status.Data.RunStatistics.TotalOutputBytes)
 	assert.Equal(t, getTestApplicationInfo().TotalNewInputBytes, createdCR.Status.Data.RunStatistics.TotalInputBytes)
 	assert.Equal(t, getTestApplicationInfo().TotalNewExecutorCpuTime, createdCR.Status.Data.RunStatistics.TotalExecutorCpuTime)
-	assert.Equal(t, strconv.Itoa(getTestApplicationInfo().MaxProcessedStageID), createdCR.Annotations[maxProcessedStageIDAnnotation])
+	verifyStageMetricsStateAnnotation(t, getTestApplicationInfo().MetricsAggregatorState, createdCR)
 	assert.Equal(t, string(getTestApplicationInfo().WorkloadType), createdCR.Annotations[workloadTypeAnnotation])
 	verifyCRAttempts(t, getTestApplicationInfo().Attempts, createdCR.Status.Data.RunStatistics.Attempts)
 	verifyCRExecutors(t, getTestApplicationInfo().Executors, createdCR.Status.Data.RunStatistics.Executors)
@@ -1164,6 +1163,12 @@ func verifyCRAttempts(t *testing.T, attempts []sparkapiclient.Attempt, crAttempt
 	}
 }
 
+func verifyStageMetricsStateAnnotation(t *testing.T, expected sparkapi.StageMetricsAggregatorState, cr *v1alpha1.SparkApplication) {
+	res, err := getStageMetricsAggregatorState(cr)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, res)
+}
+
 func getMinimalTestCR(namespace string, applicationID string) *v1alpha1.SparkApplication {
 	return &v1alpha1.SparkApplication{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1245,8 +1250,22 @@ func getTestPod(namespace string, name string, uid string, role string, applicat
 
 func getTestApplicationInfo() *sparkapi.ApplicationInfo {
 	return &sparkapi.ApplicationInfo{
-		MaxProcessedStageID: 1045,
-		ApplicationName:     "The application name",
+		MetricsAggregatorState: sparkapi.StageMetricsAggregatorState{
+			MaxProcessedFinalizedStage: sparkapi.StageKey{StageID: 135, AttemptID: 0},
+			ActiveStageMetrics: map[sparkapi.StageKey]sparkapi.StageMetrics{
+				{StageID: 3, AttemptID: 0}: {
+					OutputBytes: 1, InputBytes: 2, CPUTime: 3,
+				},
+				{StageID: 9, AttemptID: 0}: {
+					OutputBytes: 45, InputBytes: 55, CPUTime: 65,
+				},
+				{StageID: 99, AttemptID: 0}: {
+					OutputBytes: 4590, InputBytes: 552425, CPUTime: 6345245636478595,
+				},
+			},
+			PendingStages: []sparkapi.StageKey{{StageID: 100, AttemptID: 0}, {StageID: 101, AttemptID: 0}, {StageID: 102, AttemptID: 0}},
+		},
+		ApplicationName: "The application name",
 		SparkProperties: map[string]string{
 			"prop1": "val1",
 			"prop2": "val2",

@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -203,8 +204,18 @@ serviceAccount:
 	// 	}
 	// }
 	if webhook {
-		ac := admission.NewAdmissionController(&util.FakeStorageProvider{}, logger)
+		config := ctrl.GetConfigOrDie()
+		k, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			panic(err)
+		}
+		ac := admission.NewAdmissionController(
+			k,
+			&util.FakeStorageProvider{},
+			logger,
+		)
 		ctx := ctrl.SetupSignalHandler()
+
 		ac.Start(ctx)
 	}
 

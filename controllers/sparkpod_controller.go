@@ -2,8 +2,8 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -38,8 +38,8 @@ const (
 	waveKindLabel          = "wave.spot.io/kind"
 	waveApplicationIDLabel = "wave.spot.io/application-id"
 
-	maxProcessedStageIDAnnotation = "wave.spot.io/maxProcessedStageID"
-	workloadTypeAnnotation        = "wave.spot.io/workloadType"
+	stageMetricsAggregationAnnotation = "wave.spot.io/stageMetricsAggregation"
+	workloadTypeAnnotation            = "wave.spot.io/workloadType"
 
 	requeueAfterTimeout = 10 * time.Second
 	podDeletionTimeout  = 5 * time.Minute
@@ -216,6 +216,9 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 					Requeue:      true,
 					RequeueAfter: requeueAfterTimeout,
 				}, nil
+			} else if sparkapi.IsApiNotAvailableError(err) {
+				// Spark API is not available, don't want to requeue
+				log.Info(fmt.Sprintf("Spark API not available: %s", err.Error()))
 			} else {
 				log.Error(err, "error handling driver pod")
 				return ctrl.Result{}, err
@@ -284,17 +287,17 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 	// Fetch information from Spark API
 	// Let's update the driver pod information even though the Spark API call fails
 
-	maxProcessedStageID, err := getMaxProcessedStageID(deepCopy)
+	stageMetricsAggregatorState, err := getStageMetricsAggregatorState(deepCopy)
 	if err != nil {
-		return fmt.Errorf("could not get max processed stage ID, %w", err)
+		return fmt.Errorf("could not get stage metrics aggregation state, %w", err)
 	}
 
 	var sparkApiError error
-	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationID, maxProcessedStageID, log)
+	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationID, stageMetricsAggregatorState, log)
 	if err != nil {
 		sparkApiError = fmt.Errorf("could not get spark api application information, %w", err)
 	} else {
-		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
+		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo, log)
 	}
 
 	// Make sure we have an application name
@@ -547,14 +550,14 @@ func podStateHistoryEntryEqual(a v1alpha1.PodStateHistoryEntry, b v1alpha1.PodSt
 	return true
 }
 
-func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationID string, maxProcessedStageID int, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
+func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationID string, metricsAggregatorState sparkapi.StageMetricsAggregatorState, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
 
 	manager, err := r.getSparkApiManager(clientSet, driverPod, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api manager, %w", err)
 	}
 
-	applicationInfo, err := manager.GetApplicationInfo(applicationID, maxProcessedStageID, logger)
+	applicationInfo, err := manager.GetApplicationInfo(applicationID, metricsAggregatorState, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api application info, %w", err)
 	}
@@ -562,7 +565,7 @@ func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Int
 	return applicationInfo, nil
 }
 
-func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo) {
+func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo, log logr.Logger) {
 
 	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
@@ -571,7 +574,11 @@ func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	deepCopy.Status.Data.RunStatistics.TotalInputBytes += sparkApiInfo.TotalNewInputBytes
 	deepCopy.Status.Data.RunStatistics.TotalOutputBytes += sparkApiInfo.TotalNewOutputBytes
 
-	setMaxProcessedStageID(deepCopy, sparkApiInfo.MaxProcessedStageID)
+	err := setStageMetricsAggregatorState(deepCopy, sparkApiInfo.MetricsAggregatorState)
+	if err != nil {
+		// Best effort
+		log.Error(err, "Could not set stage metrics aggregation state annotation")
+	}
 
 	attempts := make([]v1alpha1.Attempt, 0, len(sparkApiInfo.Attempts))
 	for _, apiAttempt := range sparkApiInfo.Attempts {
@@ -691,28 +698,35 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 	return nil
 }
 
-func getMaxProcessedStageID(cr *v1alpha1.SparkApplication) (int, error) {
+func getStageMetricsAggregatorState(cr *v1alpha1.SparkApplication) (sparkapi.StageMetricsAggregatorState, error) {
+	newState := sparkapi.NewStageMetricsAggregatorState()
 	if cr.Annotations == nil {
 		// We haven't processed any stages yet
-		return -1, nil
+		return newState, nil
 	}
-	val := cr.Annotations[maxProcessedStageIDAnnotation]
+	val := cr.Annotations[stageMetricsAggregationAnnotation]
 	if val == "" {
 		// We haven't processed any stages yet
-		return -1, nil
+		return newState, nil
 	}
-	maxProcessedStageID, err := strconv.Atoi(val)
+	state := sparkapi.StageMetricsAggregatorState{}
+	err := json.Unmarshal([]byte(val), &state)
 	if err != nil {
-		return -1, fmt.Errorf("could not parse max processed stage ID: %q, %w", val, err)
+		return newState, fmt.Errorf("could not unmarshal state %s, %w", val, err)
 	}
-	return maxProcessedStageID, nil
+	return state, nil
 }
 
-func setMaxProcessedStageID(cr *v1alpha1.SparkApplication, maxProcessedStageID int) {
+func setStageMetricsAggregatorState(cr *v1alpha1.SparkApplication, state sparkapi.StageMetricsAggregatorState) error {
 	if cr.Annotations == nil {
 		cr.Annotations = make(map[string]string)
 	}
-	cr.Annotations[maxProcessedStageIDAnnotation] = strconv.Itoa(maxProcessedStageID)
+	marshalled, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("could not marshal state, %w", err)
+	}
+	cr.Annotations[stageMetricsAggregationAnnotation] = string(marshalled)
+	return nil
 }
 
 func setWorkloadType(cr *v1alpha1.SparkApplication, workloadType sparkapi.WorkloadType) {

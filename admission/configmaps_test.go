@@ -4,10 +4,15 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/spotinst/wave-operator/internal/util"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
+
+	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/internal/config"
+	"github.com/spotinst/wave-operator/internal/util"
 )
 
 var (
@@ -21,7 +26,8 @@ var (
 			Name: "empty",
 		},
 	}
-	nonsparkConfigMap = &corev1.ConfigMap{
+
+	nonSparkConfigMap = &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
 			APIVersion: "v1",
@@ -79,9 +85,27 @@ var (
 	}
 )
 
+func getDriverPod(name string, namespace string, eventLogSyncEnabled bool, eventLogSyncValueOverride string) *corev1.Pod {
+	pod := getSimplePod()
+	pod.Name = name
+	pod.Namespace = namespace
+	pod.Labels = map[string]string{
+		SparkRoleLabel: SparkRoleDriverValue,
+	}
+	if eventLogSyncEnabled {
+		eventLogSyncValue := "true"
+		if eventLogSyncValueOverride != "" {
+			eventLogSyncValue = eventLogSyncValueOverride
+		}
+		pod.Annotations[config.WaveConfigAnnotationSyncEventLogs] = eventLogSyncValue
+	}
+	return pod
+}
+
 func TestMutateEmptyCM(t *testing.T) {
+	clientSet := k8sfake.NewSimpleClientset()
 	req := getAdmissionRequest(t, emptyConfigMap)
-	r, err := NewConfigMapMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+	r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, emptyConfigMap.UID, r.UID)
@@ -90,34 +114,41 @@ func TestMutateEmptyCM(t *testing.T) {
 	assert.True(t, r.Allowed)
 }
 
-func TestMutateNonsparkCM(t *testing.T) {
-	req := getAdmissionRequest(t, nonsparkConfigMap)
-	r, err := NewConfigMapMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+func TestMutateNonSparkCM(t *testing.T) {
+	clientSet := k8sfake.NewSimpleClientset()
+	req := getAdmissionRequest(t, nonSparkConfigMap)
+	r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
-	assert.Equal(t, nonsparkConfigMap.UID, r.UID)
+	assert.Equal(t, nonSparkConfigMap.UID, r.UID)
 	assert.Nil(t, r.PatchType)
 	assert.Nil(t, r.Patch)
 	assert.True(t, r.Allowed)
 }
 
 func TestMutateBadSparkCM(t *testing.T) {
-	req := getAdmissionRequest(t, badSparkConfigMap)
-	r, err := NewConfigMapMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+	cm := badSparkConfigMap
+	driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
+	clientSet := k8sfake.NewSimpleClientset(driver)
+	req := getAdmissionRequest(t, cm)
+	r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
-	assert.Equal(t, badSparkConfigMap.UID, r.UID)
+	assert.Equal(t, cm.UID, r.UID)
 	assert.Nil(t, r.PatchType)
 	assert.Nil(t, r.Patch)
 	assert.True(t, r.Allowed)
 }
 
 func TestMutateSparkCM(t *testing.T) {
-	req := getAdmissionRequest(t, sparkConfigMap)
-	r, err := NewConfigMapMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+	cm := sparkConfigMap
+	driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
+	clientSet := k8sfake.NewSimpleClientset(driver)
+	req := getAdmissionRequest(t, cm)
+	r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
-	assert.Equal(t, sparkConfigMap.UID, r.UID)
+	assert.Equal(t, cm.UID, r.UID)
 	assert.Equal(t, &jsonPathType, r.PatchType)
 	assert.NotNil(t, r.Patch)
 	assert.True(t, r.Allowed)
@@ -129,22 +160,122 @@ func TestMutateSparkCM(t *testing.T) {
 }
 
 func TestMutateSparkBadStorageCM(t *testing.T) {
-	req := getAdmissionRequest(t, sparkConfigMap)
-	m := NewConfigMapMutator(log, &util.FailedStorageProvider{})
-	r, err := m.Mutate(req)
-	assert.NoError(t, err)
-	assert.NotNil(t, r)
-	assert.Nil(t, r.PatchType)
-	assert.Nil(t, r.Patch)
-	assert.True(t, r.Allowed)
 
-	m = NewConfigMapMutator(log, &util.NilStorageProvider{})
-	req = getAdmissionRequest(t, sparkConfigMap)
-	r, err = m.Mutate(req)
-	assert.NoError(t, err)
-	assert.NotNil(t, r)
-	assert.Nil(t, r.PatchType)
-	assert.Nil(t, r.Patch)
-	assert.True(t, r.Allowed)
+	testFunc := func(provider cloudstorage.CloudStorageProvider) {
+		cm := sparkConfigMap
+		driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
+		clientSet := k8sfake.NewSimpleClientset(driver)
+		req := getAdmissionRequest(t, cm)
+		r, err := NewConfigMapMutator(log, clientSet, provider).Mutate(req)
+		assert.NoError(t, err)
+		assert.NotNil(t, r)
+		assert.Equal(t, cm.UID, r.UID)
+		assert.Nil(t, r.PatchType)
+		assert.Nil(t, r.Patch)
+		assert.True(t, r.Allowed)
+	}
+
+	t.Run("whenFailedStorageProvider", func(tt *testing.T) {
+		testFunc(&util.FailedStorageProvider{})
+	})
+
+	t.Run("testNilStorageProvider", func(tt *testing.T) {
+		testFunc(&util.NilStorageProvider{})
+	})
+}
+
+func TestEventLogSyncConfiguration(t *testing.T) {
+
+	type testCase struct {
+		eventLogSyncAnnotationPresent bool
+		eventLogSyncAnnotationValue   string
+		shouldAddEventLogSync         bool
+		driverPodPresent              bool
+	}
+
+	testFunc := func(tt *testing.T, tc testCase) {
+		cm := sparkConfigMap
+		driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, tc.eventLogSyncAnnotationPresent, tc.eventLogSyncAnnotationValue)
+
+		var clientSet kubernetes.Interface
+		if tc.driverPodPresent {
+			clientSet = k8sfake.NewSimpleClientset(driver)
+		} else {
+			clientSet = k8sfake.NewSimpleClientset()
+		}
+
+		req := getAdmissionRequest(tt, cm)
+
+		r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
+		assert.NoError(tt, err)
+		assert.NotNil(tt, r)
+		assert.Equal(tt, cm.UID, r.UID)
+		assert.True(tt, r.Allowed)
+
+		matchedDir, _ := regexp.MatchString(`spark.eventLog.dir ?= ?file:///var/log/spark`, string(r.Patch))
+		matchedEnabled, _ := regexp.MatchString(`spark.eventLog.enabled ?= ?true`, string(r.Patch))
+
+		if tc.shouldAddEventLogSync {
+			assert.Equal(tt, &jsonPathType, r.PatchType)
+			assert.NotNil(tt, r.Patch)
+			assert.True(tt, matchedDir)
+			assert.True(tt, matchedEnabled)
+		} else {
+			assert.Nil(tt, r.PatchType)
+			assert.Nil(tt, r.Patch)
+			assert.False(tt, matchedDir)
+			assert.False(tt, matchedEnabled)
+		}
+	}
+
+	t.Run("whenEventLogSyncOn", func(tt *testing.T) {
+		tc := testCase{
+			eventLogSyncAnnotationPresent: true,
+			eventLogSyncAnnotationValue:   "true",
+			shouldAddEventLogSync:         true,
+			driverPodPresent:              true,
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenEventLogSyncOff", func(tt *testing.T) {
+		tc := testCase{
+			eventLogSyncAnnotationPresent: true,
+			eventLogSyncAnnotationValue:   "false",
+			shouldAddEventLogSync:         false,
+			driverPodPresent:              true,
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenEventLogSyncNotConfigured", func(tt *testing.T) {
+		tc := testCase{
+			eventLogSyncAnnotationPresent: false,
+			eventLogSyncAnnotationValue:   "",
+			shouldAddEventLogSync:         false,
+			driverPodPresent:              true,
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenEventLogSyncMisConfigured", func(tt *testing.T) {
+		tc := testCase{
+			eventLogSyncAnnotationPresent: true,
+			eventLogSyncAnnotationValue:   "nonsense",
+			shouldAddEventLogSync:         false,
+			driverPodPresent:              true,
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenEventLogSyncOn_ownerPodNotFound", func(tt *testing.T) {
+		tc := testCase{
+			eventLogSyncAnnotationPresent: true,
+			eventLogSyncAnnotationValue:   "true",
+			shouldAddEventLogSync:         false,
+			driverPodPresent:              false,
+		}
+		testFunc(tt, tc)
+	})
 
 }

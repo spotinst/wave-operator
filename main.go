@@ -114,7 +114,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ac := admission.NewAdmissionController(storageProvider, logger)
+	ac := admission.NewAdmissionController(clientSet, storageProvider, logger)
 	err = mgr.Add(ac)
 	if err != nil {
 		setupLog.Error(err, "unable to add admission controller")

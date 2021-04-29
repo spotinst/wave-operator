@@ -1,6 +1,7 @@
 package admission
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -8,29 +9,37 @@ import (
 	"github.com/magiconair/properties"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/internal/config"
 )
 
 type ConfigMapMutator struct {
 	log      logr.Logger
+	client   kubernetes.Interface
 	provider cloudstorage.CloudStorageProvider
 }
 
-func NewConfigMapMutator(log logr.Logger, provider cloudstorage.CloudStorageProvider) ConfigMapMutator {
+func NewConfigMapMutator(log logr.Logger, client kubernetes.Interface, provider cloudstorage.CloudStorageProvider) ConfigMapMutator {
 	return ConfigMapMutator{
 		log:      log,
+		client:   client,
 		provider: provider,
 	}
 }
 
 func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.AdmissionResponse, error) {
 
+	ctx := context.TODO()
+
 	gvk := corev1.SchemeGroupVersion.WithKind("ConfigMap")
 	sourceObj := &corev1.ConfigMap{}
+
 	_, _, err := deserializer.Decode(req.Object.Raw, &gvk, sourceObj)
 	if err != nil {
-		return nil, fmt.Errorf("deserialization failed %w", err)
+		return nil, fmt.Errorf("deserialization failed, %w", err)
 	}
 
 	log := m.log.WithValues("configmap", sourceObj.Name)
@@ -56,11 +65,26 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 		return resp, nil
 	}
 
+	ownerPod, err := m.client.CoreV1().Pods(sourceObj.Namespace).Get(ctx, sourceObj.OwnerReferences[0].Name, metav1.GetOptions{})
+	if err != nil {
+		log.Error(err, "could not get owner pod")
+		return resp, nil
+	}
+
+	log.Info("Got config map owner pod",
+		"name", ownerPod.Name, "namespace", ownerPod.Namespace, "annotations", ownerPod.Annotations)
+
+	if !config.IsEventLogSyncEnabled(ownerPod.Annotations) {
+		log.Info("Event log sync not enabled, will not mutate config map")
+		return resp, nil
+	}
+
 	storageInfo, err := m.provider.GetStorageInfo()
 	if err != nil {
 		log.Error(err, "cannot get storage configuration")
 		return resp, nil
 	}
+
 	if storageInfo == nil {
 		log.Error(err, "storage information from provider is nil")
 		return resp, nil

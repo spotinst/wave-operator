@@ -26,3 +26,6 @@ VERSION
 scratch
 venv/
 telepresence.log
+
+# MacOS
+.DS_Store
