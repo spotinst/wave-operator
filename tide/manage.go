@@ -95,7 +95,6 @@ type manager struct {
 	spec              install.InstallSpec
 	clusterIdentifier string
 	log               logr.Logger
-	env               Environment
 	rc                ctrlrt.Client
 	kubeClientGetter  genericclioptions.RESTClientGetter
 	kc                kubernetes.Interface
@@ -141,9 +140,8 @@ func NewManager(log logr.Logger) (Manager, error) {
 			Values:     WaveOperatorValues,
 			Enabled:    map[v1alpha1.ChartName]bool{},
 		},
-		kc:  kc,
-		rc:  rt,
-		env: NewKubernetesEnvironment(rt, clusterIdentifier),
+		kc: kc,
+		rc: rt,
 	}, nil
 }
 
@@ -357,11 +355,23 @@ func (m *manager) SetConfiguration(input map[string]interface{}) (*v1alpha1.Wave
 }
 
 func (m *manager) GetConfiguration() (*v1alpha1.WaveEnvironment, error) {
-	return m.env.GetConfiguration()
+	env := &v1alpha1.WaveEnvironment{}
+	ctx := context.TODO()
+	key := ctrlrt.ObjectKey{Name: m.clusterIdentifier, Namespace: catalog.SystemNamespace}
+	err := m.rc.Get(ctx, key, env)
+	if err != nil {
+		return nil, err
+	}
+	return env, nil
 }
 
 func (m *manager) SaveConfiguration(env *v1alpha1.WaveEnvironment) error {
-	return m.env.SaveConfiguration(env)
+	ctx := context.TODO()
+	err := m.rc.Update(ctx, env)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *manager) Create(env v1alpha1.WaveEnvironment) error {
