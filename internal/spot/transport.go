@@ -5,16 +5,15 @@ import (
 	"net/http"
 
 	"github.com/spotinst/spotinst-sdk-go/spotinst"
-	"github.com/spotinst/spotinst-sdk-go/spotinst/credentials"
 )
 
-type authTransport struct {
-	base  http.RoundTripper
-	creds *credentials.Credentials
+type apiTransport struct {
+	base   http.RoundTripper
+	config *spotinst.Config
 }
 
-func (a *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	creds, err := a.creds.Get()
+func (a *apiTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	creds, err := a.config.Credentials.Get()
 	if err != nil {
 		return nil, err
 	}
@@ -25,16 +24,23 @@ func (a *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", creds.Token))
 
+	// Set request base URL.
+	req.URL.Host = a.config.BaseURL.Host
+	req.URL.Scheme = a.config.BaseURL.Scheme
+
+	// Set request headers.
+	req.Host = a.config.BaseURL.Host
+	req.Header.Add("User-Agent", a.config.UserAgent)
 	return a.base.RoundTrip(req)
 }
 
-func AuthTransport(base http.RoundTripper, config *spotinst.Config) http.RoundTripper {
+func ApiTransport(base http.RoundTripper, config *spotinst.Config) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport
 	}
 
-	return &authTransport{
-		base:  base,
-		creds: config.Credentials,
+	return &apiTransport{
+		base:   base,
+		config: config,
 	}
 }
