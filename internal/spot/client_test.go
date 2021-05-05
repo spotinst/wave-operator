@@ -2,21 +2,24 @@ package spot_test
 
 import (
 	"fmt"
-	"net/http/httputil"
 	"testing"
 
+	"github.com/spotinst/spotinst-sdk-go/spotinst"
+	spotlog "github.com/spotinst/spotinst-sdk-go/spotinst/log"
+	"github.com/spotinst/wave-operator/internal/logger"
 	"github.com/spotinst/wave-operator/internal/spot"
 	"github.com/stretchr/testify/require"
 )
 
 func TestClient(t *testing.T) {
-	c := spot.NewClient(spot.Credentials{
-		AccountId: "ble", Token: "shuff",
-	}, "clusterBle")
+	log := logger.New()
+	conf := spotinst.DefaultConfig().WithLogger(spotlog.LoggerFunc(func(format string, args ...interface{}) {
+		log.Info(fmt.Sprintf(format, args...))
+	}))
 
-	resp, err := c.Get("https://httpbin.org/get")
+	c := spot.NewClient(conf, "arnar-test-ekctl")
+
+	app, err := c.GetSparkApplication("wsa-0439934b2ca5460e")
 	require.NoError(t, err)
-	body, err := httputil.DumpResponse(resp, true)
-	require.NoError(t, err)
-	fmt.Println(string(body))
+	fmt.Println(app)
 }
