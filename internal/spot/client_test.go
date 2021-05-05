@@ -5,17 +5,12 @@ import (
 	"testing"
 
 	"github.com/spotinst/spotinst-sdk-go/spotinst"
-	spotlog "github.com/spotinst/spotinst-sdk-go/spotinst/log"
-	"github.com/spotinst/wave-operator/internal/logger"
 	"github.com/spotinst/wave-operator/internal/spot"
 	"github.com/stretchr/testify/require"
 )
 
 func TestClient(t *testing.T) {
-	log := logger.New()
-	conf := spotinst.DefaultConfig().WithLogger(spotlog.LoggerFunc(func(format string, args ...interface{}) {
-		log.Info(fmt.Sprintf(format, args...))
-	}))
+	conf := spotinst.DefaultConfig()
 
 	c := spot.NewClient(conf, "arnar-test-ekctl")
 
