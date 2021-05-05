@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 
+	"github.com/go-logr/logr"
 	"github.com/spotinst/spotinst-sdk-go/spotinst"
 	"github.com/spotinst/spotinst-sdk-go/spotinst/client"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
@@ -21,16 +22,18 @@ type ApplicationGetter interface {
 }
 
 type ApplicationSaver interface {
-	SaveApplication(app v1alpha1.SparkApplication)
+	SaveApplication(app *v1alpha1.SparkApplication) error
 }
 
 type Client struct {
-	spot   *client.Client
+	logger  logr.Logger
+	cluster string
+	spot    *client.Client
 }
 
-func (c *Client) GetSparkApplication(ID string) (string, error) {
+func (c *Client) GetSparkApplication(ctx context.Context, ID string) (string, error) {
 	req := client.NewRequest(http.MethodGet, fmt.Sprintf("/wave/spark/application/%s", ID))
-	resp, err := c.spot.Do(context.TODO(), req)
+	resp, err := c.spot.Do(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -39,11 +42,15 @@ func (c *Client) GetSparkApplication(ID string) (string, error) {
 	return string(body), nil
 }
 
-func (c *Client) SaveApplication(app v1alpha1.SparkApplication) {
+func (c *Client) SaveApplication(app *v1alpha1.SparkApplication) error {
+	c.logger.Info("Persisting spark spark application", "id", app.Spec.ApplicationID, "name", app.Spec.ApplicationName, "heritage", app.Spec.Heritage)
+	return nil
 }
 
-func NewClient(config *spotinst.Config, cluster string) *Client {
+func NewClient(config *spotinst.Config, cluster string, logger logr.Logger) *Client {
 	return &Client{
-		spot:   client.New(config),
+		logger:  logger,
+		cluster: cluster,
+		spot:    client.New(config),
 	}
 }

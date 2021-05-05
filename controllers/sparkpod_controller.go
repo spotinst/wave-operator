@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/spotinst/wave-operator/internal/spot"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,7 +67,8 @@ func NewSparkPodReconciler(
 	clientSet kubernetes.Interface,
 	sparkApiManagerGetter SparkApiManagerGetter,
 	log logr.Logger,
-	scheme *runtime.Scheme) *SparkPodReconciler {
+	scheme *runtime.Scheme,
+	spotClient *spot.Client) *SparkPodReconciler {
 
 	return &SparkPodReconciler{
 		Client:                 client,
@@ -742,6 +744,10 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 	err = r.Create(ctx, cr)
 	if err != nil {
 		return fmt.Errorf("could not create cr, %w", err)
+	}
+
+	if err := r.spotClient.SaveApplication(cr); err != nil {
+		return fmt.Errorf("could not create application in spot backend, %w", err)
 	}
 
 	return nil
