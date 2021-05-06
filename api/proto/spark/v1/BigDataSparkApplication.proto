@@ -1,0 +1,11 @@
+syntax = "proto2";
+
+package spark.v1;
+
+option java_package = "com.spotinst.kubernetes.controller.dal.model.proto";
+option java_outer_classname = "BigDataSparkApplicationProto";
+option go_package = "github.com/spotinst/wave-operator/api/proto/spark/v1;spark";
+
+message BigDataSparkApplication {
+  required string sparkApplication = 1;
+}

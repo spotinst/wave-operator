@@ -1,0 +1,14 @@
+syntax = "proto2";
+
+package spark.v1;
+
+import "spark/v1/BigDataSparkApplication.proto";
+
+option java_package = "com.spotinst.kubernetes.controller.dal.model.proto";
+option java_outer_classname = "BigDataSparkApplicationsTopologyProto";
+option go_package = "github.com/spotinst/wave-operator/api/proto/spark/v1;spark";
+
+
+message BigDataSparkApplicationsTopology {
+    repeated BigDataSparkApplication sparkApplications = 1;
+}
