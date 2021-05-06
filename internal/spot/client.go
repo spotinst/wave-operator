@@ -1,20 +1,21 @@
 package spot
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
 
 	"github.com/go-logr/logr"
 	"github.com/spotinst/spotinst-sdk-go/spotinst"
+	sparkpb "github.com/spotinst/wave-operator/api/proto/spark/v1"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	queryAccountId         = "accountId"
-	queryClusterIdentifier = "clusterIdentifier"
-
 	contentTypeProtobuf = "application/x-protobuf"
 )
 
@@ -44,15 +45,48 @@ func (c *Client) GetSparkApplication(ctx context.Context, ID string) (string, er
 
 func (c *Client) SaveApplication(app *v1alpha1.SparkApplication) error {
 	c.logger.Info("Persisting spark spark application", "id", app.Spec.ApplicationID, "name", app.Spec.ApplicationName, "heritage", app.Spec.Heritage)
+	appBody, err := json.Marshal(app)
+	if err != nil {
+		return err
+	}
+	sparkAppBody := string(appBody)
 
-	//req, := c.httpClient.Post("mcs/kubernetes/topology/bigdata/spark/application", contentTypeProtobuf)
+	topology := sparkpb.BigDataSparkApplicationsTopology{
+		SparkApplications: []*sparkpb.BigDataSparkApplication{
+			{
+				SparkApplication: &sparkAppBody,
+			},
+		},
+	}
+
+	body, err := proto.Marshal(&topology)
+	if err != nil {
+		return err
+	}
+
+	payload := bytes.NewBuffer(body)
+	req, err := http.NewRequest(http.MethodPost, "mcs/kubernetes/topology/bigdata/spark/application", payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", contentTypeProtobuf)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	respbody, _ := httputil.DumpResponse(resp, true)
+	fmt.Println(string(respbody))
+
 	return nil
 }
 
 func NewClient(config *spotinst.Config, cluster string, logger logr.Logger) *Client {
 	return &Client{
-		logger:     logger,
-		cluster:    cluster,
-		httpClient: config.HTTPClient,
+		logger:  logger,
+		cluster: cluster,
+		httpClient: &http.Client{
+			Transport: ApiTransport(nil, config, "test-idendity", cluster),
+		},
 	}
 }
