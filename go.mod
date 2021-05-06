@@ -8,7 +8,7 @@ require (
 	github.com/go-logr/logr v0.4.0
 	github.com/go-logr/zapr v0.3.0 // indirect
 	github.com/golang/mock v1.4.4
-	github.com/google/go-cmp v0.5.4
+	github.com/google/go-cmp v0.5.5
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/jetstack/cert-manager v1.3.1
 	github.com/magiconair/properties v1.8.1
@@ -21,6 +21,7 @@ require (
 	github.com/spf13/viper v1.7.1
 	github.com/spotinst/spotinst-sdk-go v1.86.0
 	github.com/stretchr/testify v1.7.0
+	google.golang.org/protobuf v1.26.0
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 	helm.sh/helm/v3 v3.5.4
 	k8s.io/api v0.20.4
