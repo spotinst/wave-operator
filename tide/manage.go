@@ -48,7 +48,7 @@ const (
 
 	CertManagerChart      = "cert-manager"
 	CertManagerRepository = "https://charts.jetstack.io"
-	CertManagerVersion    = "v1.1.0"
+	CertManagerVersion    = "v1.3.1"
 	CertManagerValues     = "installCRDs: true"
 
 	spotConfigMapNamespace        = metav1.NamespaceSystem
@@ -130,9 +130,15 @@ func NewManager(log logr.Logger) (Manager, error) {
 		return nil, err
 	}
 
+	kubeConfig, err := buildRESTClientGetter(conf)
+	if err != nil {
+		return nil, err
+	}
+
 	return &manager{
 		clusterIdentifier: clusterIdentifier,
 		log:               log,
+		kubeClientGetter:  kubeConfig,
 		spec: install.InstallSpec{
 			Name:       WaveOperatorChart,
 			Repository: WaveOperatorRepository,
@@ -143,6 +149,15 @@ func NewManager(log logr.Logger) (Manager, error) {
 		kc: kc,
 		rc: rt,
 	}, nil
+}
+
+func buildRESTClientGetter(conf *rest.Config) (genericclioptions.RESTClientGetter, error) {
+	kubeConfig := genericclioptions.NewConfigFlags(false)
+	kubeConfig.APIServer = &conf.Host
+	kubeConfig.BearerToken = &conf.BearerToken
+	kubeConfig.CAFile = &conf.CAFile
+	*(kubeConfig.Namespace) = catalog.SystemNamespace
+	return kubeConfig, nil
 }
 
 func (m *manager) SetWaveInstallSpec(spec install.InstallSpec) error {
