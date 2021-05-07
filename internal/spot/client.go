@@ -86,7 +86,7 @@ func NewClient(config *spotinst.Config, cluster string, logger logr.Logger) *Cli
 		logger:  logger,
 		cluster: cluster,
 		httpClient: &http.Client{
-			Transport: ApiTransport(nil, config, "test-idendity", cluster),
+			Transport: ApiTransport(nil, config, "", cluster),
 		},
 	}
 }

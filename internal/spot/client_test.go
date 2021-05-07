@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/spotinst/spotinst-sdk-go/spotinst"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
@@ -29,15 +30,26 @@ func TestClient(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "Test-arnar-app",
 			},
-			Spec:       v1alpha1.SparkApplicationSpec{
-				ApplicationID: "some-random-thing",
+			Spec: v1alpha1.SparkApplicationSpec{
+				ApplicationID:   "some-random-thing",
 				ApplicationName: "Test-arnar-app",
+				Heritage:        "spark-submit",
 			},
-			Status:     v1alpha1.SparkApplicationStatus{
+			Status: v1alpha1.SparkApplicationStatus{
 				Data: v1alpha1.SparkApplicationData{
-					RunStatistics:   v1alpha1.Statistics{},
-					Driver:          v1alpha1.Pod{},
-					Executors:       nil,
+					RunStatistics: v1alpha1.Statistics{
+						Attempts: []v1alpha1.Attempt{
+							{
+								StartTimeEpoch: time.Now().Unix(),
+							},
+						},
+						TotalInputBytes: 10,
+					},
+					Driver: v1alpha1.Pod{
+						Name:      "arnar-test-driver",
+						Namespace: "spark-test-jobs",
+					},
+					Executors: nil,
 				},
 			},
 		}

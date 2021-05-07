@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	queryAccountId         = "accountId"
-	queryClusterIdentifier = "clusterIdentifier"
+	queryAccountId                  = "accountId"
+	queryClusterIdentifier          = "clusterIdentifier"
+	queryKubernetesUniqueIdentifier = "kubernetesUniqueIdentifier"
 )
 
 type apiTransport struct {
@@ -25,13 +26,18 @@ func (a *apiTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", creds.Token))
+	req.Header.Add("User-Agent", a.config.UserAgent)
+
 	query := req.URL.Query()
 	query.Set(queryAccountId, creds.Account)
-	query.Set(queryClusterIdentifier, a.cluster,
-	)
-	req.URL.RawQuery = query.Encode()
+	query.Set(queryClusterIdentifier, a.cluster)
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", creds.Token))
+	if a.identifier != "" {
+		query.Set(queryKubernetesUniqueIdentifier, a.identifier)
+	}
+
+	req.URL.RawQuery = query.Encode()
 
 	// Set request base URL.
 	req.URL.Host = a.config.BaseURL.Host
@@ -39,10 +45,7 @@ func (a *apiTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// Set request headers.
 	req.Host = a.config.BaseURL.Host
-	req.Header.Add("User-Agent", a.config.UserAgent)
 
-	// Set the unique identifier for this kubernetes cluster
-	req.Header.Set("kubernetesUniqueIdentifier", a.identifier)
 	return a.base.RoundTrip(req)
 }
 
