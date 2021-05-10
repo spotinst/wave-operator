@@ -130,7 +130,7 @@ func NewManager(log logr.Logger) (Manager, error) {
 		return nil, err
 	}
 
-	kubeConfig, err := buildRESTClientGetter(conf)
+	restClientGetter, err := buildRESTClientGetter(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func NewManager(log logr.Logger) (Manager, error) {
 	return &manager{
 		clusterIdentifier: clusterIdentifier,
 		log:               log,
-		kubeClientGetter:  kubeConfig,
+		kubeClientGetter:  restClientGetter,
 		spec: install.InstallSpec{
 			Name:       WaveOperatorChart,
 			Repository: WaveOperatorRepository,
