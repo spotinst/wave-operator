@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -18,6 +19,13 @@ import (
 const (
 	contentTypeProtobuf = "application/x-protobuf"
 )
+
+var ErrUpdatingApplication = errors.New("spot: unable to update application")
+
+type ApplicationClient interface {
+	ApplicationGetter
+	ApplicationSaver
+}
 
 type ApplicationGetter interface {
 	GetSparkApplication(ctx context.Context, ID string) (string, error)
@@ -44,7 +52,12 @@ func (c *Client) GetSparkApplication(ctx context.Context, ID string) (string, er
 }
 
 func (c *Client) SaveApplication(app *v1alpha1.SparkApplication) error {
-	c.logger.Info("Persisting spark spark application", "id", app.Spec.ApplicationID, "name", app.Spec.ApplicationName, "heritage", app.Spec.Heritage)
+	c.logger.Info("Persisting spark spark application",
+		"id", app.Spec.ApplicationID,
+		"name", app.Spec.ApplicationName,
+		"heritage", app.Spec.Heritage,
+		"revision", app.ResourceVersion)
+
 	appBody, err := json.Marshal(app)
 	if err != nil {
 		return err
@@ -75,8 +88,9 @@ func (c *Client) SaveApplication(app *v1alpha1.SparkApplication) error {
 		return err
 	}
 
-	respbody, _ := httputil.DumpResponse(resp, true)
-	fmt.Println(string(respbody))
+	if resp.StatusCode != http.StatusOK {
+		return ErrUpdatingApplication
+	}
 
 	return nil
 }

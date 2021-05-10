@@ -29,7 +29,7 @@ func TestClient(t *testing.T) {
 		app := &v1alpha1.SparkApplication{
 			ObjectMeta: metav1.ObjectMeta{
 				ResourceVersion: "1",
-				Name: "Test-arnar-app",
+				Name:            "Test-arnar-app",
 			},
 			Spec: v1alpha1.SparkApplicationSpec{
 				ApplicationID:   "some-random-thing",

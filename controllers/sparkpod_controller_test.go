@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
+	mock_spot "github.com/spotinst/wave-operator/internal/spot/mock_spotapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -55,7 +56,7 @@ func TestReconcile_sparkAppIDMissing(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme, nil)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -91,7 +92,7 @@ func TestReconcile_unknownRole(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme, nil)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -135,7 +136,7 @@ func TestReconcile_driver_garbageCollectionEvent(t *testing.T) {
 		return m, nil
 	}
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme, nil)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -190,7 +191,10 @@ func TestReconcile_driver_whenSparkApiCommunicationFails(t *testing.T) {
 		return m, nil
 	}
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+	app := mock_spot.NewMockApplicationClient(ctrl)
+	app.EXPECT().SaveApplication(gomock.Any()).Return(nil)
+
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme, app)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -381,7 +385,10 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 		return m, nil
 	}
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+	app := mock_spot.NewMockApplicationClient(ctrl)
+	app.EXPECT().SaveApplication(gomock.Any()).Return(nil).AnyTimes()
+
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme, app)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -471,7 +478,7 @@ func TestReconcile_driver_whenPodDeletionTimeoutPassed(t *testing.T) {
 		return m, nil
 	}
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme, nil)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -505,7 +512,14 @@ func TestReconcile_executor_whenSuccessful(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, exec1, exec2, cr)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
+	// Mock Spark API manager
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	app := mock_spot.NewMockApplicationClient(ctrl)
+	app.EXPECT().SaveApplication(gomock.Any()).Return(nil).AnyTimes()
+
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme, app)
 
 	// Executor 1
 
@@ -585,7 +599,7 @@ func TestReconcile_executor_whenCRDoesntExist(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme, nil)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -609,7 +623,7 @@ func TestReconcile_finalizer_add(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme, nil)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -639,7 +653,7 @@ func TestReconcile_finalizer_remove(t *testing.T) {
 	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
 	clientSet := k8sfake.NewSimpleClientset()
 
-	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme)
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, nil, getTestLogger(), testScheme, nil)
 
 	req := ctrlrt.Request{
 		NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
@@ -797,7 +811,10 @@ func TestReconcile_ownerReference_add(t *testing.T) {
 				return m, nil
 			}
 
-			controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+			app := mock_spot.NewMockApplicationClient(ctrl)
+			app.EXPECT().SaveApplication(gomock.Any()).Return(nil).AnyTimes()
+
+			controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme, app)
 
 			req := ctrlrt.Request{
 				NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},

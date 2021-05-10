@@ -68,7 +68,7 @@ func NewSparkPodReconciler(
 	sparkApiManagerGetter SparkApiManagerGetter,
 	log logr.Logger,
 	scheme *runtime.Scheme,
-	spotClient *spot.Client) *SparkPodReconciler {
+	app spot.ApplicationClient) *SparkPodReconciler {
 
 	return &SparkPodReconciler{
 		Client:                 client,
@@ -468,6 +468,10 @@ func (r *SparkPodReconciler) handleExecutor(ctx context.Context, pod *corev1.Pod
 		return fmt.Errorf("patch error, %w", err)
 	}
 
+	if err := r.app.SaveApplication(cr); err != nil {
+		return fmt.Errorf("could not create application in spot backend, %w", err)
+	}
+
 	return nil
 }
 
@@ -744,10 +748,6 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 	err = r.Create(ctx, cr)
 	if err != nil {
 		return fmt.Errorf("could not create cr, %w", err)
-	}
-
-	if err := r.spotClient.SaveApplication(cr); err != nil {
-		return fmt.Errorf("could not create application in spot backend, %w", err)
 	}
 
 	return nil
