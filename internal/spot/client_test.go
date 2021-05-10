@@ -28,6 +28,7 @@ func TestClient(t *testing.T) {
 	t.Run("SavesApplication", func(t *testing.T) {
 		app := &v1alpha1.SparkApplication{
 			ObjectMeta: metav1.ObjectMeta{
+				ResourceVersion: "1",
 				Name: "Test-arnar-app",
 			},
 			Spec: v1alpha1.SparkApplicationSpec{
@@ -49,7 +50,12 @@ func TestClient(t *testing.T) {
 						Name:      "arnar-test-driver",
 						Namespace: "spark-test-jobs",
 					},
-					Executors: nil,
+					Executors: []v1alpha1.Pod{
+						{
+							Name:      "arnar-test-executor-1",
+							Namespace: "spark-test-jobs",
+						},
+					},
 				},
 			},
 		}

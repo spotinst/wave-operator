@@ -47,7 +47,7 @@ func (a *apiTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Set request headers.
 	req.Host = a.config.BaseURL.Host
 
-	if !strings.HasPrefix("/", req.URL.Path) {
+	if !strings.HasPrefix(req.URL.Path, "/") {
 		req.URL.Path = "/" + req.URL.Path
 	}
 
