@@ -188,6 +188,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetMetrics().Return(getMetricsResponse(), nil).Times(1)
 		m.EXPECT().GetStreamingStatistics(applicationID).Return(nil, fmt.Errorf("404 not found")).Times(1)
 
 		manager := &manager{
@@ -208,6 +209,7 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
+		m.EXPECT().GetMetrics().Return(getMetricsResponse(), nil).Times(1)
 		m.EXPECT().GetStreamingStatistics(applicationID).Return(getStreamingStatisticsResponse(), nil).Times(1)
 
 		manager := &manager{
@@ -960,6 +962,22 @@ func getExecutorsResponse() []sparkapiclient.Executor {
 		{
 			ID:      "2",
 			AddTime: "2020-12-14T16:27:47.142GMT",
+		},
+	}
+}
+
+func getMetricsResponse() *sparkapiclient.Metrics {
+	return &sparkapiclient.Metrics{
+		Version: "6.6.6",
+		Gauges: map[string]sparkapiclient.GaugeValue{
+			"test-gauge": {
+				Value: int64(200),
+			},
+		},
+		Counters: map[string]sparkapiclient.CounterValue{
+			"test-counter": {
+				Count: int64(2000),
+			},
 		},
 	}
 }

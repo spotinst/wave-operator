@@ -48,6 +48,7 @@ type ApplicationInfo struct {
 	Attempts                []sparkapiclient.Attempt
 	Executors               []sparkapiclient.Executor
 	WorkloadType            WorkloadType
+	Metrics                 *sparkapiclient.Metrics
 }
 
 var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (Manager, error) {
@@ -139,24 +140,30 @@ func (m manager) GetApplicationInfo(applicationID string, metricsAggregatorState
 
 	applicationInfo.Executors = executors
 
-	workloadType := m.getWorkloadType(applicationID)
-	applicationInfo.WorkloadType = workloadType
+	if dc, ok := m.client.(sparkapiclient.DriverClient); ok {
+		applicationInfo.WorkloadType = m.getWorkloadType(dc, applicationID)
+		metrics, err := dc.GetMetrics()
+		if err != nil {
+			m.logger.Error(err, "Unable to collect driver metrics")
+		}
 
-	if _, err := registry.Register(applicationInfo); err != nil {
-		m.logger.Error(err, "Unable to register application for metrics collection")
+		applicationInfo.Metrics = metrics
+
+		if _, err := registry.Register(applicationInfo); err != nil {
+			m.logger.Error(err, "Unable to register application for metrics collection")
+		}
 	}
 
 	return applicationInfo, nil
 }
 
-func (m manager) getWorkloadType(applicationID string) WorkloadType {
+func (m manager) getWorkloadType(c sparkapiclient.DriverClient, applicationID string) WorkloadType {
 	// Streaming statistics endpoint is only available on running driver
-	if dc, ok := m.client.(sparkapiclient.DriverClient); ok {
-		_, err := dc.GetStreamingStatistics(applicationID)
-		if err == nil {
-			return SparkStreaming
-		}
+	_, err := c.GetStreamingStatistics(applicationID)
+	if err == nil {
+		return SparkStreaming
 	}
+
 	return ""
 }
 
