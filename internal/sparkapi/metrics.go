@@ -2,6 +2,7 @@ package sparkapi
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -243,6 +244,15 @@ func (a *applicationCollector) Describe(descs chan<- *prometheus.Desc) {
 func (a *applicationCollector) Collect(metrics chan<- prometheus.Metric) {
 	metrics <- prometheus.MustNewConstMetric(a.info, prometheus.GaugeValue, 1, a.app.Attempts[0].AppSparkVersion)
 	metrics <- prometheus.MustNewConstMetric(a.durationSeconds, prometheus.GaugeValue, float64(a.calculateDuration()))
+
+	for name, value := range a.app.Metrics.Counters {
+		fmt.Printf("%s - %d", name, value.Count)
+	}
+
+	for name, value := range a.app.Metrics.Gauges{
+		fmt.Printf("%s - %d", name, value.Value)
+	}
+
 	a.executors.Collect(a.app.Executors, metrics)
 }
 

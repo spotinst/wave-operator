@@ -21,7 +21,6 @@ func TestDriverMetrics(t *testing.T) {
 		require.NoError(tt, err)
 		assert.NotNil(tt, metrics)
 
-		assert.Equal(tt, "4.0.0", metrics.Version)
 		assert.NotEmpty(tt, metrics.Gauges)
 		assert.NotEmpty(tt, metrics.Counters)
 
@@ -35,7 +34,6 @@ func TestDriverMetrics(t *testing.T) {
 
 func getMetricsResponse() []byte {
 	return []byte(`{
-  "version": "4.0.0",
   "gauges": {
     "test-app-id.driver.BlockManager.disk.diskSpaceUsed_MB": {
       "value": 0

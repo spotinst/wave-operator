@@ -966,9 +966,8 @@ func getExecutorsResponse() []sparkapiclient.Executor {
 	}
 }
 
-func getMetricsResponse() *sparkapiclient.Metrics {
-	return &sparkapiclient.Metrics{
-		Version: "6.6.6",
+func getMetricsResponse() sparkapiclient.Metrics {
+	return sparkapiclient.Metrics{
 		Gauges: map[string]sparkapiclient.GaugeValue{
 			"test-gauge": {
 				Value: int64(200),

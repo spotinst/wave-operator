@@ -68,6 +68,7 @@ vet:  ## Run go vet against code
 
 generate: $(GOBIN)/mockgen controller-gen  ## Generate code
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(GO) generate ./...
 
 
 docker-build: test version ## Build the operator docker image

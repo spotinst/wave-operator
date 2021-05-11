@@ -16,7 +16,7 @@ const driverPort = "4040"
 type DriverClient interface {
 	Client
 	GetStreamingStatistics(applicationID string) (*StreamingStatistics, error)
-	GetMetrics() (*Metrics, error)
+	GetMetrics() (Metrics, error)
 }
 
 type driver struct {
@@ -50,19 +50,19 @@ func (dc *driver) GetStreamingStatistics(applicationID string) (*StreamingStatis
 	return streamingStatistics, nil
 }
 
-func (dc *driver) GetMetrics() (*Metrics, error) {
+func (dc *driver) GetMetrics() (Metrics, error) {
 	resp, err := dc.transportClient.Get("metrics/json")
 	if err != nil {
-		return nil, err
+		return Metrics{}, err
 	}
 
 	metrics := new(Metrics)
 	err = json.Unmarshal(resp, metrics)
 	if err != nil {
-		return nil, err
+		return Metrics{}, err
 	}
 
-	return metrics, nil
+	return *metrics, nil
 }
 
 func (dc *driver) getStreamingStatisticsURLPath(applicationID string) string {

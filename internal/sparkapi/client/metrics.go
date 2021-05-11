@@ -9,7 +9,6 @@ type CounterValue struct {
 }
 
 type Metrics struct {
-	Version  string                  `json:"version"`
 	Gauges   map[string]GaugeValue   `json:"gauges"`
 	Counters map[string]CounterValue `json:"counters"`
 }

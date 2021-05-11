@@ -79,10 +79,10 @@ func (mr *MockDriverClientMockRecorder) GetEnvironment(arg0 interface{}) *gomock
 }
 
 // GetMetrics mocks base method
-func (m *MockDriverClient) GetMetrics() (*client.Metrics, error) {
+func (m *MockDriverClient) GetMetrics() (client.Metrics, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMetrics")
-	ret0, _ := ret[0].(*client.Metrics)
+	ret0, _ := ret[0].(client.Metrics)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

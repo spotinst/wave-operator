@@ -48,7 +48,7 @@ type ApplicationInfo struct {
 	Attempts                []sparkapiclient.Attempt
 	Executors               []sparkapiclient.Executor
 	WorkloadType            WorkloadType
-	Metrics                 *sparkapiclient.Metrics
+	Metrics                 sparkapiclient.Metrics
 }
 
 var GetManager = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (Manager, error) {
