@@ -41,22 +41,22 @@ func TestClient(t *testing.T) {
 					RunStatistics: v1alpha1.Statistics{
 						Attempts: []v1alpha1.Attempt{
 							{
-								StartTimeEpoch: time.Now().Unix(),
-								AppSparkVersion: "2.9.9",
+								StartTimeEpoch:   time.Now().Unix(),
+								AppSparkVersion:  "2.9.9",
 								LastUpdatedEpoch: time.Now().Add(30 * time.Second).Unix(),
 							},
 						},
 						TotalInputBytes: 10,
 					},
 					Driver: v1alpha1.Pod{
-						Name:      "arnar-test-driver",
-						Namespace: "spark-test-jobs",
+						Name:              "arnar-test-driver",
+						Namespace:         "spark-test-jobs",
 						CreationTimestamp: metav1.Now(),
 					},
 					Executors: []v1alpha1.Pod{
 						{
-							Name:      "arnar-test-executor-1",
-							Namespace: "spark-test-jobs",
+							Name:              "arnar-test-executor-1",
+							Namespace:         "spark-test-jobs",
 							CreationTimestamp: metav1.Now(),
 						},
 					},
