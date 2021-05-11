@@ -89,16 +89,26 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 	modObj := sourceObj.DeepCopy()
 	log.Info("constructing patch", "owner", sourceObj.OwnerReferences[0].Name)
 	propertyString := modObj.Data["spark.properties"]
+
 	props, err := properties.LoadString(propertyString)
 	if err != nil {
 		log.Error(err, "un-parsable spark property data in configmap")
 		return resp, nil
 	}
+
 	if props == nil {
 		props = properties.NewProperties()
 	}
-	props.Set("spark.eventLog.dir", "file:///var/log/spark") //storageInfo.Path)
-	props.Set("spark.eventLog.enabled", "true")
+
+	if _, _, err := props.Set("spark.eventLog.dir", "file:///var/log/spark"); err != nil {
+		log.Error(err, "could not set property")
+		return resp, nil
+	}
+
+	if _, _, err := props.Set("spark.eventLog.enabled", "true"); err != nil {
+		log.Error(err, "could not set property")
+		return resp, nil
+	}
 
 	modObj.Data["spark.properties"] = props.String()
 
@@ -107,6 +117,7 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 		log.Error(err, "unable to generate patch, continuing")
 		return resp, nil
 	}
+
 	log.Info("patching configmap", "patch", string(patch))
 
 	resp.Patch = patch
