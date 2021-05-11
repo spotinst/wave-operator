@@ -20,7 +20,7 @@ func TestGetApplication(t *testing.T) {
 		m := mock_transport.NewMockClient(ctrl)
 		m.EXPECT().Get("api/v1/applications/spark-123").Return(nil, fmt.Errorf("test error")).Times(1)
 
-		client := &client{DriverClient, m}
+		client := &driver{&client{m}}
 
 		res, err := client.GetApplication("spark-123")
 		assert.Error(tt, err)
@@ -33,7 +33,7 @@ func TestGetApplication(t *testing.T) {
 		m := mock_transport.NewMockClient(ctrl)
 		m.EXPECT().Get("api/v1/applications/spark-123").Return(getApplicationResponse(), nil).Times(1)
 
-		client := &client{DriverClient, m}
+		client := &driver{&client{m}}
 
 		res, err := client.GetApplication("spark-123")
 		assert.NoError(tt, err)
@@ -62,7 +62,7 @@ func TestGetStages(t *testing.T) {
 		m := mock_transport.NewMockClient(ctrl)
 		m.EXPECT().Get("api/v1/applications/spark-123/stages").Return(nil, fmt.Errorf("test error")).Times(1)
 
-		client := &client{DriverClient, m}
+		client := &driver{&client{m}}
 
 		res, err := client.GetStages("spark-123")
 		assert.Error(tt, err)
@@ -75,7 +75,7 @@ func TestGetStages(t *testing.T) {
 		m := mock_transport.NewMockClient(ctrl)
 		m.EXPECT().Get("api/v1/applications/spark-123/stages").Return(getStagesResponse(), nil).Times(1)
 
-		client := &client{DriverClient, m}
+		client := &driver{&client{m}}
 
 		res, err := client.GetStages("spark-123")
 		assert.NoError(tt, err)
@@ -101,7 +101,7 @@ func TestGetEnvironment(t *testing.T) {
 		m := mock_transport.NewMockClient(ctrl)
 		m.EXPECT().Get("api/v1/applications/spark-123/environment").Return(nil, fmt.Errorf("test error")).Times(1)
 
-		client := &client{DriverClient, m}
+		client := &driver{&client{m}}
 
 		res, err := client.GetEnvironment("spark-123")
 		assert.Error(tt, err)
@@ -114,7 +114,7 @@ func TestGetEnvironment(t *testing.T) {
 		m := mock_transport.NewMockClient(ctrl)
 		m.EXPECT().Get("api/v1/applications/spark-123/environment").Return(getEnvironmentResponse(), nil).Times(1)
 
-		client := &client{DriverClient, m}
+		client := &driver{&client{m}}
 
 		res, err := client.GetEnvironment("spark-123")
 		assert.NoError(tt, err)
@@ -136,7 +136,7 @@ func TestGetAllExecutors(t *testing.T) {
 		m := mock_transport.NewMockClient(ctrl)
 		m.EXPECT().Get("api/v1/applications/spark-123/allexecutors").Return(nil, fmt.Errorf("test error")).Times(1)
 
-		client := &client{DriverClient, m}
+		client := &driver{&client{m}}
 
 		res, err := client.GetAllExecutors("spark-123")
 		assert.Error(tt, err)
@@ -149,7 +149,7 @@ func TestGetAllExecutors(t *testing.T) {
 		m := mock_transport.NewMockClient(ctrl)
 		m.EXPECT().Get("api/v1/applications/spark-123/allexecutors").Return(getExecutorsResponse(), nil).Times(1)
 
-		client := &client{DriverClient, m}
+		client := &driver{&client{m}}
 
 		res, err := client.GetAllExecutors("spark-123")
 		assert.NoError(tt, err)

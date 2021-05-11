@@ -151,8 +151,8 @@ func (m manager) GetApplicationInfo(applicationID string, metricsAggregatorState
 
 func (m manager) getWorkloadType(applicationID string) WorkloadType {
 	// Streaming statistics endpoint is only available on running driver
-	if m.client.GetClientType() == sparkapiclient.DriverClient {
-		_, err := m.client.GetStreamingStatistics(applicationID)
+	if dc, ok := m.client.(sparkapiclient.DriverClient); ok {
+		_, err := dc.GetStreamingStatistics(applicationID)
 		if err == nil {
 			return SparkStreaming
 		}
