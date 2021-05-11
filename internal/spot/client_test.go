@@ -28,7 +28,7 @@ func TestClient(t *testing.T) {
 	t.Run("SavesApplication", func(t *testing.T) {
 		app := &v1alpha1.SparkApplication{
 			ObjectMeta: metav1.ObjectMeta{
-				ResourceVersion: "1",
+				ResourceVersion: "3",
 				Name:            "Test-arnar-app",
 			},
 			Spec: v1alpha1.SparkApplicationSpec{
@@ -42,6 +42,8 @@ func TestClient(t *testing.T) {
 						Attempts: []v1alpha1.Attempt{
 							{
 								StartTimeEpoch: time.Now().Unix(),
+								AppSparkVersion: "2.9.9",
+								LastUpdatedEpoch: time.Now().Add(30 * time.Second).Unix(),
 							},
 						},
 						TotalInputBytes: 10,
@@ -49,11 +51,13 @@ func TestClient(t *testing.T) {
 					Driver: v1alpha1.Pod{
 						Name:      "arnar-test-driver",
 						Namespace: "spark-test-jobs",
+						CreationTimestamp: metav1.Now(),
 					},
 					Executors: []v1alpha1.Pod{
 						{
 							Name:      "arnar-test-executor-1",
 							Namespace: "spark-test-jobs",
+							CreationTimestamp: metav1.Now(),
 						},
 					},
 				},
