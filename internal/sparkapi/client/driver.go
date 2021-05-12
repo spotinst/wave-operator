@@ -25,7 +25,7 @@ type driver struct {
 
 func NewDriverPodClient(pod *corev1.Pod, clientSet kubernetes.Interface) DriverClient {
 	//tc := transport.NewProxyClient(transport.Pod, pod.Name, pod.Namespace, driverPort, clientSet)
-	tc := transport.NewHTTPClientTransport(pod.Name, pod.Namespace, driverPort)
+	tc := transport.NewHTTPClientTransport(pod.Status.PodIP, driverPort)
 	c := &driver{
 		client: &client{
 			transportClient: tc,

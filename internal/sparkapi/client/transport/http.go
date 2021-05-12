@@ -3,26 +3,25 @@ package transport
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 )
 
 type httpClientTransport struct {
-	name      string
-	namespace string
-	port      string
+	ip   string
+	port string
 }
 
-func NewHTTPClientTransport(name string, namespace string, port string) Client {
+func NewHTTPClientTransport(ip string, port string) Client {
 	return &httpClientTransport{
-		name:      name,
-		namespace: namespace,
-		port:      port,
+		port: port,
+		ip:   ip,
 	}
 }
 
 func (h httpClientTransport) Get(path string) ([]byte, error) {
-	pathURL, err := url.Parse(fmt.Sprintf("http://%s.%s:%s/%s", h.name, h.namespace, h.port, path))
+	pathURL, err := url.Parse(fmt.Sprintf("http://%s/%s", net.JoinHostPort(h.ip, h.port), path))
 	if err != nil {
 		return nil, err
 	}
