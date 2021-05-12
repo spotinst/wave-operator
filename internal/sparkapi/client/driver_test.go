@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -30,6 +31,53 @@ func TestDriverMetrics(t *testing.T) {
 		assert.Contains(tt, metrics.Counters, "test-app-id.driver.LiveListenerBus.numEventsPosted")
 		assert.Equal(tt, int64(3720), metrics.Counters["test-app-id.driver.LiveListenerBus.numEventsPosted"].Count)
 	})
+	t.Run("returnsEmptyMetricsObjectOnError", func(tt *testing.T) {
+		m := mock_transport.NewMockClient(ctrl)
+		m.EXPECT().Get("metrics/json").Return(nil, errors.New("failed-to-get-metrics")).Times(1)
+
+		client := &driver{&client{m}}
+		metrics, err := client.GetMetrics()
+		require.Error(tt, err)
+		assert.NotNil(tt, metrics)
+
+		assert.Empty(tt, metrics.Gauges)
+		assert.Empty(tt, metrics.Counters)
+	})
+}
+
+func TestDriverStreamingStatistics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	t.Run("whenSuccessful", func(tt *testing.T) {
+		m := mock_transport.NewMockClient(ctrl)
+		m.EXPECT().Get("api/v1/applications/spark-123/streaming/statistics").Return(getStreamingStatisticsResponse(), nil).Times(1)
+
+		client := &driver{&client{m}}
+		stats, err := client.GetStreamingStatistics("spark-123")
+		require.NoError(tt, err)
+		assert.NotNil(tt, stats)
+
+		assert.Equal(tt, "10/10/2020", stats.StartTime)
+		assert.Equal(tt, int64(999), stats.BatchDuration)
+		assert.Equal(tt, int64(666), stats.AvgProcessingTime)
+	})
+	t.Run("whenError", func(tt *testing.T) {
+		m := mock_transport.NewMockClient(ctrl)
+		m.EXPECT().Get("api/v1/applications/spark-123/streaming/statistics").Return(nil, errors.New("streaming-statistics-err")).Times(1)
+
+		client := &driver{&client{m}}
+		stats, err := client.GetStreamingStatistics("spark-123")
+		require.Error(tt, err)
+		assert.Nil(tt, stats)
+	})
+}
+
+func getStreamingStatisticsResponse() []byte {
+	return []byte(`{
+	"startTime": "10/10/2020",
+	"batchDuration": 999,	
+	"avgProcessingTime": 666
+}`)
 }
 
 func getMetricsResponse() []byte {

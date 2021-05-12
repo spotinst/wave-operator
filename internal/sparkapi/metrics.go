@@ -249,7 +249,7 @@ func (a *applicationCollector) Collect(metrics chan<- prometheus.Metric) {
 		fmt.Printf("%s - %d", name, value.Count)
 	}
 
-	for name, value := range a.app.Metrics.Gauges{
+	for name, value := range a.app.Metrics.Gauges {
 		fmt.Printf("%s - %d", name, value.Value)
 	}
 

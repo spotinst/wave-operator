@@ -71,7 +71,7 @@ generate: $(GOBIN)/mockgen controller-gen  ## Generate code
 	$(GO) generate ./...
 
 
-docker-build: test version ## Build the operator docker image
+docker-build: version ## Build the operator docker image
 	docker build . -t ${OPERATOR_IMG_VERSION} -t ${OPERATOR_IMG}
 
 docker-push:  ## Push the docker image
