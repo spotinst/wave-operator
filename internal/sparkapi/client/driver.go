@@ -24,7 +24,8 @@ type driver struct {
 }
 
 func NewDriverPodClient(pod *corev1.Pod, clientSet kubernetes.Interface) DriverClient {
-	tc := transport.NewProxyClient(transport.Pod, pod.Name, pod.Namespace, driverPort, clientSet)
+	//tc := transport.NewProxyClient(transport.Pod, pod.Name, pod.Namespace, driverPort, clientSet)
+	tc := transport.NewHTTPClientTransport(pod.Name, pod.Namespace, driverPort)
 	c := &driver{
 		client: &client{
 			transportClient: tc,
@@ -51,7 +52,7 @@ func (dc *driver) GetStreamingStatistics(applicationID string) (*StreamingStatis
 }
 
 func (dc *driver) GetMetrics() (Metrics, error) {
-	resp, err := dc.transportClient.Get("metrics/json")
+	resp, err := dc.transportClient.Get("metrics/json/")
 	if err != nil {
 		return Metrics{}, err
 	}

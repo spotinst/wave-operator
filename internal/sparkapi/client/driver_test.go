@@ -15,7 +15,7 @@ func TestDriverMetrics(t *testing.T) {
 	defer ctrl.Finish()
 	t.Run("whenSuccessful", func(tt *testing.T) {
 		m := mock_transport.NewMockClient(ctrl)
-		m.EXPECT().Get("metrics/json").Return(getMetricsResponse(), nil).Times(1)
+		m.EXPECT().Get("metrics/json/").Return(getMetricsResponse(), nil).Times(1)
 
 		client := &driver{&client{m}}
 		metrics, err := client.GetMetrics()
@@ -33,7 +33,7 @@ func TestDriverMetrics(t *testing.T) {
 	})
 	t.Run("returnsEmptyMetricsObjectOnError", func(tt *testing.T) {
 		m := mock_transport.NewMockClient(ctrl)
-		m.EXPECT().Get("metrics/json").Return(nil, errors.New("failed-to-get-metrics")).Times(1)
+		m.EXPECT().Get("metrics/json/").Return(nil, errors.New("failed-to-get-metrics")).Times(1)
 
 		client := &driver{&client{m}}
 		metrics, err := client.GetMetrics()

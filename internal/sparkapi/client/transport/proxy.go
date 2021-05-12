@@ -3,13 +3,10 @@ package transport
 import (
 	"context"
 	"fmt"
+
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 )
-
-type Client interface {
-	Get(path string) ([]byte, error)
-}
 
 type ProxyResource string
 
