@@ -126,6 +126,43 @@ func TestMutateNonSparkCM(t *testing.T) {
 	assert.True(t, r.Allowed)
 }
 
+func TestMutateNonSparkDriverCM(t *testing.T) {
+
+	cm := sparkConfigMap
+
+	testFunc := func(ownerPod *corev1.Pod) {
+		clientSet := k8sfake.NewSimpleClientset(ownerPod)
+		req := getAdmissionRequest(t, cm)
+		r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
+		assert.NoError(t, err)
+		assert.NotNil(t, r)
+		assert.Equal(t, cm.UID, r.UID)
+		assert.Nil(t, r.PatchType)
+		assert.Nil(t, r.Patch)
+		assert.True(t, r.Allowed)
+
+	}
+
+	t.Run("whenExecutorOwnerPod", func(tt *testing.T) {
+		ownerPod := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
+		ownerPod.Labels[SparkRoleLabel] = SparkRoleExecutorValue
+		testFunc(ownerPod)
+	})
+
+	t.Run("whenNotSparkOwnerPod", func(tt *testing.T) {
+		ownerPod := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
+		delete(ownerPod.Labels, SparkRoleLabel)
+		testFunc(ownerPod)
+	})
+
+	t.Run("whenOwnerPodLabelsNil", func(tt *testing.T) {
+		ownerPod := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
+		ownerPod.Labels = nil
+		testFunc(ownerPod)
+	})
+
+}
+
 func TestMutateBadSparkCM(t *testing.T) {
 	cm := badSparkConfigMap
 	driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")

@@ -3,7 +3,6 @@ package admission
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/magiconair/properties"
@@ -49,18 +48,10 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 		Allowed: true,
 	}
 
-	// check to make sure it's a spark configmap
-	// "[namespace]-[spark-id]-driver-conf-map."
-	if !strings.HasSuffix(sourceObj.Name, "-driver-conf-map") {
-		return resp, nil
-	}
-	// XX don't check this. for spark-operator, no namespace prefix
-	// if !strings.HasPrefix(sourceObj.Name, sourceObj.Namespace) {
-	// 	return resp, nil
-	// }
 	if len(sourceObj.ObjectMeta.OwnerReferences) == 0 {
 		return resp, nil
 	}
+
 	if sourceObj.Data["spark.properties"] == "" {
 		return resp, nil
 	}
@@ -72,7 +63,12 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 	}
 
 	log.Info("Got config map owner pod",
-		"name", ownerPod.Name, "namespace", ownerPod.Namespace, "annotations", ownerPod.Annotations)
+		"name", ownerPod.Name, "namespace", ownerPod.Namespace, "labels", ownerPod.Labels, "annotations", ownerPod.Annotations)
+
+	if ownerPod.Labels[SparkRoleLabel] != SparkRoleDriverValue {
+		log.Info("Not a driver config map, will not mutate config map")
+		return resp, nil
+	}
 
 	if !config.IsEventLogSyncEnabled(ownerPod.Annotations) {
 		log.Info("Event log sync not enabled, will not mutate config map")
@@ -93,16 +89,26 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 	modObj := sourceObj.DeepCopy()
 	log.Info("constructing patch", "owner", sourceObj.OwnerReferences[0].Name)
 	propertyString := modObj.Data["spark.properties"]
+
 	props, err := properties.LoadString(propertyString)
 	if err != nil {
-		log.Error(err, "unparseable spark property data in configmap")
+		log.Error(err, "un-parsable spark property data in configmap")
 		return resp, nil
 	}
+
 	if props == nil {
 		props = properties.NewProperties()
 	}
-	props.Set("spark.eventLog.dir", "file:///var/log/spark") //storageInfo.Path)
-	props.Set("spark.eventLog.enabled", "true")
+
+	if _, _, err := props.Set("spark.eventLog.dir", "file:///var/log/spark"); err != nil {
+		log.Error(err, "could not set property")
+		return resp, nil
+	}
+
+	if _, _, err := props.Set("spark.eventLog.enabled", "true"); err != nil {
+		log.Error(err, "could not set property")
+		return resp, nil
+	}
 
 	modObj.Data["spark.properties"] = props.String()
 
@@ -111,6 +117,7 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 		log.Error(err, "unable to generate patch, continuing")
 		return resp, nil
 	}
+
 	log.Info("patching configmap", "patch", string(patch))
 
 	resp.Patch = patch
