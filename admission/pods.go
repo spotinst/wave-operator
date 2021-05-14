@@ -31,6 +31,11 @@ var (
 								Operator: corev1.NodeSelectorOpIn,
 								Values:   []string{"od"},
 							},
+							{
+								Key:      "node.kubernetes.io/instance-type",
+								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{"c5d.xlarge", "r5.2xlarge"},
+							},
 						},
 					},
 				},
