@@ -20,6 +20,7 @@ const (
 )
 
 var (
+	// TODO Refactor this to be more elegant - if node selector terms already present, add to them
 	onDemandAffinity = &corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
