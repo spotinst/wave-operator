@@ -303,9 +303,7 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 	}
 
 	// Make sure we have an application name
-	if deepCopy.Spec.ApplicationName == "" {
-		deepCopy.Spec.ApplicationName = pod.Name
-	}
+	setSparkApplicationName(deepCopy, pod, log)
 
 	err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
 	if err != nil {
@@ -457,7 +455,6 @@ func newPodCR(pod *corev1.Pod, existingPodCR *v1alpha1.Pod, log logr.Logger) v1a
 	podCR.CreationTimestamp = pod.CreationTimestamp
 	podCR.DeletionTimestamp = pod.DeletionTimestamp
 	podCR.Labels = pod.Labels
-	podCR.Annotations = pod.Annotations
 	podCR.StateHistory = getUpdatedPodStateHistory(pod, existingPodCR, log)
 
 	if podCR.Statuses == nil {
@@ -466,10 +463,6 @@ func newPodCR(pod *corev1.Pod, existingPodCR *v1alpha1.Pod, log logr.Logger) v1a
 
 	if podCR.Labels == nil {
 		podCR.Labels = make(map[string]string)
-	}
-
-	if podCR.Annotations == nil {
-		podCR.Annotations = make(map[string]string)
 	}
 
 	return podCR
@@ -574,25 +567,7 @@ func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Int
 
 func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo, log logr.Logger) {
 
-	//spark.app.name or driver pod name if the Spark API wasn't available
 	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
-
-	// check if the `wave.spot.io/application-name` label has been set
-	if applicationNameAnnotation, ok := deepCopy.Status.Data.Driver.Annotations[waveApplicationNameAnnotation]; ok {
-		deepCopy.Spec.ApplicationName = applicationNameAnnotation
-	} else if deepCopy.Spec.Heritage == v1alpha1.SparkHeritageOperator {
-		//if sparkoperator and the sparkoperator.sparkapplication, will set the CR name
-		if operatorAppNameLabel, ok := deepCopy.Status.Data.Driver.Labels[sparkOperatorAppNameLabel]; ok {
-			deepCopy.Spec.ApplicationName = operatorAppNameLabel
-		}
-	}
-
-	//set "wave.spot.io/application-name" label as an application name
-	if deepCopy.Annotations == nil {
-		deepCopy.Annotations = make(map[string]string)
-	}
-
-	deepCopy.Annotations[waveApplicationNameAnnotation] = deepCopy.Spec.ApplicationName
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
 
 	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime += sparkApiInfo.TotalNewExecutorCpuTime
@@ -658,6 +633,31 @@ func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	if sparkApiInfo.WorkloadType != "" {
 		setWorkloadType(deepCopy, sparkApiInfo.WorkloadType)
 	}
+}
+
+func setSparkApplicationName(sparkApp *v1alpha1.SparkApplication, driverPod *corev1.Pod, log logr.Logger) {
+	log.Info("Setting spark application name")
+
+	// check if the `wave.spot.io/application-name` label has been set
+	if applicationNameAnnotation, ok := driverPod.Annotations[waveApplicationNameAnnotation]; ok {
+		sparkApp.Spec.ApplicationName = applicationNameAnnotation
+	} else if sparkApp.Spec.Heritage == v1alpha1.SparkHeritageOperator {
+		//if this is the sparkoperator.sparkapplication, will set the CR spec name
+		if operatorAppNameLabel, ok := sparkApp.Status.Data.Driver.Labels[sparkOperatorAppNameLabel]; ok {
+			sparkApp.Spec.ApplicationName = operatorAppNameLabel
+		}
+	}
+
+	if sparkApp.Spec.ApplicationName == "" {
+		sparkApp.Spec.ApplicationName = driverPod.Name
+	}
+
+	//set "wave.spot.io/application-name" annotation as an application name
+	if sparkApp.Annotations == nil {
+		sparkApp.Annotations = make(map[string]string)
+	}
+
+	sparkApp.Annotations[waveApplicationNameAnnotation] = sparkApp.Spec.ApplicationName
 }
 
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {

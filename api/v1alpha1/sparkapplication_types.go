@@ -175,8 +175,6 @@ type Pod struct {
 	DeletionTimestamp *metav1.Time `json:"deletionTimestamp,omitempty"`
 	//the pod's labels
 	Labels map[string]string `json:"labels"`
-	//the pod's annotations
-	Annotations map[string]string `json:"annotations"`
 	//the pod's state history
 	StateHistory []PodStateHistoryEntry `json:"stateHistory"`
 }
