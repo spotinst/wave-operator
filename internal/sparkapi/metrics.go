@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -215,10 +216,7 @@ type applicationCollector struct {
 }
 
 func newApplicationCollector(info *ApplicationInfo, timeProvider func() time.Time) *applicationCollector {
-	applicationLabels := prometheus.Labels{
-		"application_name": info.ApplicationName,
-		"application_id":   info.ID,
-	}
+	applicationLabels := label(info)
 
 	return &applicationCollector{
 		app:          info,
@@ -235,10 +233,35 @@ func newApplicationCollector(info *ApplicationInfo, timeProvider func() time.Tim
 	}
 }
 
+func label(info *ApplicationInfo) prometheus.Labels {
+	return prometheus.Labels{
+		"application_name": info.ApplicationName,
+		"application_id":   info.ID,
+	}
+}
+
 func (a *applicationCollector) Describe(descs chan<- *prometheus.Desc) {
 	descs <- a.info
 	descs <- a.durationSeconds
+
+	for name, _:= range a.app.Metrics.Counters {
+		descs <- a.describe(name)
+	}
+
+	for name, _ := range a.app.Metrics.Gauges {
+		descs <- a.describe(name)
+	}
+
 	a.executors.Describe(descs)
+}
+
+func (a *applicationCollector) describe(name string) *prometheus.Desc {
+	parts := strings.Split(name, ".")
+	parts = parts[2:]
+	metricName := fmt.Sprintf("spark_%s", strings.Join(parts, "_"))
+	// TODO: Remove the metricName from the help field when an issue upstream has been fixed
+	// https://github.com/prometheus/common/issues/299
+	return prometheus.NewDesc(metricName, metricName, nil, label(a.app))
 }
 
 func (a *applicationCollector) Collect(metrics chan<- prometheus.Metric) {
@@ -246,11 +269,11 @@ func (a *applicationCollector) Collect(metrics chan<- prometheus.Metric) {
 	metrics <- prometheus.MustNewConstMetric(a.durationSeconds, prometheus.GaugeValue, float64(a.calculateDuration()))
 
 	for name, value := range a.app.Metrics.Counters {
-		fmt.Printf("%s - %d", name, value.Count)
+		metrics <- prometheus.MustNewConstMetric(a.describe(name), prometheus.CounterValue, float64(value.Count))
 	}
 
 	for name, value := range a.app.Metrics.Gauges {
-		fmt.Printf("%s - %d", name, value.Value)
+		metrics <- prometheus.MustNewConstMetric(a.describe(name), prometheus.GaugeValue, float64(value.Value))
 	}
 
 	a.executors.Collect(a.app.Executors, metrics)
