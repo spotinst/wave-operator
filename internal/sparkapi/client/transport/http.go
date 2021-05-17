@@ -9,19 +9,19 @@ import (
 )
 
 type httpClientTransport struct {
-	ip   string
+	host string
 	port string
 }
 
-func NewHTTPClientTransport(ip string, port string) Client {
+func NewHTTPClientTransport(host string, port string) Client {
 	return &httpClientTransport{
 		port: port,
-		ip:   ip,
+		host: host,
 	}
 }
 
 func (h httpClientTransport) Get(path string) ([]byte, error) {
-	pathURL, err := url.Parse(fmt.Sprintf("http://%s/%s", net.JoinHostPort(h.ip, h.port), path))
+	pathURL, err := url.Parse(fmt.Sprintf("http://%s/%s", net.JoinHostPort(h.host, h.port), path))
 	if err != nil {
 		return nil, err
 	}
