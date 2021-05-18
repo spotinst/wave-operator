@@ -196,6 +196,21 @@ func TestMutateSparkCM(t *testing.T) {
 	assert.True(t, matched)
 }
 
+func TestMutateConfiguresMetrics(t *testing.T) {
+	cm := sparkConfigMap
+	driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, false, "")
+	clientSet := k8sfake.NewSimpleClientset(driver)
+	req := getAdmissionRequest(t, cm)
+	r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
+	assert.NoError(t, err)
+	assert.NotNil(t, r)
+	assert.Equal(t, cm.UID, r.UID)
+	assert.Equal(t, &jsonPathType, r.PatchType)
+	assert.NotNil(t, r.Patch)
+	assert.True(t, r.Allowed)
+	assert.Regexp(t, `spark.metrics.appStatusSource.enabled ?= ?true`, string(r.Patch))
+}
+
 func TestMutateSparkBadStorageCM(t *testing.T) {
 
 	testFunc := func(provider cloudstorage.CloudStorageProvider) {
