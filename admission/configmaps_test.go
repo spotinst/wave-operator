@@ -252,16 +252,12 @@ func TestEventLogSyncConfiguration(t *testing.T) {
 		matchedDir, _ := regexp.MatchString(`spark.eventLog.dir ?= ?file:///var/log/spark`, string(r.Patch))
 		matchedEnabled, _ := regexp.MatchString(`spark.eventLog.enabled ?= ?true`, string(r.Patch))
 
-		if tc.shouldAddEventLogSync {
+		assert.Equal(tt, tc.shouldAddEventLogSync, matchedDir)
+		assert.Equal(tt, tc.shouldAddEventLogSync, matchedEnabled)
+
+		if tc.driverPodPresent {
 			assert.Equal(tt, &jsonPathType, r.PatchType)
 			assert.NotNil(tt, r.Patch)
-			assert.True(tt, matchedDir)
-			assert.True(tt, matchedEnabled)
-		} else {
-			assert.Nil(tt, r.PatchType)
-			assert.Nil(tt, r.Patch)
-			assert.False(tt, matchedDir)
-			assert.False(tt, matchedEnabled)
 		}
 	}
 
