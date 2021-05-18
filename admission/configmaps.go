@@ -100,15 +100,13 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 		props = properties.NewProperties()
 	}
 
-	if _, _, err := props.Set("spark.eventLog.dir", "file:///var/log/spark"); err != nil {
-		log.Error(err, "could not set property")
-		return resp, nil
-	}
+	overrideProps := properties.LoadMap(map[string]string{
+		"spark.eventLog.dir":                    "file:///var/log/spark",
+		"spark.eventLog.enabled":                "true",
+		"spark.metrics.appStatusSource.enabled": "true",
+	})
 
-	if _, _, err := props.Set("spark.eventLog.enabled", "true"); err != nil {
-		log.Error(err, "could not set property")
-		return resp, nil
-	}
+	props.Merge(overrideProps)
 
 	modObj.Data["spark.properties"] = props.String()
 
