@@ -3,9 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -40,9 +38,8 @@ const (
 	waveKindLabel          = "wave.spot.io/kind"
 	waveApplicationIDLabel = "wave.spot.io/application-id"
 
-	stageMetricsAggregationAnnotation           = "wave.spot.io/stageMetricsAggregation"
-	workloadTypeAnnotation                      = "wave.spot.io/workloadType"
-	sparkApiCommunicationAttemptCountAnnotation = "wave.spot.io/sparkApiAttemptCount"
+	stageMetricsAggregationAnnotation = "wave.spot.io/stageMetricsAggregation"
+	workloadTypeAnnotation            = "wave.spot.io/workloadType"
 
 	requeueAfterTimeout                  = 10 * time.Second
 	podDeletionTimeout                   = 5 * time.Minute
@@ -55,10 +52,11 @@ const (
 // SparkPodReconciler reconciles Pod objects to discover Spark applications
 type SparkPodReconciler struct {
 	client.Client
-	ClientSet          kubernetes.Interface
-	getSparkApiManager SparkApiManagerGetter
-	Log                logr.Logger
-	Scheme             *runtime.Scheme
+	ClientSet              kubernetes.Interface
+	getSparkApiManager     SparkApiManagerGetter
+	Log                    logr.Logger
+	Scheme                 *runtime.Scheme
+	sparkApiAttemptCounter map[string]int
 }
 
 func NewSparkPodReconciler(
@@ -69,11 +67,12 @@ func NewSparkPodReconciler(
 	scheme *runtime.Scheme) *SparkPodReconciler {
 
 	return &SparkPodReconciler{
-		Client:             client,
-		ClientSet:          clientSet,
-		getSparkApiManager: sparkApiManagerGetter,
-		Log:                log,
-		Scheme:             scheme,
+		Client:                 client,
+		ClientSet:              clientSet,
+		getSparkApiManager:     sparkApiManagerGetter,
+		Log:                    log,
+		Scheme:                 scheme,
+		sparkApiAttemptCounter: make(map[string]int),
 	}
 }
 
@@ -217,20 +216,18 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				log.Info(fmt.Sprintf("Spark API error: %s", err.Error()))
 				// Requeue non-running driver (wait for history server to respond)
 				if p.Status.Phase != corev1.PodRunning {
-					shouldRequeue := true
-					sparkApiError := &sparkApiError{}
-					if errors.As(err, sparkApiError) {
-						if sparkApiError.attemptCount >= maxSparkApiCommunicationAttemptCount {
-							shouldRequeue = false
-						}
-					}
-					if shouldRequeue {
+					// Increment attempt counter
+					r.sparkApiAttemptCounter[sparkApplicationID]++
+					log.Info(fmt.Sprintf("Increment Spark API communication attempt counter, new value: %d", r.sparkApiAttemptCounter[sparkApplicationID]))
+					if r.sparkApiAttemptCounter[sparkApplicationID] < maxSparkApiCommunicationAttemptCount {
+						log.Info("Requeue non-running driver pod")
 						// Let's requeue after a set amount of time, don't want exponential backoff
-						log.Info("Will requeue non-running driver pod")
 						return ctrl.Result{
 							Requeue:      true,
 							RequeueAfter: requeueAfterTimeout,
 						}, nil
+					} else {
+						log.Info("Max Spark API communication attempts reached, will not requeue")
 					}
 				}
 			} else if sparkapi.IsApiNotAvailableError(err) {
@@ -240,6 +237,9 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				log.Error(err, "error handling driver pod")
 				return ctrl.Result{}, err
 			}
+		} else {
+			// Reset Spark API attempt counter
+			delete(r.sparkApiAttemptCounter, sparkApplicationID)
 		}
 
 		// Requeue running drivers
@@ -309,17 +309,12 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 		return fmt.Errorf("could not get stage metrics aggregation state, %w", err)
 	}
 
-	var sparkApiError sparkApiError
+	var sparkApiError error
 	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationID, stageMetricsAggregatorState, log)
 	if err != nil {
-		newAttemptCount := getSparkApiCommunicationAttemptCount(deepCopy, log) + 1
-		log.Info(fmt.Sprintf("Incrementing Spark API communication attempt count, new count: %d", newAttemptCount))
-		setSparkApiCommunicationAttemptCount(deepCopy, newAttemptCount)
-		sparkApiError = newSparkApiError(err, newAttemptCount)
+		sparkApiError = fmt.Errorf("could not get spark api application information, %w", err)
 	} else {
 		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo, log)
-		// Reset Spark API communication attempt count
-		setSparkApiCommunicationAttemptCount(deepCopy, 0)
 	}
 
 	// Make sure we have an application name
@@ -332,7 +327,7 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 		return fmt.Errorf("patch error, %w", err)
 	}
 
-	if sparkApiError.err != nil {
+	if sparkApiError != nil {
 		return sparkApiError
 	}
 
@@ -756,41 +751,4 @@ func setWorkloadType(cr *v1alpha1.SparkApplication, workloadType sparkapi.Worklo
 		cr.Annotations = make(map[string]string)
 	}
 	cr.Annotations[workloadTypeAnnotation] = string(workloadType)
-}
-
-func getSparkApiCommunicationAttemptCount(cr *v1alpha1.SparkApplication, log logr.Logger) int {
-	val := cr.Annotations[sparkApiCommunicationAttemptCountAnnotation]
-	if val == "" {
-		return 0
-	}
-	count, err := strconv.Atoi(val)
-	if err != nil {
-		log.Error(err, "could not get spark api communication attempt count from annotation")
-		return 0
-	}
-	return count
-}
-
-func setSparkApiCommunicationAttemptCount(cr *v1alpha1.SparkApplication, count int) {
-	if cr.Annotations == nil {
-		cr.Annotations = make(map[string]string)
-	}
-	cr.Annotations[sparkApiCommunicationAttemptCountAnnotation] = strconv.Itoa(count)
-}
-
-type sparkApiError struct {
-	err          error
-	attemptCount int
-}
-
-func newSparkApiError(err error, attemptCount int) sparkApiError {
-	return sparkApiError{err: err, attemptCount: attemptCount}
-}
-
-func (e sparkApiError) Error() string {
-	return fmt.Sprintf("spark api error: %s", e.err.Error())
-}
-
-func (e sparkApiError) Unwrap() error {
-	return e.err
 }
