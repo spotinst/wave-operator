@@ -46,7 +46,7 @@ const (
 
 	requeueAfterTimeout                  = 10 * time.Second
 	podDeletionTimeout                   = 5 * time.Minute
-	maxSparkApiCommunicationAttemptCount = 10
+	maxSparkApiCommunicationAttemptCount = 20
 )
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;update;patch
@@ -214,22 +214,24 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			// Check for expected Spark API communication errors
 			if sparkapi.IsNotFoundError(err) ||
 				sparkapi.IsServiceUnavailableError(err) {
-				shouldRequeue := true
-				sparkApiError := &sparkApiError{}
-				if errors.As(err, sparkApiError) {
-					if p.Status.Phase != corev1.PodRunning && sparkApiError.attemptCount >= maxSparkApiCommunicationAttemptCount {
-						shouldRequeue = false
+				log.Info(fmt.Sprintf("Spark API error: %s", err.Error()))
+				// Requeue non-running driver (wait for history server to respond)
+				if p.Status.Phase != corev1.PodRunning {
+					shouldRequeue := true
+					sparkApiError := &sparkApiError{}
+					if errors.As(err, sparkApiError) {
+						if sparkApiError.attemptCount >= maxSparkApiCommunicationAttemptCount {
+							shouldRequeue = false
+						}
 					}
-				}
-				if shouldRequeue {
-					// Let's requeue after a set amount of time, don't want exponential backoff
-					log.Info(fmt.Sprintf("Spark API error, will requeue: %s", err.Error()))
-					return ctrl.Result{
-						Requeue:      true,
-						RequeueAfter: requeueAfterTimeout,
-					}, nil
-				} else {
-					log.Info(fmt.Sprintf("Spark API error, will not requeue: %s", err.Error()))
+					if shouldRequeue {
+						// Let's requeue after a set amount of time, don't want exponential backoff
+						log.Info("Will requeue non-running driver pod")
+						return ctrl.Result{
+							Requeue:      true,
+							RequeueAfter: requeueAfterTimeout,
+						}, nil
+					}
 				}
 			} else if sparkapi.IsApiNotAvailableError(err) {
 				// Spark API is not available, don't want to requeue
@@ -310,14 +312,14 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 	var sparkApiError sparkApiError
 	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationID, stageMetricsAggregatorState, log)
 	if err != nil {
-		log.Info("Incrementing Spark API communication attempt count")
 		newAttemptCount := getSparkApiCommunicationAttemptCount(deepCopy, log) + 1
-		setSparkApiCommunicationAttemptCount(deepCopy, newAttemptCount, log)
+		log.Info(fmt.Sprintf("Incrementing Spark API communication attempt count, new count: %d", newAttemptCount))
+		setSparkApiCommunicationAttemptCount(deepCopy, newAttemptCount)
 		sparkApiError = newSparkApiError(err, newAttemptCount)
 	} else {
 		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo, log)
-		log.Info("Resetting Spark API communication attempt count")
-		setSparkApiCommunicationAttemptCount(deepCopy, 0, log)
+		// Reset Spark API communication attempt count
+		setSparkApiCommunicationAttemptCount(deepCopy, 0)
 	}
 
 	// Make sure we have an application name
@@ -769,11 +771,10 @@ func getSparkApiCommunicationAttemptCount(cr *v1alpha1.SparkApplication, log log
 	return count
 }
 
-func setSparkApiCommunicationAttemptCount(cr *v1alpha1.SparkApplication, count int, log logr.Logger) {
+func setSparkApiCommunicationAttemptCount(cr *v1alpha1.SparkApplication, count int) {
 	if cr.Annotations == nil {
 		cr.Annotations = make(map[string]string)
 	}
-	log.Info(fmt.Sprintf("Setting Spark API communication attempt count: %d", count))
 	cr.Annotations[sparkApiCommunicationAttemptCountAnnotation] = strconv.Itoa(count)
 }
 
