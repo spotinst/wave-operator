@@ -969,12 +969,12 @@ func getExecutorsResponse() []sparkapiclient.Executor {
 func getMetricsResponse() sparkapiclient.Metrics {
 	return sparkapiclient.Metrics{
 		Gauges: map[string]sparkapiclient.GaugeValue{
-			"test-gauge": {
+			"test-gauge.driver.BlockManager.maxMem": {
 				Value: int64(200),
 			},
 		},
 		Counters: map[string]sparkapiclient.CounterValue{
-			"test-counter": {
+			"test-counter.driver.LiveListener.MaxSurge": {
 				Count: int64(2000),
 			},
 		},

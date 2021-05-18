@@ -244,11 +244,11 @@ func (a *applicationCollector) Describe(descs chan<- *prometheus.Desc) {
 	descs <- a.info
 	descs <- a.durationSeconds
 
-	for name, _:= range a.app.Metrics.Counters {
+	for name := range a.app.Metrics.Counters {
 		descs <- a.describe(name)
 	}
 
-	for name, _ := range a.app.Metrics.Gauges {
+	for name := range a.app.Metrics.Gauges {
 		descs <- a.describe(name)
 	}
 
