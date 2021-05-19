@@ -218,7 +218,8 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				if p.Status.Phase != corev1.PodRunning {
 					// Increment attempt counter
 					r.sparkApiAttemptCounter[sparkApplicationID]++
-					log.Info("Increment Spark API communication attempt counter", "newAttemptCount", r.sparkApiAttemptCounter[sparkApplicationID])
+					log.Info("Increment Spark API communication attempt counter",
+						"newAttemptCount", r.sparkApiAttemptCounter[sparkApplicationID])
 					if r.sparkApiAttemptCounter[sparkApplicationID] < maxSparkApiCommunicationAttemptCount {
 						log.Info("Requeue non-running driver pod")
 						// Let's requeue after a set amount of time, don't want exponential backoff
