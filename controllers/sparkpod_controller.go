@@ -88,7 +88,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if !k8serrors.IsNotFound(err) {
 			log.Error(err, "cannot get pod")
 		}
-		return ctrl.Result{}, err
+		return ctrl.Result{}, nil
 	}
 
 	sparkApplicationID, ok := p.Labels[SparkAppLabel]
