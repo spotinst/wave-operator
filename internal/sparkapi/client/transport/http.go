@@ -24,6 +24,12 @@ func WithTimeout(duration time.Duration) HttpClientTransportOpt {
 	}
 }
 
+func WithTransport(transport http.RoundTripper) HttpClientTransportOpt {
+	return func(t *HttpClientTransport) {
+		t.client.Transport = transport
+	}
+}
+
 func NewHTTPClientTransport(host string, port string, opts ...HttpClientTransportOpt) *HttpClientTransport {
 	const defaultTimeout = 5 * time.Second
 
