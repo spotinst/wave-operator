@@ -189,10 +189,7 @@ func TestMutateSparkCM(t *testing.T) {
 	assert.Equal(t, &jsonPathType, r.PatchType)
 	assert.NotNil(t, r.Patch)
 	assert.True(t, r.Allowed)
-	matched := false
-	matched, _ = regexp.MatchString(`spark.eventLog.dir ?= ?file:///var/log/spark`, string(r.Patch))
-	assert.True(t, matched)
-	matched, _ = regexp.MatchString(`spark.eventLog.enabled ?= ?true`, string(r.Patch))
+	matched, _ := regexp.MatchString(`spark.eventLog.enabled ?= ?true`, string(r.Patch))
 	assert.True(t, matched)
 }
 
@@ -210,32 +207,6 @@ func TestMutateConfiguresMetrics(t *testing.T) {
 	assert.True(t, r.Allowed)
 	assert.Regexp(t, `spark.metrics.appStatusSource.enabled ?= ?true`, string(r.Patch))
 }
-
-//
-//func TestMutateSparkBadStorageCM(t *testing.T) {
-//
-//	testFunc := func(tt *testing.T, provider cloudstorage.CloudStorageProvider) {
-//		cm := sparkConfigMap
-//		driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
-//		clientSet := k8sfake.NewSimpleClientset(driver)
-//		req := getAdmissionRequest(tt, cm)
-//		r, err := NewConfigMapMutator(log, clientSet, provider).Mutate(req)
-//		assert.NoError(tt, err)
-//		assert.NotNil(tt, r)
-//		assert.Equal(t, cm.UID, r.UID)
-//		assert.Nil(tt, r.PatchType)
-//		assert.Nil(tt, r.Patch)
-//		assert.True(tt, r.Allowed)
-//	}
-//
-//	t.Run("whenFailedStorageProvider", func(tt *testing.T) {
-//		testFunc(tt, &util.FailedStorageProvider{})
-//	})
-//
-//	t.Run("testNilStorageProvider", func(tt *testing.T) {
-//		testFunc(tt, &util.NilStorageProvider{})
-//	})
-//}
 
 func TestEventLogSyncConfiguration(t *testing.T) {
 
@@ -270,10 +241,8 @@ func TestEventLogSyncConfiguration(t *testing.T) {
 		assert.Equal(tt, cm.UID, r.UID)
 		assert.True(tt, r.Allowed)
 
-		matchedDir, _ := regexp.MatchString(`spark.eventLog.dir ?= ?file:///var/log/spark`, string(r.Patch))
 		matchedEnabled, _ := regexp.MatchString(`spark.eventLog.enabled ?= ?true`, string(r.Patch))
 
-		assert.Equal(tt, tc.shouldAddEventLogSync, matchedDir)
 		assert.Equal(tt, tc.shouldAddEventLogSync, matchedEnabled)
 
 		if tc.driverPodPresent {

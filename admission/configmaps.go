@@ -80,8 +80,7 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 		if err != nil || storageInfo == nil {
 			log.Error(err, "Not configuring event log sync, error getting storage info")
 		} else {
-			log.Info("Configuring storage for event log", "name", storageInfo.Name, "provider", storageInfo.Provider, "path", storageInfo.Path)
-			propOverride["spark.eventLog.dir"] = "file:///var/log/spark"
+			log.Info("Storage info present will enable event log", "name", storageInfo.Name, "provider", storageInfo.Provider, "path", storageInfo.Path)
 			propOverride["spark.eventLog.enabled"] = "true"
 		}
 	}
