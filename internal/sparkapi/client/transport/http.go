@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -49,7 +50,15 @@ func (h HttpClientTransport) Get(path string) ([]byte, error) {
 
 	resp, err := h.client.Get(pathURL.String())
 	if err != nil {
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			return nil, ServiceUnavailableError{err}
+		}
 		return nil, err
+	}
+
+	if resp.StatusCode == 404 {
+		return nil, NotFoundError{fmt.Errorf("not found %s", pathURL)}
 	}
 
 	return ioutil.ReadAll(resp.Body)
