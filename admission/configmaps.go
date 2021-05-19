@@ -75,20 +75,15 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 	}
 
 	if config.IsEventLogSyncEnabled(ownerPod.Annotations) {
-		log.Info("Event log sync enabled, configuring storage")
+		log.Info("Event log sync enabled, attempting to configuring storage")
 		storageInfo, err := m.provider.GetStorageInfo()
-		if err != nil {
-			log.Error(err, "cannot get storage configuration")
-			return resp, nil
+		if err != nil || storageInfo == nil {
+			log.Error(err, "Not configuring event log sync, error getting storage info")
+		} else {
+			log.Info("Configuring storage for event log", "name", storageInfo.Name, "provider", storageInfo.Provider, "path", storageInfo.Path)
+			propOverride["spark.eventLog.dir"] = "file:///var/log/spark"
+			propOverride["spark.eventLog.enabled"] = "true"
 		}
-
-		if storageInfo == nil {
-			log.Error(err, "storage information from provider is nil")
-			return resp, nil
-		}
-
-		propOverride["spark.eventLog.dir"] = "file:///var/log/spark"
-		propOverride["spark.eventLog.enabled"] = "true"
 	}
 
 	modObj := sourceObj.DeepCopy()
