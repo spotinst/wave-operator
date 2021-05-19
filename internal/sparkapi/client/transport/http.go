@@ -58,7 +58,7 @@ func (h HttpClientTransport) Get(path string) ([]byte, error) {
 	}
 
 	if resp.StatusCode == 404 {
-		return nil, NotFoundError{fmt.Errorf("not found %s", pathURL)}
+		return nil, NotFoundError{fmt.Errorf("%s", pathURL)}
 	}
 
 	return ioutil.ReadAll(resp.Body)

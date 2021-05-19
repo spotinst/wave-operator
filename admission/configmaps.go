@@ -75,7 +75,7 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 	}
 
 	if config.IsEventLogSyncEnabled(ownerPod.Annotations) {
-		log.Info("Event log sync enabled, attempting to configuring event log")
+		log.Info("Event log sync enabled, attempting to configure event log")
 		storageInfo, err := m.provider.GetStorageInfo()
 		if err != nil || storageInfo == nil {
 			log.Error(err, "Not configuring event log sync, error getting storage info")
