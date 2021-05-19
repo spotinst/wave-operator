@@ -76,9 +76,9 @@ func decorateError(err error, statusError *k8serrors.StatusError) error {
 	wrappedErr := fmt.Errorf("code: %d, reason: %s, causes: %s, %w", code, reason, causeMessages, err)
 
 	if k8serrors.IsNotFound(statusError) {
-		wrappedErr = newNotFoundError(wrappedErr)
+		wrappedErr = NewNotFoundError(wrappedErr)
 	} else if k8serrors.IsServiceUnavailable(statusError) {
-		wrappedErr = newServiceUnavailableError(wrappedErr)
+		wrappedErr = NewServiceUnavailableError(wrappedErr)
 	}
 
 	return wrappedErr
@@ -89,7 +89,7 @@ type NotFoundError struct {
 	err error
 }
 
-func newNotFoundError(err error) NotFoundError {
+func NewNotFoundError(err error) NotFoundError {
 	return NotFoundError{err: err}
 }
 
@@ -106,7 +106,7 @@ type ServiceUnavailableError struct {
 	err error
 }
 
-func newServiceUnavailableError(err error) ServiceUnavailableError {
+func NewServiceUnavailableError(err error) ServiceUnavailableError {
 	return ServiceUnavailableError{err: err}
 }
 

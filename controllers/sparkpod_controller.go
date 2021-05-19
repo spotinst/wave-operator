@@ -41,8 +41,9 @@ const (
 	stageMetricsAggregationAnnotation = "wave.spot.io/stageMetricsAggregation"
 	workloadTypeAnnotation            = "wave.spot.io/workloadType"
 
-	requeueAfterTimeout = 10 * time.Second
-	podDeletionTimeout  = 5 * time.Minute
+	requeueAfterTimeout                  = 10 * time.Second
+	podDeletionTimeout                   = 5 * time.Minute
+	maxSparkApiCommunicationAttemptCount = 20
 )
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;update;patch
@@ -51,10 +52,11 @@ const (
 // SparkPodReconciler reconciles Pod objects to discover Spark applications
 type SparkPodReconciler struct {
 	client.Client
-	ClientSet          kubernetes.Interface
-	getSparkApiManager SparkApiManagerGetter
-	Log                logr.Logger
-	Scheme             *runtime.Scheme
+	ClientSet              kubernetes.Interface
+	getSparkApiManager     SparkApiManagerGetter
+	Log                    logr.Logger
+	Scheme                 *runtime.Scheme
+	sparkApiAttemptCounter map[string]int
 }
 
 func NewSparkPodReconciler(
@@ -65,11 +67,12 @@ func NewSparkPodReconciler(
 	scheme *runtime.Scheme) *SparkPodReconciler {
 
 	return &SparkPodReconciler{
-		Client:             client,
-		ClientSet:          clientSet,
-		getSparkApiManager: sparkApiManagerGetter,
-		Log:                log,
-		Scheme:             scheme,
+		Client:                 client,
+		ClientSet:              clientSet,
+		getSparkApiManager:     sparkApiManagerGetter,
+		Log:                    log,
+		Scheme:                 scheme,
+		sparkApiAttemptCounter: make(map[string]int),
 	}
 }
 
@@ -85,7 +88,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if !k8serrors.IsNotFound(err) {
 			log.Error(err, "cannot get pod")
 		}
-		return ctrl.Result{}, err
+		return ctrl.Result{}, nil
 	}
 
 	sparkApplicationID, ok := p.Labels[SparkAppLabel]
@@ -210,12 +213,23 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			// Check for expected Spark API communication errors
 			if sparkapi.IsNotFoundError(err) ||
 				sparkapi.IsServiceUnavailableError(err) {
-				// Let's requeue after a set amount of time, don't want exponential backoff
-				log.Info(fmt.Sprintf("Spark API error, will requeue: %s", err.Error()))
-				return ctrl.Result{
-					Requeue:      true,
-					RequeueAfter: requeueAfterTimeout,
-				}, nil
+				log.Info(fmt.Sprintf("Spark API error: %s", err.Error()))
+				// Requeue non-running driver (wait for history server to respond)
+				if p.Status.Phase != corev1.PodRunning {
+					// Increment attempt counter
+					r.sparkApiAttemptCounter[sparkApplicationID]++
+					if r.sparkApiAttemptCounter[sparkApplicationID] < maxSparkApiCommunicationAttemptCount {
+						log.Info("Requeue non-running driver pod",
+							"sparkApiAttemptCount", r.sparkApiAttemptCounter[sparkApplicationID])
+						// Let's requeue after a set amount of time, don't want exponential backoff
+						return ctrl.Result{
+							Requeue:      true,
+							RequeueAfter: requeueAfterTimeout,
+						}, nil
+					} else {
+						log.Info("Max Spark API communication attempts reached, will not requeue")
+					}
+				}
 			} else if sparkapi.IsApiNotAvailableError(err) {
 				// Spark API is not available, don't want to requeue
 				log.Info(fmt.Sprintf("Spark API not available: %s", err.Error()))
@@ -223,6 +237,9 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				log.Error(err, "error handling driver pod")
 				return ctrl.Result{}, err
 			}
+		} else {
+			// Reset Spark API attempt counter
+			delete(r.sparkApiAttemptCounter, sparkApplicationID)
 		}
 
 		// Requeue running drivers
