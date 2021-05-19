@@ -32,8 +32,7 @@ func TestGetSparkApiClient(t *testing.T) {
 		c, err := getSparkApiClient(clientSet, pod, logger)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, c)
-		assert.Equal(tt, sparkapiclient.DriverClient, c.GetClientType())
-
+		assert.Implements(tt, (*sparkapiclient.DriverClient)(nil), c)
 	})
 
 	t.Run("whenDriverAvailable_eventLogSyncOff", func(tt *testing.T) {
@@ -46,8 +45,7 @@ func TestGetSparkApiClient(t *testing.T) {
 		c, err := getSparkApiClient(clientSet, pod, logger)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, c)
-		assert.Equal(tt, sparkapiclient.DriverClient, c.GetClientType())
-
+		assert.Implements(tt, (*sparkapiclient.DriverClient)(nil), c)
 	})
 
 	t.Run("whenDriverNotAvailableHistoryServerAvailable", func(tt *testing.T) {
@@ -61,7 +59,7 @@ func TestGetSparkApiClient(t *testing.T) {
 		c, err := getSparkApiClient(clientSet, pod, logger)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, c)
-		assert.Equal(tt, sparkapiclient.HistoryServerClient, c.GetClientType())
+		assert.Implements(tt, (*sparkapiclient.Client)(nil), c)
 
 	})
 
@@ -130,8 +128,6 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
-		m.EXPECT().GetClientType().Times(1)
-		m.EXPECT().GetStreamingStatistics(applicationID).Times(0)
 
 		manager := &manager{
 			client: m,
@@ -187,12 +183,12 @@ func TestGetApplicationInfo(t *testing.T) {
 
 	t.Run("whenDriverClient_notSparkStreaming", func(tt *testing.T) {
 
-		m := mock_client.NewMockClient(ctrl)
+		m := mock_client.NewMockDriverClient(ctrl)
 		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
-		m.EXPECT().GetClientType().Return(sparkapiclient.DriverClient).Times(1)
+		m.EXPECT().GetMetrics().Return(getMetricsResponse(), nil).Times(1)
 		m.EXPECT().GetStreamingStatistics(applicationID).Return(nil, fmt.Errorf("404 not found")).Times(1)
 
 		manager := &manager{
@@ -208,12 +204,12 @@ func TestGetApplicationInfo(t *testing.T) {
 
 	t.Run("whenDriverClient_sparkStreaming", func(tt *testing.T) {
 
-		m := mock_client.NewMockClient(ctrl)
+		m := mock_client.NewMockDriverClient(ctrl)
 		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
-		m.EXPECT().GetClientType().Return(sparkapiclient.DriverClient).Times(1)
+		m.EXPECT().GetMetrics().Return(getMetricsResponse(), nil).Times(1)
 		m.EXPECT().GetStreamingStatistics(applicationID).Return(getStreamingStatisticsResponse(), nil).Times(1)
 
 		manager := &manager{
@@ -234,8 +230,6 @@ func TestGetApplicationInfo(t *testing.T) {
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
 		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
-		m.EXPECT().GetClientType().Return(sparkapiclient.HistoryServerClient).Times(1)
-		m.EXPECT().GetStreamingStatistics(applicationID).Times(0)
 
 		manager := &manager{
 			client: m,
@@ -968,6 +962,21 @@ func getExecutorsResponse() []sparkapiclient.Executor {
 		{
 			ID:      "2",
 			AddTime: "2020-12-14T16:27:47.142GMT",
+		},
+	}
+}
+
+func getMetricsResponse() sparkapiclient.Metrics {
+	return sparkapiclient.Metrics{
+		Gauges: map[string]sparkapiclient.GaugeValue{
+			"test-gauge.driver.BlockManager.maxMem": {
+				Value: int64(200),
+			},
+		},
+		Counters: map[string]sparkapiclient.CounterValue{
+			"test-counter.driver.LiveListener.MaxSurge": {
+				Count: int64(2000),
+			},
 		},
 	}
 }

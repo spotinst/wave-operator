@@ -70,20 +70,20 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 		return resp, nil
 	}
 
-	if !config.IsEventLogSyncEnabled(ownerPod.Annotations) {
-		log.Info("Event log sync not enabled, will not mutate config map")
-		return resp, nil
+	propOverride := map[string]string{
+		"spark.metrics.appStatusSource.enabled": "true",
 	}
 
-	storageInfo, err := m.provider.GetStorageInfo()
-	if err != nil {
-		log.Error(err, "cannot get storage configuration")
-		return resp, nil
-	}
-
-	if storageInfo == nil {
-		log.Error(err, "storage information from provider is nil")
-		return resp, nil
+	if config.IsEventLogSyncEnabled(ownerPod.Annotations) {
+		log.Info("Event log sync enabled, attempting to configure event log")
+		storageInfo, err := m.provider.GetStorageInfo()
+		if err != nil || storageInfo == nil {
+			log.Error(err, "Not configuring event log sync, error getting storage info")
+		} else {
+			log.Info("Storage info present will enable event log")
+			propOverride["spark.eventLog.dir"] = "file:///var/log/spark"
+			propOverride["spark.eventLog.enabled"] = "true"
+		}
 	}
 
 	modObj := sourceObj.DeepCopy()
@@ -100,15 +100,7 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 		props = properties.NewProperties()
 	}
 
-	if _, _, err := props.Set("spark.eventLog.dir", "file:///var/log/spark"); err != nil {
-		log.Error(err, "could not set property")
-		return resp, nil
-	}
-
-	if _, _, err := props.Set("spark.eventLog.enabled", "true"); err != nil {
-		log.Error(err, "could not set property")
-		return resp, nil
-	}
+	props.Merge(properties.LoadMap(propOverride))
 
 	modObj.Data["spark.properties"] = props.String()
 

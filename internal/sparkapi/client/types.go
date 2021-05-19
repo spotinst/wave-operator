@@ -98,3 +98,21 @@ type StreamingStatistics struct {
 	BatchDuration     int64  `json:"batchDuration"`
 	AvgProcessingTime int64  `json:"avgProcessingTime"`
 }
+
+// GaugeValue holds the value for a spark metrics gauge
+type GaugeValue struct {
+	Value int64 `json:"value"`
+}
+
+// CounterValue holds the value for a spark metrics counter
+type CounterValue struct {
+	Count int64 `json:"count"`
+}
+
+// Metrics is the metrics representation from the spark metrics api.
+// A metrics object consists of maps of metrics types such as counters
+// gauges, meters, timers and histograms
+type Metrics struct {
+	Gauges   map[string]GaugeValue   `json:"gauges"`
+	Counters map[string]CounterValue `json:"counters"`
+}
