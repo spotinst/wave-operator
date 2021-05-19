@@ -303,7 +303,7 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 	}
 
 	// Make sure we have an application name
-	setSparkApplicationName(deepCopy, pod, log)
+	setSparkApplicationName(deepCopy, pod, sparkApiApplicationInfo, log)
 
 	err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
 	if err != nil {
@@ -566,8 +566,6 @@ func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Int
 }
 
 func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo, log logr.Logger) {
-
-	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
 
 	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime += sparkApiInfo.TotalNewExecutorCpuTime
@@ -635,7 +633,7 @@ func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	}
 }
 
-func setSparkApplicationName(sparkApp *v1alpha1.SparkApplication, driverPod *corev1.Pod, log logr.Logger) {
+func setSparkApplicationName(sparkApp *v1alpha1.SparkApplication, driverPod *corev1.Pod, sparkApiInfo *sparkapi.ApplicationInfo, log logr.Logger) {
 	log.Info("Setting spark application name")
 
 	// check if the `wave.spot.io/application-name` label has been set
@@ -646,6 +644,8 @@ func setSparkApplicationName(sparkApp *v1alpha1.SparkApplication, driverPod *cor
 		if operatorAppNameLabel, ok := sparkApp.Status.Data.Driver.Labels[sparkOperatorAppNameLabel]; ok {
 			sparkApp.Spec.ApplicationName = operatorAppNameLabel
 		}
+	} else if sparkApiInfo != nil {
+		sparkApp.Spec.ApplicationName = sparkApiInfo.ApplicationName
 	}
 
 	if sparkApp.Spec.ApplicationName == "" {
