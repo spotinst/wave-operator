@@ -302,8 +302,16 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo, log)
 	}
 
-	// Make sure we have an application name
-	setSparkApplicationName(deepCopy, pod, sparkApiApplicationInfo, log)
+	// Get an application name
+	sparkApplicationName := getSparkApplicationName(pod, sparkApiApplicationInfo)
+	deepCopy.Spec.ApplicationName = sparkApplicationName
+
+	//set "wave.spot.io/application-name" annotation as an application name
+	if deepCopy.Annotations == nil {
+		deepCopy.Annotations = make(map[string]string)
+	}
+
+	deepCopy.Annotations[waveApplicationNameAnnotation] = sparkApplicationName
 
 	err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
 	if err != nil {
@@ -633,31 +641,24 @@ func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	}
 }
 
-func setSparkApplicationName(sparkApp *v1alpha1.SparkApplication, driverPod *corev1.Pod, sparkApiInfo *sparkapi.ApplicationInfo, log logr.Logger) {
-	log.Info("Setting spark application name")
+func getSparkApplicationName(driverPod *corev1.Pod, sparkApiInfo *sparkapi.ApplicationInfo) string {
+	var sparkApplicationName string
 
 	// check if the `wave.spot.io/application-name` label has been set
 	if applicationNameAnnotation, ok := driverPod.Annotations[waveApplicationNameAnnotation]; ok {
-		sparkApp.Spec.ApplicationName = applicationNameAnnotation
-	} else if sparkApp.Spec.Heritage == v1alpha1.SparkHeritageOperator {
-		//if this is the sparkoperator.sparkapplication, will set the CR spec name
-		if operatorAppNameLabel, ok := sparkApp.Status.Data.Driver.Labels[sparkOperatorAppNameLabel]; ok {
-			sparkApp.Spec.ApplicationName = operatorAppNameLabel
-		}
+		sparkApplicationName = applicationNameAnnotation
+		//sparkApp.Spec.ApplicationName = applicationNameAnnotation
+	} else if operatorAppNameLabel, ok := driverPod.Labels[sparkOperatorAppNameLabel]; ok {
+		sparkApplicationName = operatorAppNameLabel
 	} else if sparkApiInfo != nil {
-		sparkApp.Spec.ApplicationName = sparkApiInfo.ApplicationName
+		sparkApplicationName = sparkApiInfo.ApplicationName
 	}
 
-	if sparkApp.Spec.ApplicationName == "" {
-		sparkApp.Spec.ApplicationName = driverPod.Name
+	if sparkApplicationName == "" {
+		sparkApplicationName = driverPod.Name
 	}
 
-	//set "wave.spot.io/application-name" annotation as an application name
-	if sparkApp.Annotations == nil {
-		sparkApp.Annotations = make(map[string]string)
-	}
-
-	sparkApp.Annotations[waveApplicationNameAnnotation] = sparkApp.Spec.ApplicationName
+	return sparkApplicationName
 }
 
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
@@ -696,11 +697,17 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 		waveApplicationIDLabel: applicationID,        // Facilitates cost calculations
 	}
 
+	cr.Annotations = make(map[string]string)
+
 	cr.Name = applicationID
 	cr.Namespace = driverPod.Namespace
 	cr.Spec.ApplicationID = applicationID
-	// We always need an application name, set it to driver pod name (will be updated with application name from Spark API)
-	setSparkApplicationName(cr, driverPod, nil, log)
+
+	//get an application name
+	sparkApplicationName := getSparkApplicationName(driverPod, nil)
+	cr.Spec.ApplicationName = sparkApplicationName
+	//set "wave.spot.io/application-name" annotation as an application name
+	cr.Annotations[waveApplicationNameAnnotation] = sparkApplicationName
 
 	heritage, err := getHeritage(driverPod)
 	if err != nil {
