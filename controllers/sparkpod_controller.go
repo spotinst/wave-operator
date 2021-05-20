@@ -696,7 +696,8 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 		waveApplicationIDLabel: applicationID,        // Facilitates cost calculations
 	}
 
-	cr.Annotations = make(map[string]string)
+	setSparkApplicationName(cr, driverPod, nil, log)
+
 	cr.Name = applicationID
 	cr.Namespace = driverPod.Namespace
 	cr.Spec.ApplicationID = applicationID
