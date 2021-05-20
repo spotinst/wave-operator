@@ -696,13 +696,11 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 		waveApplicationIDLabel: applicationID,        // Facilitates cost calculations
 	}
 
-	setSparkApplicationName(cr, driverPod, nil, log)
-
 	cr.Name = applicationID
 	cr.Namespace = driverPod.Namespace
 	cr.Spec.ApplicationID = applicationID
 	// We always need an application name, set it to driver pod name (will be updated with application name from Spark API)
-	cr.Spec.ApplicationName = driverPod.Name
+	setSparkApplicationName(cr, driverPod, nil, log)
 
 	heritage, err := getHeritage(driverPod)
 	if err != nil {
