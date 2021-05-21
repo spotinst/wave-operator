@@ -25,7 +25,7 @@ func TestHttpClientConstruction(t *testing.T) {
 
 	t.Run("SetsTimeoutToDefaultValue", func(tt *testing.T) {
 		t := NewHTTPClientTransport(host, port)
-		assert.Equal(tt, 5*time.Second, t.client.Timeout)
+		assert.Equal(tt, 15*time.Second, t.client.Timeout)
 	})
 	t.Run("ConfiguresTimeout", func(tt *testing.T) {
 		timeout := 30 * time.Hour
@@ -62,6 +62,16 @@ func TestHttpClientGet(t *testing.T) {
 		})))
 
 		_, err := t.Get("fails-connection")
+		require.Error(tt, err)
+		assert.ErrorAs(tt, err, &ServiceUnavailableError{})
+	})
+	t.Run("ReturnsServiceUnavailableOnTimeout", func(tt *testing.T) {
+		t := NewHTTPClientTransport(host, port, WithTimeout(1*time.Microsecond), WithTransport(transportTestFunc(func(req *http.Request) (*http.Response, error) {
+			time.Sleep(5 * time.Microsecond)
+			return nil, nil
+		})))
+
+		_, err := t.Get("times-out")
 		require.Error(tt, err)
 		assert.ErrorAs(tt, err, &ServiceUnavailableError{})
 	})
