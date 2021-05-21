@@ -31,7 +31,7 @@ func WithTransport(transport http.RoundTripper) HttpClientTransportOpt {
 }
 
 func NewHTTPClientTransport(host string, port string, opts ...HttpClientTransportOpt) *HttpClientTransport {
-	const defaultTimeout = 5 * time.Second
+	const defaultTimeout = 15 * time.Second
 
 	c := &HttpClientTransport{
 		client: &http.Client{
@@ -60,6 +60,12 @@ func (h HttpClientTransport) Get(path string) ([]byte, error) {
 		if errors.As(err, &opErr) {
 			return nil, ServiceUnavailableError{err}
 		}
+
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) && urlErr.Timeout() {
+			return nil, ServiceUnavailableError{err}
+		}
+
 		return nil, err
 	}
 
