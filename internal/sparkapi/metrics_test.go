@@ -225,4 +225,36 @@ func TestApplicationRegistry(t *testing.T) {
 `
 		assert.NoError(tt, testutil.CollectAndCompare(collector, strings.NewReader(expectedOutput)))
 	})
+	t.Run("RecordsApplicationSparkMetrics", func(tt *testing.T) {
+		info := &sparkapi.ApplicationInfo{
+			ID:              "some.id",
+			ApplicationName: "some.name",
+			Attempts: []sparkapiclient.Attempt{
+				{
+					Duration: time.Unix(0, 0).Unix(),
+				},
+			},
+			Metrics: sparkapiclient.Metrics{
+				Gauges: map[string]sparkapiclient.GaugeValue{
+					"test-app-id.driver.DAGScheduler.job.activeJobs": {Value: int64(100)},
+				},
+				Counters: map[string]sparkapiclient.CounterValue{
+					"test-app-id.driver.appStatus.jobs.failedJobs": {Count: int64(10)},
+				},
+			},
+		}
+		collector, err := registry.Register(info)
+		require.NoError(tt, err)
+		assert.NotNil(tt, collector)
+
+		expectedOutput := `
+			# HELP spark_DAGScheduler_job_activeJobs spark_DAGScheduler_job_activeJobs
+			# TYPE spark_DAGScheduler_job_activeJobs gauge
+			spark_DAGScheduler_job_activeJobs{application_id="some.id",application_name="some.name"} 100
+			# HELP spark_appStatus_jobs_failedJobs spark_appStatus_jobs_failedJobs
+			# TYPE spark_appStatus_jobs_failedJobs counter
+			spark_appStatus_jobs_failedJobs{application_id="some.id",application_name="some.name"} 10
+`
+		assert.NoError(tt, testutil.CollectAndCompare(collector, strings.NewReader(expectedOutput), "spark_DAGScheduler_job_activeJobs", "spark_appStatus_jobs_failedJobs"))
+	})
 }

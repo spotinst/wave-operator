@@ -25,6 +25,7 @@ import (
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/internal/sparkapi"
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
+	"github.com/spotinst/wave-operator/internal/sparkapi/client/transport"
 	"github.com/spotinst/wave-operator/internal/sparkapi/mock_sparkapi"
 	"github.com/spotinst/wave-operator/internal/version"
 )
@@ -203,6 +204,160 @@ func TestReconcile_driver_whenSparkApiCommunicationFails(t *testing.T) {
 	err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppID, Namespace: pod.Namespace}, createdCR)
 	require.NoError(t, err)
 	verifyCRPod(t, pod, createdCR.Status.Data.Driver)
+}
+
+func TestReconcile_driver_whenSparkApiError(t *testing.T) {
+
+	ctx := context.TODO()
+	sparkAppID := "spark-123456"
+	cr := getMinimalTestCR("test-ns", sparkAppID)
+	pod := getTestPod("test-ns", "test-driver", "123-456", DriverRole, sparkAppID, false)
+	pod.Finalizers = []string{sparkApplicationFinalizerName}
+	pod.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: apiVersion,
+		Kind:       sparkApplicationKind,
+		Name:       cr.Name,
+		UID:        cr.UID,
+	}}
+
+	ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod, cr)
+	clientSet := k8sfake.NewSimpleClientset()
+
+	// Mock Spark API manager
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := mock_sparkapi.NewMockManager(ctrl)
+
+	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
+		return m, nil
+	}
+
+	controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+
+	testReconcile := func(podPhase corev1.PodPhase, sparkApiError error) (ctrlrt.Result, error) {
+
+		pod.Status.Phase = podPhase
+		err := ctrlClient.Update(ctx, pod)
+		require.NoError(t, err)
+
+		m.EXPECT().GetApplicationInfo(sparkAppID, gomock.Any(), gomock.Any()).Return(getTestApplicationInfo(), sparkApiError).Times(1)
+
+		req := ctrlrt.Request{
+			NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+		}
+
+		reconcileRes, reconcileErr := controller.Reconcile(ctx, req)
+
+		// Still want to have updated the driver pod info in the CR
+		createdCR := &v1alpha1.SparkApplication{}
+		err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppID, Namespace: pod.Namespace}, createdCR)
+		require.NoError(t, err)
+		verifyCRPod(t, pod, createdCR.Status.Data.Driver)
+
+		return reconcileRes, reconcileErr
+	}
+
+	t.Run("testUpdateAttemptCount", func(tt *testing.T) {
+
+		notFoundError := transport.NewNotFoundError(fmt.Errorf("test error"))
+
+		// No update for running pods - regular error
+		res, err := testReconcile(corev1.PodRunning, fmt.Errorf("test error"))
+		assert.Error(tt, err)
+		assert.Equal(tt, ctrlrt.Result{}, res)
+		assert.Equal(tt, 0, controller.sparkApiAttemptCounter[sparkAppID])
+
+		// No update for running pods - expected Spark API error
+		res, err = testReconcile(corev1.PodRunning, notFoundError)
+		assert.NoError(tt, err)
+		assert.Equal(tt, ctrlrt.Result{
+			Requeue:      true,
+			RequeueAfter: requeueAfterTimeout,
+		}, res)
+		assert.Equal(tt, 0, controller.sparkApiAttemptCounter[sparkAppID])
+
+		// No update for non-running pods - regular error
+		res, err = testReconcile(corev1.PodSucceeded, fmt.Errorf("test error"))
+		assert.Error(tt, err)
+		assert.Equal(tt, ctrlrt.Result{}, res)
+		assert.Equal(tt, 0, controller.sparkApiAttemptCounter[sparkAppID])
+
+		// Update for non-running pods - expected Spark API error
+
+		res, err = testReconcile(corev1.PodSucceeded, notFoundError)
+		assert.NoError(tt, err)
+		assert.Equal(tt, ctrlrt.Result{
+			Requeue:      true,
+			RequeueAfter: requeueAfterTimeout,
+		}, res)
+		assert.Equal(tt, 1, controller.sparkApiAttemptCounter[sparkAppID])
+
+		res, err = testReconcile(corev1.PodSucceeded, notFoundError)
+		assert.NoError(tt, err)
+		assert.Equal(tt, ctrlrt.Result{
+			Requeue:      true,
+			RequeueAfter: requeueAfterTimeout,
+		}, res)
+		assert.Equal(tt, 2, controller.sparkApiAttemptCounter[sparkAppID])
+
+		// Successful Spark API communication should reset counter
+		res, err = testReconcile(corev1.PodSucceeded, nil)
+		assert.NoError(tt, err)
+		assert.Equal(tt, ctrlrt.Result{
+			Requeue:      false,
+			RequeueAfter: 0,
+		}, res)
+		_, entryExists := controller.sparkApiAttemptCounter[sparkAppID]
+		assert.False(tt, entryExists)
+		assert.Equal(tt, 0, controller.sparkApiAttemptCounter[sparkAppID])
+
+	})
+
+	t.Run("testShouldRequeue", func(tt *testing.T) {
+
+		notFoundError := transport.NewNotFoundError(fmt.Errorf("test error"))
+
+		// Should requeue
+		res, err := testReconcile(corev1.PodSucceeded, notFoundError)
+		assert.NoError(tt, err)
+		assert.Equal(tt, ctrlrt.Result{
+			Requeue:      true,
+			RequeueAfter: requeueAfterTimeout,
+		}, res)
+		assert.Equal(tt, 1, controller.sparkApiAttemptCounter[sparkAppID])
+
+		// Should requeue
+		res, err = testReconcile(corev1.PodSucceeded, notFoundError)
+		assert.NoError(tt, err)
+		assert.Equal(tt, ctrlrt.Result{
+			Requeue:      true,
+			RequeueAfter: requeueAfterTimeout,
+		}, res)
+		assert.Equal(tt, 2, controller.sparkApiAttemptCounter[sparkAppID])
+
+		// Set Spark API communication attempts to max - 1
+		controller.sparkApiAttemptCounter[sparkAppID] = maxSparkApiCommunicationAttemptCount - 1
+
+		// Should always requeue running pods
+		res, err = testReconcile(corev1.PodRunning, notFoundError)
+		assert.NoError(tt, err)
+		assert.Equal(tt, ctrlrt.Result{
+			Requeue:      true,
+			RequeueAfter: requeueAfterTimeout,
+		}, res)
+		assert.Equal(tt, maxSparkApiCommunicationAttemptCount-1, controller.sparkApiAttemptCounter[sparkAppID])
+
+		// Should not requeue non-running pod - max attempts reached
+		res, err = testReconcile(corev1.PodSucceeded, notFoundError)
+		assert.NoError(tt, err)
+		assert.Equal(tt, ctrlrt.Result{
+			Requeue:      false,
+			RequeueAfter: 0,
+		}, res)
+		assert.Equal(tt, maxSparkApiCommunicationAttemptCount, controller.sparkApiAttemptCounter[sparkAppID])
+
+	})
+
 }
 
 func TestReconcile_driver_whenSuccessful(t *testing.T) {
