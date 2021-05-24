@@ -33,11 +33,13 @@ const (
 
 	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
 
-	apiVersion             = "wave.spot.io/v1alpha1"
-	sparkApplicationKind   = "SparkApplication"
-	waveKindLabel          = "wave.spot.io/kind"
-	waveApplicationIDLabel = "wave.spot.io/application-id"
+	apiVersion                = "wave.spot.io/v1alpha1"
+	sparkApplicationKind      = "SparkApplication"
+	waveKindLabel             = "wave.spot.io/kind"
+	waveApplicationIDLabel    = "wave.spot.io/application-id"
+	sparkOperatorAppNameLabel = "sparkoperator.k8s.io/app-name"
 
+	waveApplicationNameAnnotation     = "wave.spot.io/application-name"
 	stageMetricsAggregationAnnotation = "wave.spot.io/stageMetricsAggregation"
 	workloadTypeAnnotation            = "wave.spot.io/workloadType"
 
@@ -317,10 +319,16 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo, log)
 	}
 
-	// Make sure we have an application name
-	if deepCopy.Spec.ApplicationName == "" {
-		deepCopy.Spec.ApplicationName = pod.Name
+	// Get an application name
+	sparkApplicationName := getSparkApplicationName(pod, sparkApiApplicationInfo)
+	deepCopy.Spec.ApplicationName = sparkApplicationName
+
+	//set "wave.spot.io/application-name" annotation as an application name
+	if deepCopy.Annotations == nil {
+		deepCopy.Annotations = make(map[string]string)
 	}
+
+	deepCopy.Annotations[waveApplicationNameAnnotation] = sparkApplicationName
 
 	err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
 	if err != nil {
@@ -583,8 +591,6 @@ func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Int
 }
 
 func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo, log logr.Logger) {
-
-	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
 
 	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime += sparkApiInfo.TotalNewExecutorCpuTime
@@ -652,6 +658,26 @@ func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	}
 }
 
+func getSparkApplicationName(driverPod *corev1.Pod, sparkApiInfo *sparkapi.ApplicationInfo) string {
+	var sparkApplicationName string
+
+	// check if the `wave.spot.io/application-name` label has been set
+	if applicationNameAnnotation, ok := driverPod.Annotations[waveApplicationNameAnnotation]; ok {
+		sparkApplicationName = applicationNameAnnotation
+		//sparkApp.Spec.ApplicationName = applicationNameAnnotation
+	} else if operatorAppNameLabel, ok := driverPod.Labels[sparkOperatorAppNameLabel]; ok {
+		sparkApplicationName = operatorAppNameLabel
+	} else if sparkApiInfo != nil {
+		sparkApplicationName = sparkApiInfo.ApplicationName
+	}
+
+	if sparkApplicationName == "" {
+		sparkApplicationName = driverPod.Name
+	}
+
+	return sparkApplicationName
+}
+
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
 	if pod.Labels[AppLabel] == AppEnterpriseGatewayLabelValue {
 		return v1alpha1.SparkHeritageJupyter, nil
@@ -688,11 +714,17 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 		waveApplicationIDLabel: applicationID,        // Facilitates cost calculations
 	}
 
+	cr.Annotations = make(map[string]string)
+
 	cr.Name = applicationID
 	cr.Namespace = driverPod.Namespace
 	cr.Spec.ApplicationID = applicationID
-	// We always need an application name, set it to driver pod name (will be updated with application name from Spark API)
-	cr.Spec.ApplicationName = driverPod.Name
+
+	//get an application name
+	sparkApplicationName := getSparkApplicationName(driverPod, nil)
+	cr.Spec.ApplicationName = sparkApplicationName
+	//set "wave.spot.io/application-name" annotation as an application name
+	cr.Annotations[waveApplicationNameAnnotation] = sparkApplicationName
 
 	heritage, err := getHeritage(driverPod)
 	if err != nil {
