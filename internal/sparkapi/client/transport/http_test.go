@@ -3,7 +3,7 @@ package transport
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"testing"
@@ -47,7 +47,7 @@ func TestHttpClientGet(t *testing.T) {
 			assert.Equal(tt, fmt.Sprintf("http://%s:%s/test/stuff", host, port), req.URL.String())
 			return &http.Response{
 				StatusCode: 200,
-				Body:       ioutil.NopCloser(bytes.NewBufferString("Success")),
+				Body:       io.NopCloser(bytes.NewBufferString("Success")),
 			}, nil
 		})))
 
@@ -62,6 +62,15 @@ func TestHttpClientGet(t *testing.T) {
 		})))
 
 		_, err := t.Get("fails-connection")
+		require.Error(tt, err)
+		assert.ErrorAs(tt, err, &ServiceUnavailableError{})
+	})
+	t.Run("ReturnsServiceUnavailableOnEOFError", func(tt *testing.T) {
+		t := NewHTTPClientTransport(host, port, WithTransport(transportTestFunc(func(req *http.Request) (*http.Response, error) {
+			return nil, io.EOF
+		})))
+
+		_, err := t.Get("eof-error")
 		require.Error(tt, err)
 		assert.ErrorAs(tt, err, &ServiceUnavailableError{})
 	})
