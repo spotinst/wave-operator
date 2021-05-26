@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -78,5 +77,5 @@ func (h HttpClientTransport) Get(path string) ([]byte, error) {
 		return nil, NotFoundError{fmt.Errorf("%s", pathURL)}
 	}
 
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }

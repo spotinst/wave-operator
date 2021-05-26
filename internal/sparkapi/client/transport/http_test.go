@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"testing"
@@ -48,7 +47,7 @@ func TestHttpClientGet(t *testing.T) {
 			assert.Equal(tt, fmt.Sprintf("http://%s:%s/test/stuff", host, port), req.URL.String())
 			return &http.Response{
 				StatusCode: 200,
-				Body:       ioutil.NopCloser(bytes.NewBufferString("Success")),
+				Body:       io.NopCloser(bytes.NewBufferString("Success")),
 			}, nil
 		})))
 
