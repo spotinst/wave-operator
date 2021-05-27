@@ -33,16 +33,19 @@ const (
 
 	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
 
-	apiVersion             = "wave.spot.io/v1alpha1"
-	sparkApplicationKind   = "SparkApplication"
-	waveKindLabel          = "wave.spot.io/kind"
-	waveApplicationIDLabel = "wave.spot.io/application-id"
+	apiVersion                = "wave.spot.io/v1alpha1"
+	sparkApplicationKind      = "SparkApplication"
+	waveKindLabel             = "wave.spot.io/kind"
+	waveApplicationIDLabel    = "wave.spot.io/application-id"
+	sparkOperatorAppNameLabel = "sparkoperator.k8s.io/app-name"
 
+	waveApplicationNameAnnotation     = "wave.spot.io/application-name"
 	stageMetricsAggregationAnnotation = "wave.spot.io/stageMetricsAggregation"
 	workloadTypeAnnotation            = "wave.spot.io/workloadType"
 
-	requeueAfterTimeout = 10 * time.Second
-	podDeletionTimeout  = 5 * time.Minute
+	requeueAfterTimeout                  = 10 * time.Second
+	podDeletionTimeout                   = 5 * time.Minute
+	maxSparkApiCommunicationAttemptCount = 20
 )
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;update;patch
@@ -51,10 +54,11 @@ const (
 // SparkPodReconciler reconciles Pod objects to discover Spark applications
 type SparkPodReconciler struct {
 	client.Client
-	ClientSet          kubernetes.Interface
-	getSparkApiManager SparkApiManagerGetter
-	Log                logr.Logger
-	Scheme             *runtime.Scheme
+	ClientSet              kubernetes.Interface
+	getSparkApiManager     SparkApiManagerGetter
+	Log                    logr.Logger
+	Scheme                 *runtime.Scheme
+	sparkApiAttemptCounter map[string]int
 }
 
 func NewSparkPodReconciler(
@@ -65,11 +69,12 @@ func NewSparkPodReconciler(
 	scheme *runtime.Scheme) *SparkPodReconciler {
 
 	return &SparkPodReconciler{
-		Client:             client,
-		ClientSet:          clientSet,
-		getSparkApiManager: sparkApiManagerGetter,
-		Log:                log,
-		Scheme:             scheme,
+		Client:                 client,
+		ClientSet:              clientSet,
+		getSparkApiManager:     sparkApiManagerGetter,
+		Log:                    log,
+		Scheme:                 scheme,
+		sparkApiAttemptCounter: make(map[string]int),
 	}
 }
 
@@ -85,7 +90,7 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if !k8serrors.IsNotFound(err) {
 			log.Error(err, "cannot get pod")
 		}
-		return ctrl.Result{}, err
+		return ctrl.Result{}, nil
 	}
 
 	sparkApplicationID, ok := p.Labels[SparkAppLabel]
@@ -210,12 +215,23 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			// Check for expected Spark API communication errors
 			if sparkapi.IsNotFoundError(err) ||
 				sparkapi.IsServiceUnavailableError(err) {
-				// Let's requeue after a set amount of time, don't want exponential backoff
-				log.Info(fmt.Sprintf("Spark API error, will requeue: %s", err.Error()))
-				return ctrl.Result{
-					Requeue:      true,
-					RequeueAfter: requeueAfterTimeout,
-				}, nil
+				log.Info(fmt.Sprintf("Spark API error: %s", err.Error()))
+				// Requeue non-running driver (wait for history server to respond)
+				if p.Status.Phase != corev1.PodRunning {
+					// Increment attempt counter
+					r.sparkApiAttemptCounter[sparkApplicationID]++
+					if r.sparkApiAttemptCounter[sparkApplicationID] < maxSparkApiCommunicationAttemptCount {
+						log.Info("Requeue non-running driver pod",
+							"sparkApiAttemptCount", r.sparkApiAttemptCounter[sparkApplicationID])
+						// Let's requeue after a set amount of time, don't want exponential backoff
+						return ctrl.Result{
+							Requeue:      true,
+							RequeueAfter: requeueAfterTimeout,
+						}, nil
+					} else {
+						log.Info("Max Spark API communication attempts reached, will not requeue")
+					}
+				}
 			} else if sparkapi.IsApiNotAvailableError(err) {
 				// Spark API is not available, don't want to requeue
 				log.Info(fmt.Sprintf("Spark API not available: %s", err.Error()))
@@ -223,6 +239,9 @@ func (r *SparkPodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				log.Error(err, "error handling driver pod")
 				return ctrl.Result{}, err
 			}
+		} else {
+			// Reset Spark API attempt counter
+			delete(r.sparkApiAttemptCounter, sparkApplicationID)
 		}
 
 		// Requeue running drivers
@@ -300,10 +319,16 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo, log)
 	}
 
-	// Make sure we have an application name
-	if deepCopy.Spec.ApplicationName == "" {
-		deepCopy.Spec.ApplicationName = pod.Name
+	// Get an application name
+	sparkApplicationName := getSparkApplicationName(pod, sparkApiApplicationInfo)
+	deepCopy.Spec.ApplicationName = sparkApplicationName
+
+	//set "wave.spot.io/application-name" annotation as an application name
+	if deepCopy.Annotations == nil {
+		deepCopy.Annotations = make(map[string]string)
 	}
+
+	deepCopy.Annotations[waveApplicationNameAnnotation] = sparkApplicationName
 
 	err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
 	if err != nil {
@@ -566,8 +591,6 @@ func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Int
 }
 
 func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo, log logr.Logger) {
-
-	deepCopy.Spec.ApplicationName = sparkApiInfo.ApplicationName
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
 
 	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime += sparkApiInfo.TotalNewExecutorCpuTime
@@ -635,6 +658,26 @@ func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInf
 	}
 }
 
+func getSparkApplicationName(driverPod *corev1.Pod, sparkApiInfo *sparkapi.ApplicationInfo) string {
+	var sparkApplicationName string
+
+	// check if the `wave.spot.io/application-name` label has been set
+	if applicationNameAnnotation, ok := driverPod.Annotations[waveApplicationNameAnnotation]; ok {
+		sparkApplicationName = applicationNameAnnotation
+		//sparkApp.Spec.ApplicationName = applicationNameAnnotation
+	} else if operatorAppNameLabel, ok := driverPod.Labels[sparkOperatorAppNameLabel]; ok {
+		sparkApplicationName = operatorAppNameLabel
+	} else if sparkApiInfo != nil {
+		sparkApplicationName = sparkApiInfo.ApplicationName
+	}
+
+	if sparkApplicationName == "" {
+		sparkApplicationName = driverPod.Name
+	}
+
+	return sparkApplicationName
+}
+
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
 	if pod.Labels[AppLabel] == AppEnterpriseGatewayLabelValue {
 		return v1alpha1.SparkHeritageJupyter, nil
@@ -671,11 +714,17 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 		waveApplicationIDLabel: applicationID,        // Facilitates cost calculations
 	}
 
+	cr.Annotations = make(map[string]string)
+
 	cr.Name = applicationID
 	cr.Namespace = driverPod.Namespace
 	cr.Spec.ApplicationID = applicationID
-	// We always need an application name, set it to driver pod name (will be updated with application name from Spark API)
-	cr.Spec.ApplicationName = driverPod.Name
+
+	//get an application name
+	sparkApplicationName := getSparkApplicationName(driverPod, nil)
+	cr.Spec.ApplicationName = sparkApplicationName
+	//set "wave.spot.io/application-name" annotation as an application name
+	cr.Annotations[waveApplicationNameAnnotation] = sparkApplicationName
 
 	heritage, err := getHeritage(driverPod)
 	if err != nil {

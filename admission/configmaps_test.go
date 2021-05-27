@@ -196,29 +196,19 @@ func TestMutateSparkCM(t *testing.T) {
 	assert.True(t, matched)
 }
 
-func TestMutateSparkBadStorageCM(t *testing.T) {
-
-	testFunc := func(provider cloudstorage.CloudStorageProvider) {
-		cm := sparkConfigMap
-		driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, true, "")
-		clientSet := k8sfake.NewSimpleClientset(driver)
-		req := getAdmissionRequest(t, cm)
-		r, err := NewConfigMapMutator(log, clientSet, provider).Mutate(req)
-		assert.NoError(t, err)
-		assert.NotNil(t, r)
-		assert.Equal(t, cm.UID, r.UID)
-		assert.Nil(t, r.PatchType)
-		assert.Nil(t, r.Patch)
-		assert.True(t, r.Allowed)
-	}
-
-	t.Run("whenFailedStorageProvider", func(tt *testing.T) {
-		testFunc(&util.FailedStorageProvider{})
-	})
-
-	t.Run("testNilStorageProvider", func(tt *testing.T) {
-		testFunc(&util.NilStorageProvider{})
-	})
+func TestMutateConfiguresMetrics(t *testing.T) {
+	cm := sparkConfigMap
+	driver := getDriverPod(cm.OwnerReferences[0].Name, cm.Namespace, false, "")
+	clientSet := k8sfake.NewSimpleClientset(driver)
+	req := getAdmissionRequest(t, cm)
+	r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
+	assert.NoError(t, err)
+	assert.NotNil(t, r)
+	assert.Equal(t, cm.UID, r.UID)
+	assert.Equal(t, &jsonPathType, r.PatchType)
+	assert.NotNil(t, r.Patch)
+	assert.True(t, r.Allowed)
+	assert.Regexp(t, `spark.metrics.appStatusSource.enabled ?= ?true`, string(r.Patch))
 }
 
 func TestEventLogSyncConfiguration(t *testing.T) {
@@ -228,6 +218,7 @@ func TestEventLogSyncConfiguration(t *testing.T) {
 		eventLogSyncAnnotationValue   string
 		shouldAddEventLogSync         bool
 		driverPodPresent              bool
+		storageProvider               cloudstorage.CloudStorageProvider
 	}
 
 	testFunc := func(tt *testing.T, tc testCase) {
@@ -243,7 +234,11 @@ func TestEventLogSyncConfiguration(t *testing.T) {
 
 		req := getAdmissionRequest(tt, cm)
 
-		r, err := NewConfigMapMutator(log, clientSet, &util.FakeStorageProvider{}).Mutate(req)
+		if tc.storageProvider == nil {
+			tc.storageProvider = &util.FakeStorageProvider{}
+		}
+
+		r, err := NewConfigMapMutator(log, clientSet, tc.storageProvider).Mutate(req)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, r)
 		assert.Equal(tt, cm.UID, r.UID)
@@ -252,16 +247,12 @@ func TestEventLogSyncConfiguration(t *testing.T) {
 		matchedDir, _ := regexp.MatchString(`spark.eventLog.dir ?= ?file:///var/log/spark`, string(r.Patch))
 		matchedEnabled, _ := regexp.MatchString(`spark.eventLog.enabled ?= ?true`, string(r.Patch))
 
-		if tc.shouldAddEventLogSync {
+		assert.Equal(tt, tc.shouldAddEventLogSync, matchedDir)
+		assert.Equal(tt, tc.shouldAddEventLogSync, matchedEnabled)
+
+		if tc.driverPodPresent {
 			assert.Equal(tt, &jsonPathType, r.PatchType)
 			assert.NotNil(tt, r.Patch)
-			assert.True(tt, matchedDir)
-			assert.True(tt, matchedEnabled)
-		} else {
-			assert.Nil(tt, r.PatchType)
-			assert.Nil(tt, r.Patch)
-			assert.False(tt, matchedDir)
-			assert.False(tt, matchedEnabled)
 		}
 	}
 
@@ -315,4 +306,25 @@ func TestEventLogSyncConfiguration(t *testing.T) {
 		testFunc(tt, tc)
 	})
 
+	t.Run("whenEventLogStorageConfigurationError", func(tt *testing.T) {
+		tc := testCase{
+			eventLogSyncAnnotationPresent: true,
+			eventLogSyncAnnotationValue:   "true",
+			shouldAddEventLogSync:         false,
+			driverPodPresent:              true,
+			storageProvider:               util.FailedStorageProvider{},
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenEventLogStorageConfigurationNil", func(tt *testing.T) {
+		tc := testCase{
+			eventLogSyncAnnotationPresent: true,
+			eventLogSyncAnnotationValue:   "true",
+			shouldAddEventLogSync:         false,
+			driverPodPresent:              true,
+			storageProvider:               util.NilStorageProvider{},
+		}
+		testFunc(tt, tc)
+	})
 }
