@@ -94,9 +94,6 @@ func TestGetSparkApiClient(t *testing.T) {
 }
 
 func TestGetApplicationInfo(t *testing.T) {
-
-	logger := getTestLogger()
-
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -107,7 +104,6 @@ func TestGetApplicationInfo(t *testing.T) {
 		m := mock_client.NewMockClient(ctrl)
 		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationID).Return(nil, fmt.Errorf("test error")).Times(1)
-		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(0)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(0)
 
 		manager := &manager{
@@ -115,7 +111,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		_, err := manager.GetApplicationInfo(applicationID, NewStageMetricsAggregatorState(), logger)
+		_, err := manager.GetApplicationInfo(applicationID)
 		assert.Error(tt, err)
 		assert.Contains(tt, err.Error(), "test error")
 
@@ -126,7 +122,6 @@ func TestGetApplicationInfo(t *testing.T) {
 		m := mock_client.NewMockClient(ctrl)
 		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
-		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
 
 		manager := &manager{
@@ -134,36 +129,10 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, NewStageMetricsAggregatorState(), logger)
+		res, err := manager.GetApplicationInfo(applicationID)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, "my-test-application", res.ApplicationName)
-
-		assert.Equal(tt, int64(900), res.TotalNewExecutorCpuTime)
-		assert.Equal(tt, int64(300), res.TotalNewInputBytes)
-		assert.Equal(tt, int64(600), res.TotalNewOutputBytes)
-		assert.Equal(tt, StageMetricsAggregatorState{
-			MaxProcessedFinalizedStage: StageKey{
-				StageID:   2,
-				AttemptID: 3,
-			},
-			ActiveStageMetrics: map[StageKey]StageMetrics{
-				{
-					StageID:   2,
-					AttemptID: 4,
-				}: {
-					OutputBytes: 200,
-					InputBytes:  100,
-					CPUTime:     300,
-				},
-			},
-			PendingStages: []StageKey{
-				{
-					StageID:   3,
-					AttemptID: 0,
-				},
-			},
-		}, res.MetricsAggregatorState)
 
 		assert.Equal(tt, 2, len(res.SparkProperties))
 		assert.Equal(tt, "val1", res.SparkProperties["prop1"])
@@ -186,7 +155,6 @@ func TestGetApplicationInfo(t *testing.T) {
 		m := mock_client.NewMockDriverClient(ctrl)
 		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
-		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
 		m.EXPECT().GetMetrics().Return(getMetricsResponse(), nil).Times(1)
 		m.EXPECT().GetStreamingStatistics(applicationID).Return(nil, fmt.Errorf("404 not found")).Times(1)
@@ -196,7 +164,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, NewStageMetricsAggregatorState(), logger)
+		res, err := manager.GetApplicationInfo(applicationID)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, WorkloadType(""), res.WorkloadType)
@@ -207,7 +175,6 @@ func TestGetApplicationInfo(t *testing.T) {
 		m := mock_client.NewMockDriverClient(ctrl)
 		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
-		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
 		m.EXPECT().GetMetrics().Return(getMetricsResponse(), nil).Times(1)
 		m.EXPECT().GetStreamingStatistics(applicationID).Return(getStreamingStatisticsResponse(), nil).Times(1)
@@ -217,7 +184,7 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, NewStageMetricsAggregatorState(), logger)
+		res, err := manager.GetApplicationInfo(applicationID)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, SparkStreaming, res.WorkloadType)
@@ -228,7 +195,6 @@ func TestGetApplicationInfo(t *testing.T) {
 		m := mock_client.NewMockClient(ctrl)
 		m.EXPECT().GetApplication(applicationID).Return(getApplicationResponse(), nil).Times(1)
 		m.EXPECT().GetEnvironment(applicationID).Return(getEnvironmentResponse(), nil).Times(1)
-		m.EXPECT().GetStages(applicationID).Return(getStagesResponse(), nil).Times(1)
 		m.EXPECT().GetAllExecutors(applicationID).Return(getExecutorsResponse(), nil).Times(1)
 
 		manager := &manager{
@@ -236,633 +202,12 @@ func TestGetApplicationInfo(t *testing.T) {
 			logger: getTestLogger(),
 		}
 
-		res, err := manager.GetApplicationInfo(applicationID, NewStageMetricsAggregatorState(), logger)
+		res, err := manager.GetApplicationInfo(applicationID)
 		assert.NoError(tt, err)
 
 		assert.Equal(tt, WorkloadType(""), res.WorkloadType)
 	})
 
-}
-
-func TestStageAggregation(t *testing.T) {
-
-	logger := getTestLogger()
-
-	const inputBytesPerStage = 100
-	const outputBytesPerStage = 150
-	const cpuTimePerStage = 200
-
-	getStages := func(statuses []string) []sparkapiclient.Stage {
-		stages := make([]sparkapiclient.Stage, len(statuses))
-		for i := 0; i < len(statuses); i++ {
-			stage := sparkapiclient.Stage{
-				Status:          statuses[i],
-				StageID:         i,
-				AttemptID:       0,
-				InputBytes:      inputBytesPerStage,
-				OutputBytes:     outputBytesPerStage,
-				ExecutorCpuTime: cpuTimePerStage,
-			}
-			stages[i] = stage
-		}
-		return stages
-	}
-
-	type testCase struct {
-		statuses       []string
-		oldState       StageMetricsAggregatorState
-		expectedResult stageWindowAggregationResult
-		message        string
-	}
-
-	testCases := []testCase{
-		{
-			statuses: []string{},
-			oldState: NewStageMetricsAggregatorState(),
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     0,
-				totalNewInputBytes:      0,
-				totalNewExecutorCpuTime: 0,
-				newState:                NewStageMetricsAggregatorState(),
-			},
-			message: "whenNoStagesReceived",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldState: NewStageMetricsAggregatorState(),
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     4 * outputBytesPerStage,
-				totalNewInputBytes:      4 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 3, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteInOrder_1",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 0, AttemptID: 0},
-				ActiveStageMetrics:         make(map[StageKey]StageMetrics),
-				PendingStages:              make([]StageKey, 0),
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     3 * outputBytesPerStage,
-				totalNewInputBytes:      3 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 3 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 3, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteInOrder_2",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 1, AttemptID: 0},
-				ActiveStageMetrics:         make(map[StageKey]StageMetrics),
-				PendingStages:              make([]StageKey, 0),
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     2 * outputBytesPerStage,
-				totalNewInputBytes:      2 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 2 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 3, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteInOrder_3",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
-				ActiveStageMetrics:         make(map[StageKey]StageMetrics),
-				PendingStages:              make([]StageKey, 0),
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     1 * outputBytesPerStage,
-				totalNewInputBytes:      1 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 3, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteInOrder_4",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
-				ActiveStageMetrics:         make(map[StageKey]StageMetrics),
-				PendingStages:              make([]StageKey, 0),
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     1 * outputBytesPerStage,
-				totalNewInputBytes:      1 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 3, AttemptID: 0},
-					ActiveStageMetrics:         map[StageKey]StageMetrics{},
-					PendingStages:              []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteInOrder_5",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 3, AttemptID: 0},
-				ActiveStageMetrics:         make(map[StageKey]StageMetrics),
-				PendingStages:              make([]StageKey, 0),
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     0,
-				totalNewInputBytes:      0,
-				totalNewExecutorCpuTime: 0,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 3, AttemptID: 0},
-					ActiveStageMetrics:         map[StageKey]StageMetrics{},
-					PendingStages:              []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteInOrder_6",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldState: NewStageMetricsAggregatorState(),
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     4 * outputBytesPerStage,
-				totalNewInputBytes:      4 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 3, AttemptID: 0},
-					ActiveStageMetrics:         map[StageKey]StageMetrics{},
-					PendingStages:              []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteInOrder_7",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldState: NewStageMetricsAggregatorState(),
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     6 * outputBytesPerStage,
-				totalNewInputBytes:      6 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 6 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 2, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-						{StageID: 4, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteOutOfOrder_1",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 0, AttemptID: 0},
-				ActiveStageMetrics:         map[StageKey]StageMetrics{},
-				PendingStages:              []StageKey{},
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     5 * outputBytesPerStage,
-				totalNewInputBytes:      5 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 5 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 2, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-						{StageID: 4, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteOutOfOrder_2",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "ACTIVE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 1, AttemptID: 0},
-				ActiveStageMetrics:         map[StageKey]StageMetrics{},
-				PendingStages:              []StageKey{},
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     4 * outputBytesPerStage,
-				totalNewInputBytes:      4 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 2, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-						{StageID: 4, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteOutOfOrder_3",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "ACTIVE", "COMPLETE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 1, AttemptID: 0},
-				ActiveStageMetrics:         map[StageKey]StageMetrics{},
-				PendingStages:              []StageKey{},
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     4 * outputBytesPerStage,
-				totalNewInputBytes:      4 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 4, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteOutOfOrder_4",
-		},
-		{
-			statuses: []string{"COMPLETE", "COMPLETE", "COMPLETE", "SKIPPED", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 1, AttemptID: 0},
-				ActiveStageMetrics:         map[StageKey]StageMetrics{},
-				PendingStages:              []StageKey{},
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     4 * outputBytesPerStage,
-				totalNewInputBytes:      4 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 4 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
-					ActiveStageMetrics:         map[StageKey]StageMetrics{},
-					PendingStages:              []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteOutOfOrder_5",
-		},
-		{
-			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "COMPLETE", "ACTIVE"},
-			oldState: NewStageMetricsAggregatorState(),
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     5 * outputBytesPerStage,
-				totalNewInputBytes:      5 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 5 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 4, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 5, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{{StageID: 3, AttemptID: 0}},
-				},
-			},
-			message: "whenStagesCompleteOutOfOrder_6",
-		},
-		{
-			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 100, AttemptID: 0},
-				ActiveStageMetrics:         map[StageKey]StageMetrics{},
-				PendingStages:              []StageKey{},
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     0,
-				totalNewInputBytes:      0,
-				totalNewExecutorCpuTime: 0,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 100, AttemptID: 0},
-					ActiveStageMetrics:         map[StageKey]StageMetrics{},
-					PendingStages:              []StageKey{},
-				},
-			},
-			message: "whenOnlyOldStagesReceived",
-		},
-		{
-			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 100, AttemptID: 0},
-				ActiveStageMetrics: map[StageKey]StageMetrics{
-					{StageID: 4, AttemptID: 0}: {
-						OutputBytes: outputBytesPerStage,
-						InputBytes:  inputBytesPerStage,
-						CPUTime:     cpuTimePerStage,
-					},
-				},
-				PendingStages: []StageKey{{StageID: 3, AttemptID: 0}},
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     0,
-				totalNewInputBytes:      0,
-				totalNewExecutorCpuTime: 0,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 100, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 4, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{{StageID: 3, AttemptID: 0}},
-				},
-			},
-			message: "shouldNotAddActiveStagesTwice",
-		},
-		{
-			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "PENDING", "ACTIVE", "COMPLETE", "ACTIVE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0},
-				ActiveStageMetrics:         map[StageKey]StageMetrics{},
-				PendingStages:              []StageKey{},
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     3 * outputBytesPerStage,
-				totalNewInputBytes:      3 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 3 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 4, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-						{StageID: 6, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{{StageID: 3, AttemptID: 0}},
-				},
-			},
-			message: "whenStagesCompleteOutOfOrder_oldStagesFinalize_1",
-		},
-		{
-			statuses: []string{"COMPLETE", "FAILED", "SKIPPED", "ACTIVE", "COMPLETE", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0},
-				ActiveStageMetrics: map[StageKey]StageMetrics{
-					{StageID: 4, AttemptID: 0}: {
-						OutputBytes: 10,
-						InputBytes:  20,
-						CPUTime:     30,
-					},
-					{StageID: 6, AttemptID: 0}: {
-						OutputBytes: outputBytesPerStage,
-						InputBytes:  inputBytesPerStage,
-						CPUTime:     cpuTimePerStage,
-					},
-				},
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     (outputBytesPerStage - 10) + outputBytesPerStage,
-				totalNewInputBytes:      (inputBytesPerStage - 20) + inputBytesPerStage,
-				totalNewExecutorCpuTime: (cpuTimePerStage - 30) + cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 6, AttemptID: 0},
-					ActiveStageMetrics: map[StageKey]StageMetrics{
-						{StageID: 3, AttemptID: 0}: {
-							OutputBytes: outputBytesPerStage,
-							InputBytes:  inputBytesPerStage,
-							CPUTime:     cpuTimePerStage,
-						},
-					},
-					PendingStages: []StageKey{},
-				},
-			},
-			message: "whenStagesCompleteOutOfOrder_oldStagesFinalize_2",
-		},
-		{
-			statuses: []string{"COMPLETE", "FAILED", "PENDING", "COMPLETE"},
-			oldState: NewStageMetricsAggregatorState(),
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     3 * outputBytesPerStage,
-				totalNewInputBytes:      3 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 3 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 3, AttemptID: 0},
-					ActiveStageMetrics:         map[StageKey]StageMetrics{},
-					PendingStages:              []StageKey{{StageID: 2, AttemptID: 0}},
-				},
-			},
-			message: "whenPendingStageOutOfOrder_1",
-		},
-		{
-			statuses: []string{"COMPLETE", "FAILED", "COMPLETE", "COMPLETE"},
-			oldState: StageMetricsAggregatorState{
-				MaxProcessedFinalizedStage: StageKey{StageID: 3, AttemptID: 0},
-				ActiveStageMetrics:         map[StageKey]StageMetrics{},
-				PendingStages:              []StageKey{{StageID: 2, AttemptID: 0}},
-			},
-			expectedResult: stageWindowAggregationResult{
-				totalNewOutputBytes:     1 * outputBytesPerStage,
-				totalNewInputBytes:      1 * inputBytesPerStage,
-				totalNewExecutorCpuTime: 1 * cpuTimePerStage,
-				newState: StageMetricsAggregatorState{
-					MaxProcessedFinalizedStage: StageKey{StageID: 3, AttemptID: 0},
-					ActiveStageMetrics:         map[StageKey]StageMetrics{},
-					PendingStages:              []StageKey{},
-				},
-			},
-			message: "whenPendingStageOutOfOrder_2",
-		},
-	}
-
-	for _, tc := range testCases {
-
-		stages := getStages(tc.statuses)
-		aggregator := newStageMetricsAggregator(logger, tc.oldState)
-		res := aggregator.processWindow(stages)
-
-		assert.Equal(t, tc.expectedResult.newState, res.newState, tc.message)
-		assert.Equal(t, tc.expectedResult.totalNewExecutorCpuTime, res.totalNewExecutorCpuTime, tc.message)
-		assert.Equal(t, tc.expectedResult.totalNewInputBytes, res.totalNewInputBytes, tc.message)
-		assert.Equal(t, tc.expectedResult.totalNewOutputBytes, res.totalNewOutputBytes, tc.message)
-	}
-
-	t.Run("whenStagesReceivedOutOfOrder", func(tt *testing.T) {
-
-		stages := getStages([]string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE", "COMPLETE", "ACTIVE"})
-		stages[0], stages[3] = stages[3], stages[0]
-		stages[2], stages[5] = stages[5], stages[2]
-
-		aggregator := newStageMetricsAggregator(logger, NewStageMetricsAggregatorState())
-		res := aggregator.processWindow(stages)
-		assert.Equal(tt, StageKey{StageID: 4, AttemptID: 0}, res.newState.MaxProcessedFinalizedStage)
-		assert.Equal(tt, map[StageKey]StageMetrics{
-			{StageID: 3, AttemptID: 0}: {
-				OutputBytes: outputBytesPerStage,
-				InputBytes:  inputBytesPerStage,
-				CPUTime:     cpuTimePerStage,
-			},
-			{StageID: 5, AttemptID: 0}: {
-				OutputBytes: outputBytesPerStage,
-				InputBytes:  inputBytesPerStage,
-				CPUTime:     cpuTimePerStage,
-			},
-		}, res.newState.ActiveStageMetrics)
-		assert.Equal(tt, []StageKey{}, res.newState.PendingStages)
-		assert.Equal(tt, int64(6*cpuTimePerStage), res.totalNewExecutorCpuTime)
-		assert.Equal(tt, int64(6*inputBytesPerStage), res.totalNewInputBytes)
-		assert.Equal(tt, int64(6*outputBytesPerStage), res.totalNewOutputBytes)
-	})
-
-	t.Run("whenStagesMissed", func(tt *testing.T) {
-
-		// Manual verification of error logging
-
-		// Should not log error, no stages received
-		newStageMetricsAggregator(logger, NewStageMetricsAggregatorState()).processWindow([]sparkapiclient.Stage{})
-
-		stages := getStages([]string{"COMPLETE", "COMPLETE"})
-
-		// Should not log error, no stages seen before
-		newStageMetricsAggregator(logger, NewStageMetricsAggregatorState()).processWindow(stages)
-
-		stages[0].StageID = 4
-		stages[1].StageID = 5
-
-		// Should not log error
-		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStage: StageKey{StageID: 3, AttemptID: 0}}).processWindow(stages)
-		// Should not log error
-		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStage: StageKey{StageID: 4, AttemptID: 0}}).processWindow(stages)
-		// Should not log error, no new stages received
-		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStage: StageKey{StageID: 5, AttemptID: 0}}).processWindow(stages)
-		// Should not log error, no new stages received
-		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStage: StageKey{StageID: 6, AttemptID: 0}}).processWindow(stages)
-		// Should log error, we missed stage 0
-		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStage: StageKey{StageID: -1, AttemptID: -1}}).processWindow(stages)
-		// Should log error, we missed stage 1
-		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStage: StageKey{StageID: 0, AttemptID: 0}}).processWindow(stages)
-		// Should log error, we missed stage 2
-		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStage: StageKey{StageID: 1, AttemptID: 0}}).processWindow(stages)
-		// Should log error, we missed stage 3
-		newStageMetricsAggregator(logger, StageMetricsAggregatorState{MaxProcessedFinalizedStage: StageKey{StageID: 2, AttemptID: 0}}).processWindow(stages)
-	})
-
-	t.Run("testAttemptIDs", func(tt *testing.T) {
-
-		stages := getStages([]string{"COMPLETE", "COMPLETE", "COMPLETE", "ACTIVE", "COMPLETE", "ACTIVE", "PENDING"})
-		stages[2].StageID = 1
-		stages[2].AttemptID = 1
-		stages[3].StageID = 1
-		stages[3].AttemptID = 2
-		stages[4].StageID = 1
-		stages[4].AttemptID = 3
-		stages[5].StageID = 1
-		stages[5].AttemptID = 4
-		stages[6].StageID = 2
-		stages[6].AttemptID = 99
-
-		aggregator := newStageMetricsAggregator(logger, NewStageMetricsAggregatorState())
-		res := aggregator.processWindow(stages)
-		assert.Equal(tt, StageKey{StageID: 1, AttemptID: 3}, res.newState.MaxProcessedFinalizedStage)
-		assert.Equal(tt, map[StageKey]StageMetrics{
-			{StageID: 1, AttemptID: 2}: {
-				OutputBytes: outputBytesPerStage,
-				InputBytes:  inputBytesPerStage,
-				CPUTime:     cpuTimePerStage,
-			},
-			{StageID: 1, AttemptID: 4}: {
-				OutputBytes: outputBytesPerStage,
-				InputBytes:  inputBytesPerStage,
-				CPUTime:     cpuTimePerStage,
-			},
-		}, res.newState.ActiveStageMetrics)
-		assert.Equal(tt, []StageKey{{StageID: 2, AttemptID: 99}}, res.newState.PendingStages)
-		assert.Equal(tt, int64(6*cpuTimePerStage), res.totalNewExecutorCpuTime)
-		assert.Equal(tt, int64(6*inputBytesPerStage), res.totalNewInputBytes)
-		assert.Equal(tt, int64(6*outputBytesPerStage), res.totalNewOutputBytes)
-
-		aggregator = newStageMetricsAggregator(logger, res.newState)
-		stages[3].Status = "COMPLETE"
-		stages[5].Status = "COMPLETE"
-		stages[6].Status = "ACTIVE"
-		res = aggregator.processWindow(stages)
-		assert.Equal(tt, StageKey{StageID: 1, AttemptID: 4}, res.newState.MaxProcessedFinalizedStage)
-		assert.Equal(tt, map[StageKey]StageMetrics{
-			{StageID: 2, AttemptID: 99}: {
-				OutputBytes: outputBytesPerStage,
-				InputBytes:  inputBytesPerStage,
-				CPUTime:     cpuTimePerStage,
-			},
-		}, res.newState.ActiveStageMetrics)
-		assert.Equal(tt, []StageKey{}, res.newState.PendingStages)
-		assert.Equal(tt, int64(1*cpuTimePerStage), res.totalNewExecutorCpuTime)
-		assert.Equal(tt, int64(1*inputBytesPerStage), res.totalNewInputBytes)
-		assert.Equal(tt, int64(1*outputBytesPerStage), res.totalNewOutputBytes)
-
-	})
 }
 
 func getTestLogger() logr.Logger {
@@ -892,43 +237,6 @@ func getApplicationResponse() *sparkapiclient.Application {
 				Completed:        true,
 				AppSparkVersion:  "9.0.0",
 			},
-		},
-	}
-}
-
-func getStagesResponse() []sparkapiclient.Stage {
-	return []sparkapiclient.Stage{
-		{
-			Status:          "COMPLETE",
-			StageID:         1,
-			AttemptID:       2,
-			InputBytes:      100,
-			OutputBytes:     200,
-			ExecutorCpuTime: 300,
-		},
-		{
-			Status:          "COMPLETE",
-			StageID:         2,
-			AttemptID:       3,
-			InputBytes:      100,
-			OutputBytes:     200,
-			ExecutorCpuTime: 300,
-		},
-		{
-			Status:          "ACTIVE",
-			StageID:         2,
-			AttemptID:       4,
-			InputBytes:      100,
-			OutputBytes:     200,
-			ExecutorCpuTime: 300,
-		},
-		{
-			Status:          "PENDING",
-			StageID:         3,
-			AttemptID:       0,
-			InputBytes:      100,
-			OutputBytes:     200,
-			ExecutorCpuTime: 300,
 		},
 	}
 }

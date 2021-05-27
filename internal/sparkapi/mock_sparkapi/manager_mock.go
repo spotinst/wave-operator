@@ -5,7 +5,6 @@
 package mock_sparkapi
 
 import (
-	logr "github.com/go-logr/logr"
 	gomock "github.com/golang/mock/gomock"
 	sparkapi "github.com/spotinst/wave-operator/internal/sparkapi"
 	reflect "reflect"
@@ -35,16 +34,16 @@ func (m *MockManager) EXPECT() *MockManagerMockRecorder {
 }
 
 // GetApplicationInfo mocks base method
-func (m *MockManager) GetApplicationInfo(applicationID string, metricsAggregatorState sparkapi.StageMetricsAggregatorState, log logr.Logger) (*sparkapi.ApplicationInfo, error) {
+func (m *MockManager) GetApplicationInfo(applicationID string) (*sparkapi.ApplicationInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetApplicationInfo", applicationID, metricsAggregatorState, log)
+	ret := m.ctrl.Call(m, "GetApplicationInfo", applicationID)
 	ret0, _ := ret[0].(*sparkapi.ApplicationInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetApplicationInfo indicates an expected call of GetApplicationInfo
-func (mr *MockManagerMockRecorder) GetApplicationInfo(applicationID, metricsAggregatorState, log interface{}) *gomock.Call {
+func (mr *MockManagerMockRecorder) GetApplicationInfo(applicationID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetApplicationInfo", reflect.TypeOf((*MockManager)(nil).GetApplicationInfo), applicationID, metricsAggregatorState, log)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetApplicationInfo", reflect.TypeOf((*MockManager)(nil).GetApplicationInfo), applicationID)
 }

@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -306,18 +305,12 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 
 	// Fetch information from Spark API
 	// Let's update the driver pod information even though the Spark API call fails
-
-	stageMetricsAggregatorState, err := getStageMetricsAggregatorState(deepCopy)
-	if err != nil {
-		return fmt.Errorf("could not get stage metrics aggregation state, %w", err)
-	}
-
 	var sparkApiError error
-	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationID, stageMetricsAggregatorState, log)
+	sparkApiApplicationInfo, err := r.getSparkApiApplicationInfo(r.ClientSet, pod, cr.Spec.ApplicationID, log)
 	if err != nil {
 		sparkApiError = fmt.Errorf("could not get spark api application information, %w", err)
 	} else {
-		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo, log)
+		setSparkApiApplicationInfo(deepCopy, sparkApiApplicationInfo)
 	}
 
 	// Get an application name
@@ -576,14 +569,14 @@ func podStateHistoryEntryEqual(a v1alpha1.PodStateHistoryEntry, b v1alpha1.PodSt
 	return true
 }
 
-func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationID string, metricsAggregatorState sparkapi.StageMetricsAggregatorState, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
+func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Interface, driverPod *corev1.Pod, applicationID string, logger logr.Logger) (*sparkapi.ApplicationInfo, error) {
 
 	manager, err := r.getSparkApiManager(clientSet, driverPod, logger)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api manager, %w", err)
 	}
 
-	applicationInfo, err := manager.GetApplicationInfo(applicationID, metricsAggregatorState, logger)
+	applicationInfo, err := manager.GetApplicationInfo(applicationID)
 	if err != nil {
 		return nil, fmt.Errorf("could not get spark api application info, %w", err)
 	}
@@ -591,18 +584,8 @@ func (r *SparkPodReconciler) getSparkApiApplicationInfo(clientSet kubernetes.Int
 	return applicationInfo, nil
 }
 
-func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo, log logr.Logger) {
+func setSparkApiApplicationInfo(deepCopy *v1alpha1.SparkApplication, sparkApiInfo *sparkapi.ApplicationInfo) {
 	deepCopy.Status.Data.SparkProperties = sparkApiInfo.SparkProperties
-
-	deepCopy.Status.Data.RunStatistics.TotalExecutorCpuTime += sparkApiInfo.TotalNewExecutorCpuTime
-	deepCopy.Status.Data.RunStatistics.TotalInputBytes += sparkApiInfo.TotalNewInputBytes
-	deepCopy.Status.Data.RunStatistics.TotalOutputBytes += sparkApiInfo.TotalNewOutputBytes
-
-	err := setStageMetricsAggregatorState(deepCopy, sparkApiInfo.MetricsAggregatorState)
-	if err != nil {
-		// Best effort
-		log.Error(err, "Could not set stage metrics aggregation state annotation")
-	}
 
 	attempts := make([]v1alpha1.Attempt, 0, len(sparkApiInfo.Attempts))
 	for _, apiAttempt := range sparkApiInfo.Attempts {
@@ -756,37 +739,6 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 		return fmt.Errorf("could not create cr, %w", err)
 	}
 
-	return nil
-}
-
-func getStageMetricsAggregatorState(cr *v1alpha1.SparkApplication) (sparkapi.StageMetricsAggregatorState, error) {
-	newState := sparkapi.NewStageMetricsAggregatorState()
-	if cr.Annotations == nil {
-		// We haven't processed any stages yet
-		return newState, nil
-	}
-	val := cr.Annotations[stageMetricsAggregationAnnotation]
-	if val == "" {
-		// We haven't processed any stages yet
-		return newState, nil
-	}
-	state := sparkapi.StageMetricsAggregatorState{}
-	err := json.Unmarshal([]byte(val), &state)
-	if err != nil {
-		return newState, fmt.Errorf("could not unmarshal state %s, %w", val, err)
-	}
-	return state, nil
-}
-
-func setStageMetricsAggregatorState(cr *v1alpha1.SparkApplication, state sparkapi.StageMetricsAggregatorState) error {
-	if cr.Annotations == nil {
-		cr.Annotations = make(map[string]string)
-	}
-	marshalled, err := json.Marshal(state)
-	if err != nil {
-		return fmt.Errorf("could not marshal state, %w", err)
-	}
-	cr.Annotations[stageMetricsAggregationAnnotation] = string(marshalled)
 	return nil
 }
 
