@@ -335,8 +335,11 @@ func (m PodMutator) buildRequiredOnDemandAffinity(nodeAffinity *corev1.NodeAffin
 
 	// TODO Override existing
 
-	for _, nst := range nodeSelector.NodeSelectorTerms {
-		nst.MatchExpressions = append(nst.MatchExpressions, nodeSelectorRequirement)
+	for i := range nodeSelector.NodeSelectorTerms {
+		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
+			nodeSelector.NodeSelectorTerms[i].MatchExpressions,
+			nodeSelectorRequirement)
+
 	}
 }
 
@@ -390,11 +393,12 @@ func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeA
 
 	// TODO Override existing
 
-	for _, nst := range nodeSelector.NodeSelectorTerms {
-		nst.MatchExpressions = append(nst.MatchExpressions, nodeSelectorRequirement)
-		nst.MatchExpressions = append(nst.MatchExpressions, nodeSelectorRequirementBeta)
-	}
+	for i := range nodeSelector.NodeSelectorTerms {
+		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
+			nodeSelector.NodeSelectorTerms[i].MatchExpressions,
+			nodeSelectorRequirement, nodeSelectorRequirementBeta)
 
+	}
 }
 
 // isNodeAffinityKeySet determines if the given node affinity key set as either preferred or required
