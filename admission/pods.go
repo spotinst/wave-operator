@@ -38,11 +38,11 @@ var (
 								Operator: corev1.NodeSelectorOpIn,
 								Values:   []string{"od"},
 							},
-							{
+							/*{
 								Key:      "node.kubernetes.io/instance-type",
 								Operator: corev1.NodeSelectorOpIn,
 								Values:   []string{"c5d.xlarge", "r5.2xlarge"},
-							},
+							},*/
 						},
 					},
 				},
@@ -251,28 +251,21 @@ func (m PodMutator) mutateExecutorPod(sourceObj *corev1.Pod) *corev1.Pod {
 type nodeAffinityConfig struct {
 	// instanceLifecycle is the life cycle of the node (on-demand vs spot)
 	instanceLifecycle config.InstanceLifecycle
-	// overrideLifecycle should we override lifecycle configuration that may already be present on the pod
-	overrideLifecycle bool
 	// instanceTypes is a list of allowed instance types for the pod to run on
 	instanceTypes []string
 }
 
 func (m PodMutator) getNodeAffinityConfig(annotations map[string]string, defaultLifecycle config.InstanceLifecycle) nodeAffinityConfig {
-	var overrideLifecycle bool
 	lifecycle := config.GetInstanceLifecycle(annotations)
 	if lifecycle == "" {
 		// Use default
 		lifecycle = defaultLifecycle
-		overrideLifecycle = false
-	} else {
-		overrideLifecycle = true
 	}
 
 	instanceTypes := config.GetConfiguredInstanceTypes(annotations, m.log)
 
 	return nodeAffinityConfig{
 		instanceLifecycle: lifecycle,
-		overrideLifecycle: overrideLifecycle,
 		instanceTypes:     instanceTypes,
 	}
 }
@@ -295,9 +288,12 @@ func (m PodMutator) buildAffinity(pod *corev1.Pod, conf nodeAffinityConfig) {
 		pod.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{}
 	}
 
+	// If any of the node affinity keys we want to set have been set already by some other means we will not touch them.
+	// TODO(thorsteinn) Should we override the existing configuration?
+
 	// Set node lifecycle
-	if isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeLifeCycleKey) && !conf.overrideLifecycle {
-		m.log.Info("Node affinity key %q already set, will not be mutated", nodeLifeCycleKey)
+	if isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeLifeCycleKey) {
+		m.log.Info(fmt.Sprintf("Node affinity key %q already set, will not be mutated", nodeLifeCycleKey))
 	} else {
 		switch conf.instanceLifecycle {
 		case config.InstanceLifecycleOnDemand:
@@ -308,7 +304,13 @@ func (m PodMutator) buildAffinity(pod *corev1.Pod, conf nodeAffinityConfig) {
 	}
 
 	if len(conf.instanceTypes) > 0 {
-		m.buildRequiredInstanceTypeAffinity(pod.Spec.Affinity.NodeAffinity, conf.instanceTypes)
+		if isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeInstanceTypeKey) ||
+			isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeInstanceTypeKeyBeta) {
+			m.log.Info(fmt.Sprintf("Node affinity keys %q or %q already set, will not be mutated",
+				nodeInstanceTypeKey, nodeInstanceTypeKeyBeta))
+		} else {
+			m.buildRequiredInstanceTypeAffinity(pod.Spec.Affinity.NodeAffinity, conf.instanceTypes)
+		}
 	}
 }
 
@@ -333,8 +335,6 @@ func (m PodMutator) buildRequiredOnDemandAffinity(nodeAffinity *corev1.NodeAffin
 		nodeSelector.NodeSelectorTerms = []corev1.NodeSelectorTerm{{}}
 	}
 
-	// TODO Override existing
-
 	for i := range nodeSelector.NodeSelectorTerms {
 		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
 			nodeSelector.NodeSelectorTerms[i].MatchExpressions,
@@ -350,8 +350,6 @@ func (m PodMutator) buildPreferredOnDemandAntiAffinity(nodeAffinity *corev1.Node
 		Operator: corev1.NodeSelectorOpNotIn,
 		Values:   []string{nodeLifeCycleValueOnDemand},
 	}
-
-	// TODO Override existing
 
 	nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(
 		nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
@@ -390,8 +388,6 @@ func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeA
 	if len(nodeSelector.NodeSelectorTerms) == 0 {
 		nodeSelector.NodeSelectorTerms = []corev1.NodeSelectorTerm{{}}
 	}
-
-	// TODO Override existing
 
 	for i := range nodeSelector.NodeSelectorTerms {
 		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
