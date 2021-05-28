@@ -91,6 +91,7 @@ func getSimplePod() *corev1.Pod {
 
 // the MutatingWebhook ObjectSelector does the initial filtering on the pod and should select only those
 // with the label SparkRoleLabel
+
 func TestMutateDriverPod(t *testing.T) {
 
 	type testCase struct {
@@ -163,6 +164,215 @@ func TestMutateDriverPod(t *testing.T) {
 			assert.Equal(t, driverPod.Spec.Volumes, newPod.Spec.Volumes)
 		}
 	}
+}
+
+func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
+
+	type testCase struct {
+		pod      *corev1.Pod
+		expected *corev1.Affinity
+	}
+
+	getDriverPod := func() *corev1.Pod {
+		pod := getSimplePod()
+		pod.Labels = map[string]string{
+			SparkRoleLabel: SparkRoleDriverValue,
+		}
+		return pod
+	}
+
+	getExecutorPod := func() *corev1.Pod {
+		pod := getSimplePod()
+		pod.Labels = map[string]string{
+			SparkRoleLabel: SparkRoleExecutorValue,
+		}
+		return pod
+	}
+
+	testFunc := func(tt *testing.T, tc testCase) {
+
+		req := getAdmissionRequest(tt, tc.pod)
+		res, err := NewPodMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+		assert.NoError(tt, err)
+		assert.NotNil(tt, res)
+		assert.Equal(tt, tc.pod.UID, res.UID)
+		assert.Equal(tt, &jsonPatchType, res.PatchType)
+		assert.NotNil(tt, res.Patch)
+		assert.True(tt, res.Allowed)
+
+		obj, err := ApplyJsonPatch(res.Patch, tc.pod)
+		assert.NoError(tt, err)
+		newPod, ok := obj.(*corev1.Pod)
+		assert.True(tt, ok)
+		assert.Equal(tt, tc.expected, newPod.Spec.Affinity)
+
+	}
+
+	t.Run("whenDefaultInstanceLifecycle_driver", func(tt *testing.T) {
+		tc := testCase{
+			pod:      getDriverPod(),
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenDefaultInstanceLifecycle_executor", func(tt *testing.T) {
+		tc := testCase{
+			pod:      getExecutorPod(),
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenOD_driver", func(tt *testing.T) {
+		pod := getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "od"
+		tc := testCase{
+			pod:      pod,
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenOD_executor", func(tt *testing.T) {
+		pod := getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "od"
+		tc := testCase{
+			pod:      pod,
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenSpot_driver", func(tt *testing.T) {
+		pod := getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "spot"
+		tc := testCase{
+			pod:      pod,
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenSpot_executor", func(tt *testing.T) {
+		pod := getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "spot"
+		tc := testCase{
+			pod:      pod,
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenInstanceLifecycleAlreadyConfigured_shouldNotOverride", func(tt *testing.T) {
+
+		// Required affinity
+
+		requiredAffinity := getOnDemandAffinity()
+		requiredAffinity.NodeAffinity.
+			RequiredDuringSchedulingIgnoredDuringExecution.
+			NodeSelectorTerms[0].MatchExpressions[0].Values = []string{"whatever"}
+
+		pod := getDriverPod()
+		pod.Spec.Affinity = requiredAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: requiredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Spec.Affinity = requiredAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "spot"
+		tc = testCase{
+			pod:      pod,
+			expected: requiredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Spec.Affinity = requiredAffinity
+		tc = testCase{
+			pod:      pod,
+			expected: requiredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Spec.Affinity = requiredAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "od"
+		tc = testCase{
+			pod:      pod,
+			expected: requiredAffinity,
+		}
+		testFunc(tt, tc)
+
+		// Preferred affinity
+
+		preferredAffinity := getOnDemandAntiAffinity()
+		preferredAffinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution[0].
+			Preference.MatchExpressions[0].Values = []string{"huh?"}
+
+		pod = getDriverPod()
+		pod.Spec.Affinity = preferredAffinity
+		tc = testCase{
+			pod:      pod,
+			expected: preferredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Spec.Affinity = preferredAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "spot"
+		tc = testCase{
+			pod:      pod,
+			expected: preferredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Spec.Affinity = preferredAffinity
+		tc = testCase{
+			pod:      pod,
+			expected: preferredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Spec.Affinity = preferredAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "od"
+		tc = testCase{
+			pod:      pod,
+			expected: preferredAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("whenInstanceLifecycleMisConfigured", func(tt *testing.T) {
+
+	})
+
+	t.Run("whenInstanceTypesConfigured", func(tt *testing.T) {
+
+	})
+
+	t.Run("whenInstanceTypesNotConfigured", func(tt *testing.T) {
+
+	})
+
+	t.Run("whenInstanceTypesAlreadyConfigured", func(tt *testing.T) {
+
+	})
+
+	t.Run("whenInstanceTypesMisConfigured", func(tt *testing.T) {
+
+	})
+
+	t.Run("whenOtherNodeSelectorRequirements_shouldNotOverride", func(tt *testing.T) {
+
+	})
+
 }
 
 func TestMutateExecutorPod(t *testing.T) {
