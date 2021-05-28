@@ -40,7 +40,7 @@ func GetInstanceLifecycle(annotations map[string]string, log logr.Logger) Instan
 	case "spot":
 		return InstanceLifecycleSpot
 	default:
-		log.Info(fmt.Sprintf("Unknown instance lifecycle value configuration: %q", conf))
+		log.Info(fmt.Sprintf("Unknown instance lifecycle configuration value: %q", conf))
 		return ""
 	}
 }
