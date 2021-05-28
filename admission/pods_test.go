@@ -13,8 +13,8 @@ import (
 	"github.com/spotinst/wave-operator/internal/util"
 )
 
-var (
-	onDemandAffinity = &corev1.Affinity{
+func getOnDemandAffinity() *corev1.Affinity {
+	return &corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 				NodeSelectorTerms: []corev1.NodeSelectorTerm{
@@ -36,7 +36,10 @@ var (
 			},
 		},
 	}
-	onDemandAntiAffinity = &corev1.Affinity{
+}
+
+func getOnDemandAntiAffinity() *corev1.Affinity {
+	return &corev1.Affinity{
 		NodeAffinity: &corev1.NodeAffinity{
 			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
 				{
@@ -54,7 +57,7 @@ var (
 			},
 		},
 	}
-)
+}
 
 func getSimplePod() *corev1.Pod {
 	return &corev1.Pod{
@@ -147,7 +150,7 @@ func TestMutateDriverPod(t *testing.T) {
 		assert.NoError(t, err)
 		newPod, ok := obj.(*corev1.Pod)
 		assert.True(t, ok)
-		assert.Equal(t, onDemandAffinity, newPod.Spec.Affinity)
+		assert.Equal(t, getOnDemandAffinity(), newPod.Spec.Affinity)
 
 		if tc.shouldAddEventLogSync {
 			assert.Equal(t, len(driverPod.Spec.Containers)+1, len(newPod.Spec.Containers))
@@ -181,7 +184,7 @@ func TestMutateExecutorPod(t *testing.T) {
 	newPod, ok := obj.(*(corev1.Pod))
 	assert.True(t, ok)
 	assert.Equal(t, 1, len(newPod.Spec.Containers))
-	assert.Equal(t, onDemandAntiAffinity, newPod.Spec.Affinity)
+	assert.Equal(t, getOnDemandAntiAffinity(), newPod.Spec.Affinity)
 	assert.Equal(t, 0, len(newPod.Spec.Volumes))
 }
 
@@ -212,7 +215,7 @@ func TestIdempotency(t *testing.T) {
 	require.True(t, ok)
 
 	assert.Equal(t, 2, len(pod2.Spec.Containers))
-	assert.Equal(t, onDemandAffinity, pod2.Spec.Affinity)
+	assert.Equal(t, getOnDemandAffinity(), pod2.Spec.Affinity)
 	assert.Equal(t, 1, len(newPod.Spec.Volumes))
 	assert.Equal(t, "spark-logs", newPod.Spec.Volumes[0].Name)
 }
@@ -258,7 +261,7 @@ func TestMutatePodBadStorage(t *testing.T) {
 
 		// We still want to add node affinity even though we have a failed storage provider
 		assert.Nil(t, driverPod.Spec.Affinity)
-		assert.Equal(t, onDemandAffinity, newPod.Spec.Affinity)
+		assert.Equal(t, getOnDemandAffinity(), newPod.Spec.Affinity)
 	}
 
 	t.Run("whenFailedStorageProvider", func(tt *testing.T) {
