@@ -339,7 +339,6 @@ func (m PodMutator) buildRequiredOnDemandAffinity(nodeAffinity *corev1.NodeAffin
 		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
 			nodeSelector.NodeSelectorTerms[i].MatchExpressions,
 			nodeSelectorRequirement)
-
 	}
 }
 
@@ -393,7 +392,6 @@ func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeA
 		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
 			nodeSelector.NodeSelectorTerms[i].MatchExpressions,
 			nodeSelectorRequirement, nodeSelectorRequirementBeta)
-
 	}
 }
 
