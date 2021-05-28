@@ -350,7 +350,7 @@ func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeA
 	for i := range nodeSelector.NodeSelectorTerms {
 		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
 			nodeSelector.NodeSelectorTerms[i].MatchExpressions,
-			nodeSelectorRequirement, nodeSelectorRequirementBeta)
+			nodeSelectorRequirement, nodeSelectorRequirementBeta) // TODO This does not work - they are ANDed
 	}
 }
 

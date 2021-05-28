@@ -25,11 +25,6 @@ func getOnDemandAffinity() *corev1.Affinity {
 								Operator: corev1.NodeSelectorOpIn,
 								Values:   []string{"od"},
 							},
-							/*{
-								Key:      "node.kubernetes.io/instance-type",
-								Operator: corev1.NodeSelectorOpIn,
-								Values:   []string{"c5d.xlarge", "r5.2xlarge"},
-							},*/
 						},
 					},
 				},
@@ -401,7 +396,61 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 
 	})
 
-	t.Run("whenInstanceTypesConfigured", func(tt *testing.T) {
+	t.Run("whenInstanceTypesConfigured_driver", func(tt *testing.T) {
+
+		expectedAffinity := getOnDemandAffinity()
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions =
+			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "node.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"t2.micro", "m5.xlarge"},
+				},
+				corev1.NodeSelectorRequirement{
+					Key:      "beta.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"t2.micro", "m5.xlarge"},
+				})
+
+		pod := getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "t2.micro, m5, m5.xlarge"
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("whenInstanceTypesConfigured_executor", func(tt *testing.T) {
+
+		expectedAffinity := getOnDemandAntiAffinity()
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{
+			NodeSelectorTerms: []corev1.NodeSelectorTerm{
+				{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "node.kubernetes.io/instance-type",
+							Operator: corev1.NodeSelectorOpIn,
+							Values:   []string{"t2.micro", "m5.xlarge"},
+						},
+						{
+							Key:      "beta.kubernetes.io/instance-type",
+							Operator: corev1.NodeSelectorOpIn,
+							Values:   []string{"t2.micro", "m5.xlarge"},
+						},
+					},
+				},
+			},
+		}
+
+		pod := getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "t2.micro, m5, m5.xlarge"
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
 
 	})
 
