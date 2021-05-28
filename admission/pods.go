@@ -215,7 +215,7 @@ type nodeAffinityConfig struct {
 }
 
 func (m PodMutator) getNodeAffinityConfig(annotations map[string]string, defaultLifecycle config.InstanceLifecycle) nodeAffinityConfig {
-	lifecycle := config.GetInstanceLifecycle(annotations)
+	lifecycle := config.GetInstanceLifecycle(annotations, m.log)
 	if lifecycle == "" {
 		// Use default
 		lifecycle = defaultLifecycle

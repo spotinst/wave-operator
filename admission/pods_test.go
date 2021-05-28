@@ -351,6 +351,54 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 
 	t.Run("whenInstanceLifecycleMisConfigured", func(tt *testing.T) {
 
+		pod := getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = ""
+		tc := testCase{
+			pod:      pod,
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "nonsense (driver)"
+		tc = testCase{
+			pod:      pod,
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = " SPOT " // Test input sanitation
+		tc = testCase{
+			pod:      pod,
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = ""
+		tc = testCase{
+			pod:      pod,
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "nonsense (executor)"
+		tc = testCase{
+			pod:      pod,
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = " OD " // Test input sanitation
+		tc = testCase{
+			pod:      pod,
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+
 	})
 
 	t.Run("whenInstanceTypesConfigured", func(tt *testing.T) {

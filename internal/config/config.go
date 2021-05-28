@@ -30,7 +30,7 @@ func IsEventLogSyncEnabled(annotations map[string]string) bool {
 	return enabled
 }
 
-func GetInstanceLifecycle(annotations map[string]string) InstanceLifecycle {
+func GetInstanceLifecycle(annotations map[string]string, log logr.Logger) InstanceLifecycle {
 	conf := annotations[WaveConfigAnnotationInstanceLifecycle]
 	conf = strings.ToLower(conf)
 	conf = strings.TrimSpace(conf)
@@ -40,6 +40,7 @@ func GetInstanceLifecycle(annotations map[string]string) InstanceLifecycle {
 	case "spot":
 		return InstanceLifecycleSpot
 	default:
+		log.Info(fmt.Sprintf("Unknown instance lifecycle value configuration: %q", conf))
 		return ""
 	}
 }
