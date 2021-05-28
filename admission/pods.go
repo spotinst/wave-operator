@@ -17,6 +17,12 @@ const (
 	SparkRoleLabel         = "spark-role"
 	SparkRoleDriverValue   = "driver"
 	SparkRoleExecutorValue = "executor"
+
+	nodeLifeCycleKey           = "spotinst.io/node-lifecycle"
+	nodeLifeCycleValueOnDemand = "od"
+
+	nodeInstanceTypeKey     = "node.kubernetes.io/instance-type"
+	nodeInstanceTypeKeyBeta = "beta.kubernetes.io/instance-type" // k8s version <v1.17
 )
 
 var (
@@ -94,7 +100,7 @@ func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.Admi
 	if err != nil {
 		return nil, fmt.Errorf("deserialization failed, %w", err)
 	}
-	log := m.log.WithValues("pod", sourceObj.Name)
+	log := m.log.WithValues("pod", sourceObj.Name, "annotations", sourceObj.Annotations)
 
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
@@ -113,7 +119,7 @@ func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.Admi
 
 	var modObj *corev1.Pod
 	if sparkRole == SparkRoleDriverValue {
-		log.Info("Mutating driver pod", "annotations", sourceObj.Annotations)
+		log.Info("Mutating driver pod")
 		modObj = m.mutateDriverPod(sourceObj)
 	} else {
 		log.Info("Mutating executor pod")
@@ -138,7 +144,8 @@ func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod) *corev1.Pod {
 	modObj := sourceObj.DeepCopy()
 
 	// node affinity
-	modObj.Spec.Affinity = onDemandAffinity
+	m.buildAffinityDriver(modObj)
+	//modObj.Spec.Affinity = onDemandAffinity
 
 	if !config.IsEventLogSyncEnabled(sourceObj.Annotations) {
 		m.log.Info("Event log sync not enabled, will not add storage sync container")
@@ -236,6 +243,180 @@ func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod) *corev1.Pod {
 func (m PodMutator) mutateExecutorPod(sourceObj *corev1.Pod) *corev1.Pod {
 	modObj := sourceObj.DeepCopy()
 	// node affinity
-	modObj.Spec.Affinity = onDemandAntiAffinity
+	m.buildAffinityExecutor(modObj)
+	//modObj.Spec.Affinity = onDemandAntiAffinity
 	return modObj
+}
+
+type nodeAffinityConfig struct {
+	// instanceLifecycle is the life cycle of the node (on-demand vs spot)
+	instanceLifecycle config.InstanceLifecycle
+	// overrideLifecycle should we override lifecycle configuration that may already be present on the pod
+	overrideLifecycle bool
+	// instanceTypes is a list of allowed instance types for the pod to run on
+	instanceTypes []string
+}
+
+func (m PodMutator) getNodeAffinityConfig(annotations map[string]string, defaultLifecycle config.InstanceLifecycle) nodeAffinityConfig {
+	var overrideLifecycle bool
+	lifecycle := config.GetInstanceLifecycle(annotations)
+	if lifecycle == "" {
+		// Use default
+		lifecycle = defaultLifecycle
+		overrideLifecycle = false
+	} else {
+		overrideLifecycle = true
+	}
+
+	instanceTypes := config.GetConfiguredInstanceTypes(annotations, m.log)
+
+	return nodeAffinityConfig{
+		instanceLifecycle: lifecycle,
+		overrideLifecycle: overrideLifecycle,
+		instanceTypes:     instanceTypes,
+	}
+}
+
+func (m PodMutator) buildAffinityDriver(pod *corev1.Pod) {
+	conf := m.getNodeAffinityConfig(pod.Annotations, config.InstanceLifecycleOnDemand)
+	m.buildAffinity(pod, conf)
+}
+
+func (m PodMutator) buildAffinityExecutor(pod *corev1.Pod) {
+	conf := m.getNodeAffinityConfig(pod.Annotations, config.InstanceLifecycleSpot)
+	m.buildAffinity(pod, conf)
+}
+
+func (m PodMutator) buildAffinity(pod *corev1.Pod, conf nodeAffinityConfig) {
+	if pod.Spec.Affinity == nil {
+		pod.Spec.Affinity = &corev1.Affinity{}
+	}
+	if pod.Spec.Affinity.NodeAffinity == nil {
+		pod.Spec.Affinity.NodeAffinity = &corev1.NodeAffinity{}
+	}
+
+	// Set node lifecycle
+	if isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeLifeCycleKey) && !conf.overrideLifecycle {
+		m.log.Info("Node affinity key %q already set, will not be mutated", nodeLifeCycleKey)
+	} else {
+		switch conf.instanceLifecycle {
+		case config.InstanceLifecycleOnDemand:
+			m.buildRequiredOnDemandAffinity(pod.Spec.Affinity.NodeAffinity)
+		case config.InstanceLifecycleSpot:
+			m.buildPreferredOnDemandAntiAffinity(pod.Spec.Affinity.NodeAffinity)
+		}
+	}
+
+	if len(conf.instanceTypes) > 0 {
+		m.buildRequiredInstanceTypeAffinity(pod.Spec.Affinity.NodeAffinity, conf.instanceTypes)
+	}
+}
+
+// buildRequiredOnDemandAffinity builds a required affinity to on-demand nodes
+func (m PodMutator) buildRequiredOnDemandAffinity(nodeAffinity *corev1.NodeAffinity) {
+	nodeSelectorRequirement := corev1.NodeSelectorRequirement{
+		Key:      nodeLifeCycleKey,
+		Operator: corev1.NodeSelectorOpIn,
+		Values:   []string{nodeLifeCycleValueOnDemand},
+	}
+
+	if nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
+		nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
+	}
+
+	nodeSelector := nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+
+	// Node selector terms are ORed, and expressions are ANDed.
+	// Let's add the node lifecycle requirement to all node selector terms.
+
+	if len(nodeSelector.NodeSelectorTerms) == 0 {
+		nodeSelector.NodeSelectorTerms = []corev1.NodeSelectorTerm{{}}
+	}
+
+	// TODO Override existing
+
+	for _, nst := range nodeSelector.NodeSelectorTerms {
+		nst.MatchExpressions = append(nst.MatchExpressions, nodeSelectorRequirement)
+	}
+}
+
+// buildPreferredOnDemandAntiAffinity builds a preferred anti affinity to on-demand nodes
+func (m PodMutator) buildPreferredOnDemandAntiAffinity(nodeAffinity *corev1.NodeAffinity) {
+	nodeSelectorRequirement := corev1.NodeSelectorRequirement{
+		Key:      nodeLifeCycleKey,
+		Operator: corev1.NodeSelectorOpNotIn,
+		Values:   []string{nodeLifeCycleValueOnDemand},
+	}
+
+	// TODO Override existing
+
+	nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(
+		nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
+		corev1.PreferredSchedulingTerm{
+			Weight: 1,
+			Preference: corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					nodeSelectorRequirement,
+				},
+			},
+		})
+}
+
+func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeAffinity, instanceTypes []string) {
+	nodeSelectorRequirement := corev1.NodeSelectorRequirement{
+		Key:      nodeInstanceTypeKey,
+		Operator: corev1.NodeSelectorOpIn,
+		Values:   instanceTypes,
+	}
+
+	nodeSelectorRequirementBeta := corev1.NodeSelectorRequirement{
+		Key:      nodeInstanceTypeKeyBeta,
+		Operator: corev1.NodeSelectorOpIn,
+		Values:   instanceTypes,
+	}
+
+	if nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
+		nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
+	}
+
+	nodeSelector := nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+
+	// Node selector terms are ORed, and expressions are ANDed.
+	// Let's add the node selector requirement to all node selector terms.
+
+	if len(nodeSelector.NodeSelectorTerms) == 0 {
+		nodeSelector.NodeSelectorTerms = []corev1.NodeSelectorTerm{{}}
+	}
+
+	// TODO Override existing
+
+	for _, nst := range nodeSelector.NodeSelectorTerms {
+		nst.MatchExpressions = append(nst.MatchExpressions, nodeSelectorRequirement)
+		nst.MatchExpressions = append(nst.MatchExpressions, nodeSelectorRequirementBeta)
+	}
+
+}
+
+// isNodeAffinityKeySet determines if the given node affinity key set as either preferred or required
+func isNodeAffinityKeySet(na *corev1.NodeAffinity, key string) bool {
+	if na.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+		nodeSelector := na.RequiredDuringSchedulingIgnoredDuringExecution
+		for _, term := range nodeSelector.NodeSelectorTerms {
+			for _, expr := range term.MatchExpressions {
+				if expr.Key == key {
+					return true
+				}
+			}
+		}
+	}
+
+	for _, pst := range na.PreferredDuringSchedulingIgnoredDuringExecution {
+		for _, expr := range pst.Preference.MatchExpressions {
+			if expr.Key == key {
+				return true
+			}
+		}
+	}
+
+	return false
 }

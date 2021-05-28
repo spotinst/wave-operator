@@ -9,9 +9,15 @@ import (
 )
 
 const (
-	WaveConfigAnnotationSyncEventLogs = "wave.spot.io/synceventlogs"
-	WaveConfigAnnotationInstanceType  = "wave.spot.io/instancetype"
+	WaveConfigAnnotationSyncEventLogs     = "wave.spot.io/synceventlogs"
+	WaveConfigAnnotationInstanceType      = "wave.spot.io/instancetype"
+	WaveConfigAnnotationInstanceLifecycle = "wave.spot.io/instancelifecycle"
+
+	InstanceLifecycleOnDemand = "od"
+	InstanceLifecycleSpot     = "spot"
 )
+
+type InstanceLifecycle string
 
 func IsEventLogSyncEnabled(annotations map[string]string) bool {
 	if annotations == nil {
@@ -22,6 +28,20 @@ func IsEventLogSyncEnabled(annotations map[string]string) bool {
 		return false
 	}
 	return enabled
+}
+
+func GetInstanceLifecycle(annotations map[string]string) InstanceLifecycle {
+	conf := annotations[WaveConfigAnnotationInstanceLifecycle]
+	conf = strings.ToLower(conf)
+	conf = strings.TrimSpace(conf)
+	switch conf {
+	case "od":
+		return InstanceLifecycleOnDemand
+	case "spot":
+		return InstanceLifecycleSpot
+	default:
+		return ""
+	}
 }
 
 func GetConfiguredInstanceTypes(annotations map[string]string, log logr.Logger) []string {
