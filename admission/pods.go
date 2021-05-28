@@ -26,47 +26,6 @@ const (
 )
 
 var (
-	// TODO Refactor this to be more elegant - if node selector terms already present, add to them
-	onDemandAffinity = &corev1.Affinity{
-		NodeAffinity: &corev1.NodeAffinity{
-			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-				NodeSelectorTerms: []corev1.NodeSelectorTerm{
-					{
-						MatchExpressions: []corev1.NodeSelectorRequirement{
-							{
-								Key:      "spotinst.io/node-lifecycle",
-								Operator: corev1.NodeSelectorOpIn,
-								Values:   []string{"od"},
-							},
-							/*{
-								Key:      "node.kubernetes.io/instance-type",
-								Operator: corev1.NodeSelectorOpIn,
-								Values:   []string{"c5d.xlarge", "r5.2xlarge"},
-							},*/
-						},
-					},
-				},
-			},
-		},
-	}
-	onDemandAntiAffinity = &corev1.Affinity{
-		NodeAffinity: &corev1.NodeAffinity{
-			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
-				{
-					Weight: 1,
-					Preference: corev1.NodeSelectorTerm{
-						MatchExpressions: []corev1.NodeSelectorRequirement{
-							{
-								Key:      "spotinst.io/node-lifecycle",
-								Operator: corev1.NodeSelectorOpNotIn,
-								Values:   []string{"od"},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
 	volume = corev1.Volume{
 		Name: "spark-logs",
 		VolumeSource: corev1.VolumeSource{
