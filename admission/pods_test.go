@@ -724,7 +724,66 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 	})
 
 	t.Run("instanceTypeConfigurationIsAdditive", func(tt *testing.T) {
-		// TODO
+
+		existingAffinity := getOnDemandAffinity()
+		existingAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = append(
+			existingAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms,
+			corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					{
+						Key:      "some-config-key",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"some-config-value"},
+					},
+				},
+			})
+
+		expectedAffinity := getOnDemandAffinity()
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = append(
+			expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms,
+			corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					{
+						Key:      "some-config-key",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"some-config-value"},
+					},
+				},
+			})
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions =
+			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "node.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"t2.micro", "m5.xlarge"},
+				},
+				corev1.NodeSelectorRequirement{
+					Key:      "beta.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"t2.micro", "m5.xlarge"},
+				})
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[1].MatchExpressions =
+			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[1].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "node.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"t2.micro", "m5.xlarge"},
+				},
+				corev1.NodeSelectorRequirement{
+					Key:      "beta.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"t2.micro", "m5.xlarge"},
+				})
+
+		pod := getDriverPod()
+		pod.Spec.Affinity = existingAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "t2.micro, m5, m5.xlarge"
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
 	})
 
 	t.Run("whenInstanceTypesMisConfigured_shouldIgnore", func(tt *testing.T) {
