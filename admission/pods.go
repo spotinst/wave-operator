@@ -21,8 +21,7 @@ const (
 	nodeLifeCycleKey           = "spotinst.io/node-lifecycle"
 	nodeLifeCycleValueOnDemand = "od"
 
-	nodeInstanceTypeKey     = "node.kubernetes.io/instance-type"
-	nodeInstanceTypeKeyBeta = "beta.kubernetes.io/instance-type" // k8s version <v1.17
+	nodeInstanceTypeKey = "node.kubernetes.io/instance-type"
 )
 
 var (
@@ -263,10 +262,8 @@ func (m PodMutator) buildAffinity(pod *corev1.Pod, conf nodeAffinityConfig) {
 	}
 
 	if len(conf.instanceTypes) > 0 {
-		if isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeInstanceTypeKey) ||
-			isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeInstanceTypeKeyBeta) {
-			m.log.Info(fmt.Sprintf("Node affinity keys %q or %q already set, will not be mutated",
-				nodeInstanceTypeKey, nodeInstanceTypeKeyBeta))
+		if isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeInstanceTypeKey) {
+			m.log.Info(fmt.Sprintf("Node affinity keys %q already set, will not be mutated", nodeInstanceTypeKey))
 		} else {
 			m.buildRequiredInstanceTypeAffinity(pod.Spec.Affinity.NodeAffinity, conf.instanceTypes)
 		}
@@ -330,12 +327,6 @@ func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeA
 		Values:   instanceTypes,
 	}
 
-	nodeSelectorRequirementBeta := corev1.NodeSelectorRequirement{
-		Key:      nodeInstanceTypeKeyBeta,
-		Operator: corev1.NodeSelectorOpIn,
-		Values:   instanceTypes,
-	}
-
 	if nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
 		nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
 	}
@@ -351,8 +342,7 @@ func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeA
 
 	for i := range nodeSelector.NodeSelectorTerms {
 		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
-			nodeSelector.NodeSelectorTerms[i].MatchExpressions,
-			nodeSelectorRequirement, nodeSelectorRequirementBeta) // TODO This does not work - they are ANDed
+			nodeSelector.NodeSelectorTerms[i].MatchExpressions, nodeSelectorRequirement)
 	}
 }
 
