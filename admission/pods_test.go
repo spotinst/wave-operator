@@ -54,6 +54,26 @@ func getOnDemandAntiAffinity() *corev1.Affinity {
 	}
 }
 
+func getInstanceTypeAffinity() *corev1.Affinity {
+	return &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "node.kubernetes.io/instance-type",
+								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{"t2.micro", "m5.xlarge"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func getSimplePod() *corev1.Pod {
 	return &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -396,8 +416,87 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 
 	})
 
-	t.Run("instanceLifecycleConfigurationIsAdditive", func(tt *testing.T) {
-		// TODO
+	t.Run("instanceLifecycleConfigurationIsAdditive_driver", func(tt *testing.T) {
+
+		// Should not override other node affinity configurations
+
+		existingAffinity := getInstanceTypeAffinity()
+
+		expectedAffinity := getInstanceTypeAffinity()
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions =
+			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "spotinst.io/node-lifecycle",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"od"},
+				})
+
+		pod := getDriverPod()
+		pod.Spec.Affinity = existingAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("instanceLifecycleConfigurationIsAdditive_executor", func(tt *testing.T) {
+
+		// Should not override other node affinity configurations
+
+		existingAffinity := getInstanceTypeAffinity()
+		existingAffinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm{
+			{
+				Weight: 10,
+				Preference: corev1.NodeSelectorTerm{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "whatever",
+							Operator: corev1.NodeSelectorOpNotIn,
+							Values:   []string{"some other configuration"},
+						},
+					},
+				},
+			},
+		}
+
+		expectedAffinity := getInstanceTypeAffinity()
+		expectedAffinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm{
+			{
+				Weight: 10,
+				Preference: corev1.NodeSelectorTerm{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "whatever",
+							Operator: corev1.NodeSelectorOpNotIn,
+							Values:   []string{"some other configuration"},
+						},
+					},
+				},
+			},
+			{
+				Weight: 1,
+				Preference: corev1.NodeSelectorTerm{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "spotinst.io/node-lifecycle",
+							Operator: corev1.NodeSelectorOpNotIn,
+							Values:   []string{"od"},
+						},
+					},
+				},
+			},
+		}
+
+		pod := getExecutorPod()
+		pod.Spec.Affinity = existingAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
 	})
 
 	t.Run("whenInstanceTypesConfigured_driver", func(tt *testing.T) {

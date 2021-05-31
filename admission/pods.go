@@ -309,6 +309,8 @@ func (m PodMutator) buildPreferredOnDemandAntiAffinity(nodeAffinity *corev1.Node
 		Values:   []string{nodeLifeCycleValueOnDemand},
 	}
 
+	// Add new preferred scheduling term
+	// The weights of preferred scheduling terms are summed up to find the most suitable node
 	nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(
 		nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
 		corev1.PreferredSchedulingTerm{
