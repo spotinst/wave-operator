@@ -32,6 +32,9 @@ func IsEventLogSyncEnabled(annotations map[string]string) bool {
 
 func GetInstanceLifecycle(annotations map[string]string, log logr.Logger) InstanceLifecycle {
 	conf := annotations[WaveConfigAnnotationInstanceLifecycle]
+	if conf == "" {
+		return ""
+	}
 	conf = strings.ToLower(conf)
 	conf = strings.TrimSpace(conf)
 	switch conf {

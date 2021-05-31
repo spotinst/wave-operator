@@ -456,6 +456,40 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 
 	t.Run("whenInstanceTypesNotConfigured", func(tt *testing.T) {
 
+		expectedAffinity := getOnDemandAffinity()
+
+		pod := getDriverPod()
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = ""
+		tc = testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+		expectedAffinity = getOnDemandAntiAffinity()
+
+		pod = getExecutorPod()
+		tc = testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = ""
+		tc = testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
 	})
 
 	t.Run("whenInstanceTypesAlreadyConfigured", func(tt *testing.T) {
