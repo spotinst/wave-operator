@@ -39,12 +39,14 @@ var (
 
 type PodMutator struct {
 	storageProvider cloudstorage.CloudStorageProvider
+	baseLogger      logr.Logger
 	log             logr.Logger
 }
 
 func NewPodMutator(log logr.Logger, storageProvider cloudstorage.CloudStorageProvider) PodMutator {
 	return PodMutator{
 		storageProvider: storageProvider,
+		baseLogger:      log,
 		log:             log,
 	}
 }
@@ -58,7 +60,7 @@ func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.Admi
 	if err != nil {
 		return nil, fmt.Errorf("deserialization failed, %w", err)
 	}
-	log := m.log.WithValues("pod", sourceObj.Name, "annotations", sourceObj.Annotations)
+	m.log = m.baseLogger.WithValues("pod", sourceObj.Name, "annotations", sourceObj.Annotations)
 
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
@@ -77,20 +79,20 @@ func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.Admi
 
 	var modObj *corev1.Pod
 	if sparkRole == SparkRoleDriverValue {
-		log.Info("Mutating driver pod")
+		m.log.Info("Mutating driver pod")
 		modObj = m.mutateDriverPod(sourceObj)
 	} else {
-		log.Info("Mutating executor pod")
+		m.log.Info("Mutating executor pod")
 		modObj = m.mutateExecutorPod(sourceObj)
 	}
 
 	patchBytes, err := GetJsonPatch(sourceObj, modObj)
 	if err != nil {
-		log.Error(err, "unable to generate patch, continuing", "pod", sourceObj.Name)
+		m.log.Error(err, "unable to generate patch, continuing", "pod", sourceObj.Name)
 		return resp, nil
 	}
 
-	log.Info("patching pod", "patch", string(patchBytes))
+	m.log.Info("patching pod", "patch", string(patchBytes))
 	resp.PatchType = &jsonPatchType
 	resp.Patch = patchBytes
 
