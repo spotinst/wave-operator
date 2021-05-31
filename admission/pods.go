@@ -278,24 +278,7 @@ func (m PodMutator) buildRequiredOnDemandAffinity(nodeAffinity *corev1.NodeAffin
 		Values:   []string{nodeLifeCycleValueOnDemand},
 	}
 
-	if nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
-		nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
-	}
-
-	nodeSelector := nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
-
-	// Node selector terms are ORed, and expressions are ANDed.
-	// Let's add the node lifecycle requirement to all node selector terms.
-
-	if len(nodeSelector.NodeSelectorTerms) == 0 {
-		nodeSelector.NodeSelectorTerms = []corev1.NodeSelectorTerm{{}}
-	}
-
-	for i := range nodeSelector.NodeSelectorTerms {
-		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
-			nodeSelector.NodeSelectorTerms[i].MatchExpressions,
-			nodeSelectorRequirement)
-	}
+	m.addNodeSelectorRequirement(nodeAffinity, nodeSelectorRequirement)
 }
 
 // buildPreferredOnDemandAntiAffinity builds a preferred anti affinity to on-demand nodes
@@ -327,6 +310,10 @@ func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeA
 		Values:   instanceTypes,
 	}
 
+	m.addNodeSelectorRequirement(nodeAffinity, nodeSelectorRequirement)
+}
+
+func (m PodMutator) addNodeSelectorRequirement(nodeAffinity *corev1.NodeAffinity, requirement corev1.NodeSelectorRequirement) {
 	if nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
 		nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
 	}
@@ -342,7 +329,7 @@ func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeA
 
 	for i := range nodeSelector.NodeSelectorTerms {
 		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
-			nodeSelector.NodeSelectorTerms[i].MatchExpressions, nodeSelectorRequirement)
+			nodeSelector.NodeSelectorTerms[i].MatchExpressions, requirement)
 	}
 }
 
