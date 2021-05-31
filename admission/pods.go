@@ -103,7 +103,6 @@ func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod) *corev1.Pod {
 
 	// node affinity
 	m.buildAffinityDriver(modObj)
-	//modObj.Spec.Affinity = onDemandAffinity
 
 	if !config.IsEventLogSyncEnabled(sourceObj.Annotations) {
 		m.log.Info("Event log sync not enabled, will not add storage sync container")
@@ -202,7 +201,6 @@ func (m PodMutator) mutateExecutorPod(sourceObj *corev1.Pod) *corev1.Pod {
 	modObj := sourceObj.DeepCopy()
 	// node affinity
 	m.buildAffinityExecutor(modObj)
-	//modObj.Spec.Affinity = onDemandAntiAffinity
 	return modObj
 }
 
@@ -263,7 +261,7 @@ func (m PodMutator) buildAffinity(pod *corev1.Pod, conf nodeAffinityConfig) {
 
 	if len(conf.instanceTypes) > 0 {
 		if isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeInstanceTypeKey) {
-			m.log.Info(fmt.Sprintf("Node affinity keys %q already set, will not be mutated", nodeInstanceTypeKey))
+			m.log.Info(fmt.Sprintf("Node affinity key %q already set, will not be mutated", nodeInstanceTypeKey))
 		} else {
 			m.buildRequiredInstanceTypeAffinity(pod.Spec.Affinity.NodeAffinity, conf.instanceTypes)
 		}
@@ -291,6 +289,7 @@ func (m PodMutator) buildPreferredOnDemandAntiAffinity(nodeAffinity *corev1.Node
 
 	// Add new preferred scheduling term
 	// The weights of preferred scheduling terms are summed up to find the most suitable node
+	m.log.Info(fmt.Sprintf("Adding preferred node selector requirement: %v", nodeSelectorRequirement))
 	nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(
 		nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
 		corev1.PreferredSchedulingTerm{
@@ -327,6 +326,7 @@ func (m PodMutator) addNodeSelectorRequirement(nodeAffinity *corev1.NodeAffinity
 		nodeSelector.NodeSelectorTerms = []corev1.NodeSelectorTerm{{}}
 	}
 
+	m.log.Info(fmt.Sprintf("Adding node selector requirement: %v", requirement))
 	for i := range nodeSelector.NodeSelectorTerms {
 		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
 			nodeSelector.NodeSelectorTerms[i].MatchExpressions, requirement)
