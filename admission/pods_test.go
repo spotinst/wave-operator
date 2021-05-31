@@ -646,11 +646,6 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 					Key:      "node.kubernetes.io/instance-type",
 					Operator: corev1.NodeSelectorOpIn,
 					Values:   []string{"what", "ever"},
-				},
-				corev1.NodeSelectorRequirement{
-					Key:      "beta.kubernetes.io/instance-type",
-					Operator: corev1.NodeSelectorOpIn,
-					Values:   []string{"doesn't", "matter"},
 				})
 
 		pod := getDriverPod()
@@ -683,11 +678,6 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 							Key:      "node.kubernetes.io/instance-type",
 							Operator: corev1.NodeSelectorOpIn,
 							Values:   []string{"what", "ever"},
-						},
-						{
-							Key:      "beta.kubernetes.io/instance-type",
-							Operator: corev1.NodeSelectorOpIn,
-							Values:   []string{"doesn't", "matter"},
 						},
 					},
 				},
