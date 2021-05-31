@@ -441,6 +441,58 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 
 	})
 
+	t.Run("instanceLifecycleConfigurationIsAdditive_driver_shouldAddNodeSelectorRequirementToAllNodeSelectorTerms", func(tt *testing.T) {
+
+		// Should add node selector requirement to all node selector terms
+
+		existingAffinity := getInstanceTypeAffinity()
+		existingAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = append(
+			existingAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms,
+			corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					{
+						Key:      "some-config-key",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"some-config-value"},
+					},
+				},
+			})
+
+		expectedAffinity := getInstanceTypeAffinity()
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions =
+			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "spotinst.io/node-lifecycle",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"od"},
+				})
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = append(
+			expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms,
+			corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					{
+						Key:      "some-config-key",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"some-config-value"},
+					},
+					{
+						Key:      "spotinst.io/node-lifecycle",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"od"},
+					},
+				},
+			})
+
+		pod := getDriverPod()
+		pod.Spec.Affinity = existingAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
 	t.Run("instanceLifecycleConfigurationIsAdditive_executor", func(tt *testing.T) {
 
 		// Should not override other node affinity configurations
