@@ -727,12 +727,26 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 		// TODO
 	})
 
-	t.Run("whenInstanceTypesMisConfigured", func(tt *testing.T) {
-		// TODO
-	})
+	t.Run("whenInstanceTypesMisConfigured_shouldIgnore", func(tt *testing.T) {
 
-	t.Run("whenOtherNodeSelectorRequirements_shouldNotOverride", func(tt *testing.T) {
-		// TODO
+		expectedAffinity := getOnDemandAffinity()
+		pod := getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "this, is, nonsense"
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+		expectedAffinity = getOnDemandAntiAffinity()
+		pod = getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "this, is, nonsense"
+		tc = testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
 	})
 
 }
