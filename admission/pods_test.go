@@ -396,6 +396,10 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 
 	})
 
+	t.Run("instanceLifecycleConfigurationIsAdditive", func(tt *testing.T) {
+		// TODO
+	})
+
 	t.Run("whenInstanceTypesConfigured_driver", func(tt *testing.T) {
 
 		expectedAffinity := getOnDemandAffinity()
@@ -492,16 +496,92 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 
 	})
 
-	t.Run("whenInstanceTypesAlreadyConfigured", func(tt *testing.T) {
+	t.Run("whenInstanceTypesAlreadyConfigured_shouldNotOverride_driver", func(tt *testing.T) {
 
+		odAffinity := getOnDemandAffinity()
+		odAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions =
+			append(odAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "node.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"what", "ever"},
+				},
+				corev1.NodeSelectorRequirement{
+					Key:      "beta.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"doesn't", "matter"},
+				})
+
+		pod := getDriverPod()
+		pod.Spec.Affinity = odAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: odAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Spec.Affinity = odAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "t2.micro"
+		tc = testCase{
+			pod:      pod,
+			expected: odAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("whenInstanceTypesAlreadyConfigured_shouldNotOverride_executor", func(tt *testing.T) {
+
+		odAntiAffinity := getOnDemandAntiAffinity()
+		odAntiAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{
+			NodeSelectorTerms: []corev1.NodeSelectorTerm{
+				{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "node.kubernetes.io/instance-type",
+							Operator: corev1.NodeSelectorOpIn,
+							Values:   []string{"what", "ever"},
+						},
+						{
+							Key:      "beta.kubernetes.io/instance-type",
+							Operator: corev1.NodeSelectorOpIn,
+							Values:   []string{"doesn't", "matter"},
+						},
+					},
+				},
+			},
+		}
+
+		pod := getExecutorPod()
+		pod.Spec.Affinity = odAntiAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: odAntiAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Spec.Affinity = odAntiAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "t2.micro"
+		tc = testCase{
+			pod:      pod,
+			expected: odAntiAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("instanceTypeConfigurationIsAdditive", func(tt *testing.T) {
+		// TODO
 	})
 
 	t.Run("whenInstanceTypesMisConfigured", func(tt *testing.T) {
-
+		// TODO
 	})
 
 	t.Run("whenOtherNodeSelectorRequirements_shouldNotOverride", func(tt *testing.T) {
-
+		// TODO
 	})
 
 }
