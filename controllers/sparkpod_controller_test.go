@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/spotinst/wave-operator/internal/config"
 	"testing"
 	"time"
 
@@ -24,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/internal/config"
 	"github.com/spotinst/wave-operator/internal/sparkapi"
 	sparkapiclient "github.com/spotinst/wave-operator/internal/sparkapi/client"
 	"github.com/spotinst/wave-operator/internal/sparkapi/client/transport"
