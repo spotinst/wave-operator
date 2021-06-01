@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/spotinst/wave-operator/internal/config"
 	"testing"
 	"time"
 
@@ -487,6 +488,88 @@ func TestReconcile_driver_whenPodDeletionTimeoutPassed(t *testing.T) {
 	err = ctrlClient.Get(ctx, client.ObjectKey{Name: pod.Name, Namespace: pod.Namespace}, updatedPod)
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(updatedPod.Finalizers))
+}
+
+func TestReconcile_driver_setApplicationName(t *testing.T) {
+	ctx := context.TODO()
+	sparkAppID := "spark-123456"
+
+	// Mock Spark API manager
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := mock_sparkapi.NewMockManager(ctrl)
+	m.EXPECT().GetApplicationInfo(sparkAppID, sparkapi.NewStageMetricsAggregatorState(), gomock.Any()).Return(getTestApplicationInfo(), nil).AnyTimes()
+	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
+		return m, nil
+	}
+
+	testFunc := func(tt *testing.T, pod *corev1.Pod, expectedName string, callSparkAPI bool) {
+
+		ctrlClient := ctrlrt_fake.NewFakeClientWithScheme(testScheme, pod)
+		clientSet := k8sfake.NewSimpleClientset()
+		controller := NewSparkPodReconciler(ctrlClient, clientSet, getMockSparkApiManager, getTestLogger(), testScheme)
+
+		req := ctrlrt.Request{
+			NamespacedName: types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name},
+		}
+
+		// First reconcile - finalizer added
+		_, err := controller.Reconcile(ctx, req)
+		assert.NoError(t, err)
+
+		// Second reconcile - cr created
+		_, err = controller.Reconcile(ctx, req)
+		assert.NoError(t, err)
+
+		// Third reconcile - owner reference added
+		_, err = controller.Reconcile(ctx, req)
+		assert.NoError(t, err)
+
+		if callSparkAPI {
+			// Fourth reconcile - cr updated with Spark API info
+			_, err = controller.Reconcile(ctx, req)
+			assert.NoError(t, err)
+		}
+
+		createdCR := &v1alpha1.SparkApplication{}
+		err = ctrlClient.Get(ctx, client.ObjectKey{Name: sparkAppID, Namespace: pod.Namespace}, createdCR)
+		require.NoError(t, err)
+
+		// Application name set as annotation on CR
+		assert.Equal(tt, expectedName, createdCR.Annotations[config.WaveConfigAnnotationApplicationName])
+		// Application name set in CR spec
+		assert.Equal(tt, expectedName, createdCR.Spec.ApplicationName)
+	}
+
+	t.Run("whenNameFromAnnotation", func(tt *testing.T) {
+		name := "app-name-from-annotation"
+		pod := getTestPod("test-ns", "test-driver", "123-456", DriverRole, sparkAppID, false)
+		pod.Annotations = map[string]string{
+			config.WaveConfigAnnotationApplicationName: name,
+		}
+		pod.Labels[sparkOperatorAppNameLabel] = "whatever - shouldn't be used"
+		testFunc(tt, pod, name, true)
+	})
+
+	t.Run("whenNameFromSparkOperatorCR", func(tt *testing.T) {
+		name := "spark-operator-app-name"
+		pod := getTestPod("test-ns", "test-driver", "123-456", DriverRole, sparkAppID, false)
+		pod.Labels[sparkOperatorAppNameLabel] = name
+		testFunc(tt, pod, name, true)
+	})
+
+	t.Run("whenNameFromSparkAPI", func(tt *testing.T) {
+		name := getTestApplicationInfo().ApplicationName
+		pod := getTestPod("test-ns", "test-driver", "123-456", DriverRole, sparkAppID, false)
+		testFunc(tt, pod, name, true)
+	})
+
+	t.Run("whenNameFromDriverPod", func(tt *testing.T) {
+		name := "driver-pod-name"
+		pod := getTestPod("test-ns", name, "123-456", DriverRole, sparkAppID, false)
+		testFunc(tt, pod, name, false)
+	})
+
 }
 
 func TestReconcile_executor_whenSuccessful(t *testing.T) {

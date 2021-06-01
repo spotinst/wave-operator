@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	WaveConfigAnnotationSyncEventLogs     = "wave.spot.io/synceventlogs"
-	WaveConfigAnnotationInstanceType      = "wave.spot.io/instancetype"
-	WaveConfigAnnotationInstanceLifecycle = "wave.spot.io/instancelifecycle"
+	WaveConfigAnnotationSyncEventLogs     = "wave.spot.io/sync-event-logs"
+	WaveConfigAnnotationInstanceType      = "wave.spot.io/instance-type"
+	WaveConfigAnnotationInstanceLifecycle = "wave.spot.io/instance-lifecycle"
+	WaveConfigAnnotationApplicationName   = "wave.spot.io/application-name"
 
 	InstanceLifecycleOnDemand = "od"
 	InstanceLifecycleSpot     = "spot"
