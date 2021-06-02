@@ -14,8 +14,8 @@ const (
 	WaveConfigAnnotationInstanceLifecycle = "wave.spot.io/instance-lifecycle"
 	WaveConfigAnnotationApplicationName   = "wave.spot.io/application-name"
 
-	InstanceLifecycleOnDemand = "od"
-	InstanceLifecycleSpot     = "spot"
+	InstanceLifecycleOnDemand InstanceLifecycle = "od"
+	InstanceLifecycleSpot     InstanceLifecycle = "spot"
 )
 
 type InstanceLifecycle string
