@@ -14,7 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestClient(t *testing.T) {
+func ManualTestClient(t *testing.T) {
 	conf := spotinst.DefaultConfig()
 
 	c := spot.NewClient(conf, "arnar-test-ekctl", logger.New())
