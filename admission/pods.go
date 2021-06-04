@@ -40,14 +40,12 @@ var (
 type PodMutator struct {
 	storageProvider cloudstorage.CloudStorageProvider
 	baseLogger      logr.Logger
-	log             logr.Logger
 }
 
 func NewPodMutator(log logr.Logger, storageProvider cloudstorage.CloudStorageProvider) PodMutator {
 	return PodMutator{
 		storageProvider: storageProvider,
 		baseLogger:      log,
-		log:             log,
 	}
 }
 
@@ -60,7 +58,8 @@ func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.Admi
 	if err != nil {
 		return nil, fmt.Errorf("deserialization failed, %w", err)
 	}
-	m.log = m.baseLogger.WithValues("pod", sourceObj.Name, "annotations", sourceObj.Annotations)
+
+	log := m.baseLogger.WithValues("pod", sourceObj.Name, "annotations", sourceObj.Annotations)
 
 	resp := &admissionv1.AdmissionResponse{
 		UID:     req.UID,
@@ -79,50 +78,50 @@ func (m PodMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv1.Admi
 
 	var modObj *corev1.Pod
 	if sparkRole == SparkRoleDriverValue {
-		m.log.Info("Mutating driver pod")
-		modObj = m.mutateDriverPod(sourceObj)
+		log.Info("Mutating driver pod")
+		modObj = m.mutateDriverPod(sourceObj, log)
 	} else {
-		m.log.Info("Mutating executor pod")
-		modObj = m.mutateExecutorPod(sourceObj)
+		log.Info("Mutating executor pod")
+		modObj = m.mutateExecutorPod(sourceObj, log)
 	}
 
 	patchBytes, err := GetJsonPatch(sourceObj, modObj)
 	if err != nil {
-		m.log.Error(err, "unable to generate patch, continuing", "pod", sourceObj.Name)
+		log.Error(err, "unable to generate patch, continuing")
 		return resp, nil
 	}
 
-	m.log.Info("patching pod", "patch", string(patchBytes))
+	log.Info("patching pod", "patch", string(patchBytes))
 	resp.PatchType = &jsonPatchType
 	resp.Patch = patchBytes
 
 	return resp, nil
 }
 
-func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod) *corev1.Pod {
+func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod, log logr.Logger) *corev1.Pod {
 
 	modObj := sourceObj.DeepCopy()
 
 	// node affinity
-	m.buildAffinityDriver(modObj)
+	m.buildAffinityDriver(modObj, log)
 
 	if !config.IsEventLogSyncEnabled(sourceObj.Annotations) {
-		m.log.Info("Event log sync not enabled, will not add storage sync container")
+		log.Info("Event log sync not enabled, will not add storage sync container")
 		return modObj
 	}
 
 	storageInfo, err := m.storageProvider.GetStorageInfo()
 	if err != nil {
-		m.log.Error(err, "could not get storage info, will not add storage sync container")
+		log.Error(err, "could not get storage info, will not add storage sync container")
 		return modObj
 	}
 
 	if storageInfo == nil {
-		m.log.Error(fmt.Errorf("storage configuration is nil"), "will not add storage sync container")
+		log.Error(fmt.Errorf("storage configuration is nil"), "will not add storage sync container")
 		return modObj
 	}
 
-	m.log.Info("driver pod admission control", "mountPath", volumeMount.MountPath)
+	log.Info("driver pod admission control", "mountPath", volumeMount.MountPath)
 
 	webServerPort := strconv.Itoa(int(storagesync.Port))
 	storageContainer := corev1.Container{
@@ -199,10 +198,10 @@ func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod) *corev1.Pod {
 	return modObj
 }
 
-func (m PodMutator) mutateExecutorPod(sourceObj *corev1.Pod) *corev1.Pod {
+func (m PodMutator) mutateExecutorPod(sourceObj *corev1.Pod, log logr.Logger) *corev1.Pod {
 	modObj := sourceObj.DeepCopy()
 	// node affinity
-	m.buildAffinityExecutor(modObj)
+	m.buildAffinityExecutor(modObj, log)
 	return modObj
 }
 
@@ -213,14 +212,14 @@ type nodeAffinityConfig struct {
 	instanceTypes []string
 }
 
-func (m PodMutator) getNodeAffinityConfig(annotations map[string]string, defaultLifecycle config.InstanceLifecycle) nodeAffinityConfig {
-	lifecycle := config.GetInstanceLifecycle(annotations, m.log)
+func (m PodMutator) getNodeAffinityConfig(annotations map[string]string, defaultLifecycle config.InstanceLifecycle, log logr.Logger) nodeAffinityConfig {
+	lifecycle := config.GetInstanceLifecycle(annotations, log)
 	if lifecycle == "" {
 		// Use default
 		lifecycle = defaultLifecycle
 	}
 
-	instanceTypes := config.GetConfiguredInstanceTypes(annotations, m.log)
+	instanceTypes := config.GetConfiguredInstanceTypes(annotations, log)
 
 	return nodeAffinityConfig{
 		instanceLifecycle: lifecycle,
@@ -228,17 +227,17 @@ func (m PodMutator) getNodeAffinityConfig(annotations map[string]string, default
 	}
 }
 
-func (m PodMutator) buildAffinityDriver(pod *corev1.Pod) {
-	conf := m.getNodeAffinityConfig(pod.Annotations, config.InstanceLifecycleOnDemand)
-	m.buildAffinity(pod, conf)
+func (m PodMutator) buildAffinityDriver(pod *corev1.Pod, log logr.Logger) {
+	conf := m.getNodeAffinityConfig(pod.Annotations, config.InstanceLifecycleOnDemand, log)
+	m.buildAffinity(pod, conf, log)
 }
 
-func (m PodMutator) buildAffinityExecutor(pod *corev1.Pod) {
-	conf := m.getNodeAffinityConfig(pod.Annotations, config.InstanceLifecycleSpot)
-	m.buildAffinity(pod, conf)
+func (m PodMutator) buildAffinityExecutor(pod *corev1.Pod, log logr.Logger) {
+	conf := m.getNodeAffinityConfig(pod.Annotations, config.InstanceLifecycleSpot, log)
+	m.buildAffinity(pod, conf, log)
 }
 
-func (m PodMutator) buildAffinity(pod *corev1.Pod, conf nodeAffinityConfig) {
+func (m PodMutator) buildAffinity(pod *corev1.Pod, conf nodeAffinityConfig, log logr.Logger) {
 	if pod.Spec.Affinity == nil {
 		pod.Spec.Affinity = &corev1.Affinity{}
 	}
@@ -251,38 +250,38 @@ func (m PodMutator) buildAffinity(pod *corev1.Pod, conf nodeAffinityConfig) {
 
 	// Set node lifecycle
 	if isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeLifeCycleKey) {
-		m.log.Info(fmt.Sprintf("Node affinity key %q already set, will not be mutated", nodeLifeCycleKey))
+		log.Info(fmt.Sprintf("Node affinity key %q already set, will not be mutated", nodeLifeCycleKey))
 	} else {
 		switch conf.instanceLifecycle {
 		case config.InstanceLifecycleOnDemand:
-			m.buildRequiredOnDemandAffinity(pod.Spec.Affinity.NodeAffinity)
+			m.buildRequiredOnDemandAffinity(pod.Spec.Affinity.NodeAffinity, log)
 		case config.InstanceLifecycleSpot:
-			m.buildPreferredOnDemandAntiAffinity(pod.Spec.Affinity.NodeAffinity)
+			m.buildPreferredOnDemandAntiAffinity(pod.Spec.Affinity.NodeAffinity, log)
 		}
 	}
 
 	if len(conf.instanceTypes) > 0 {
 		if isNodeAffinityKeySet(pod.Spec.Affinity.NodeAffinity, nodeInstanceTypeKey) {
-			m.log.Info(fmt.Sprintf("Node affinity key %q already set, will not be mutated", nodeInstanceTypeKey))
+			log.Info(fmt.Sprintf("Node affinity key %q already set, will not be mutated", nodeInstanceTypeKey))
 		} else {
-			m.buildRequiredInstanceTypeAffinity(pod.Spec.Affinity.NodeAffinity, conf.instanceTypes)
+			m.buildRequiredInstanceTypeAffinity(pod.Spec.Affinity.NodeAffinity, conf.instanceTypes, log)
 		}
 	}
 }
 
 // buildRequiredOnDemandAffinity builds a required affinity to on-demand nodes
-func (m PodMutator) buildRequiredOnDemandAffinity(nodeAffinity *corev1.NodeAffinity) {
+func (m PodMutator) buildRequiredOnDemandAffinity(nodeAffinity *corev1.NodeAffinity, log logr.Logger) {
 	nodeSelectorRequirement := corev1.NodeSelectorRequirement{
 		Key:      nodeLifeCycleKey,
 		Operator: corev1.NodeSelectorOpIn,
 		Values:   []string{nodeLifeCycleValueOnDemand},
 	}
 
-	m.addNodeSelectorRequirement(nodeAffinity, nodeSelectorRequirement)
+	m.addNodeSelectorRequirement(nodeAffinity, nodeSelectorRequirement, log)
 }
 
 // buildPreferredOnDemandAntiAffinity builds a preferred anti affinity to on-demand nodes
-func (m PodMutator) buildPreferredOnDemandAntiAffinity(nodeAffinity *corev1.NodeAffinity) {
+func (m PodMutator) buildPreferredOnDemandAntiAffinity(nodeAffinity *corev1.NodeAffinity, log logr.Logger) {
 	nodeSelectorRequirement := corev1.NodeSelectorRequirement{
 		Key:      nodeLifeCycleKey,
 		Operator: corev1.NodeSelectorOpNotIn,
@@ -291,7 +290,7 @@ func (m PodMutator) buildPreferredOnDemandAntiAffinity(nodeAffinity *corev1.Node
 
 	// Add new preferred scheduling term
 	// The weights of preferred scheduling terms are summed up to find the most suitable node
-	m.log.Info(fmt.Sprintf("Adding preferred node selector requirement: %v", nodeSelectorRequirement))
+	log.Info(fmt.Sprintf("Adding preferred node selector requirement: %v", nodeSelectorRequirement))
 	nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(
 		nodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
 		corev1.PreferredSchedulingTerm{
@@ -304,17 +303,17 @@ func (m PodMutator) buildPreferredOnDemandAntiAffinity(nodeAffinity *corev1.Node
 		})
 }
 
-func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeAffinity, instanceTypes []string) {
+func (m PodMutator) buildRequiredInstanceTypeAffinity(nodeAffinity *corev1.NodeAffinity, instanceTypes []string, log logr.Logger) {
 	nodeSelectorRequirement := corev1.NodeSelectorRequirement{
 		Key:      nodeInstanceTypeKey,
 		Operator: corev1.NodeSelectorOpIn,
 		Values:   instanceTypes,
 	}
 
-	m.addNodeSelectorRequirement(nodeAffinity, nodeSelectorRequirement)
+	m.addNodeSelectorRequirement(nodeAffinity, nodeSelectorRequirement, log)
 }
 
-func (m PodMutator) addNodeSelectorRequirement(nodeAffinity *corev1.NodeAffinity, requirement corev1.NodeSelectorRequirement) {
+func (m PodMutator) addNodeSelectorRequirement(nodeAffinity *corev1.NodeAffinity, requirement corev1.NodeSelectorRequirement, log logr.Logger) {
 	if nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
 		nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{}
 	}
@@ -328,7 +327,7 @@ func (m PodMutator) addNodeSelectorRequirement(nodeAffinity *corev1.NodeAffinity
 		nodeSelector.NodeSelectorTerms = []corev1.NodeSelectorTerm{{}}
 	}
 
-	m.log.Info(fmt.Sprintf("Adding node selector requirement: %v", requirement))
+	log.Info(fmt.Sprintf("Adding node selector requirement: %v", requirement))
 	for i := range nodeSelector.NodeSelectorTerms {
 		nodeSelector.NodeSelectorTerms[i].MatchExpressions = append(
 			nodeSelector.NodeSelectorTerms[i].MatchExpressions, requirement)
