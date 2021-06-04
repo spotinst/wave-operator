@@ -57,6 +57,13 @@ manifests: controller-gen  ## Generate manifests e.g. CRD, RBAC etc.
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./api/..." output:crd:artifacts:config=tide/crds
 	# $(CONTROLLER_GEN) $(CRD_OPTIONS) paths="./api/..." output:crd:artifacts:config=helm/wave-operator/templates/
 
+proto: protoc-deps ## Compile protobuf definitions
+	protoc --proto_path=api/proto \
+		 --go_out api/proto \
+		 --go_opt paths=source_relative \
+         api/proto/spark/v1/*.proto
+
+protoc-deps: $(GOBIN)/protoc-gen-go
 
 fmt:  ## Run go fmt against code
 	$(GO) fmt ./...
@@ -104,3 +111,6 @@ endif
 
 $(GOBIN)/mockgen:
 	$(GO) install github.com/golang/mock/mockgen
+
+$(GOBIN)/protoc-gen-go:
+	go install google.golang.org/protobuf/cmd/protoc-gen-go

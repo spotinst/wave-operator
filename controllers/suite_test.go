@@ -119,8 +119,7 @@ var _ = BeforeSuite(func(done Done) {
 		clientSet,
 		sparkapi.GetManager,
 		ctrl.Log.WithName("controllers").WithName("SparkPod"),
-		k8sManager.GetScheme(),
-	)
+		k8sManager.GetScheme())
 	err = sparkPodController.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
