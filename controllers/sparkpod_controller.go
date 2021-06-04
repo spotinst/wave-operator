@@ -17,6 +17,7 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/internal/config"
 	"github.com/spotinst/wave-operator/internal/sparkapi"
 	"github.com/spotinst/wave-operator/internal/storagesync"
 )
@@ -39,7 +40,6 @@ const (
 	waveApplicationIDLabel    = "wave.spot.io/application-id"
 	sparkOperatorAppNameLabel = "sparkoperator.k8s.io/app-name"
 
-	waveApplicationNameAnnotation     = "wave.spot.io/application-name"
 	stageMetricsAggregationAnnotation = "wave.spot.io/stageMetricsAggregation"
 	workloadTypeAnnotation            = "wave.spot.io/workloadType"
 
@@ -328,7 +328,7 @@ func (r *SparkPodReconciler) handleDriver(ctx context.Context, pod *corev1.Pod, 
 		deepCopy.Annotations = make(map[string]string)
 	}
 
-	deepCopy.Annotations[waveApplicationNameAnnotation] = sparkApplicationName
+	deepCopy.Annotations[config.WaveConfigAnnotationApplicationName] = sparkApplicationName
 
 	err = r.Client.Patch(ctx, deepCopy, client.MergeFrom(cr))
 	if err != nil {
@@ -662,7 +662,7 @@ func getSparkApplicationName(driverPod *corev1.Pod, sparkApiInfo *sparkapi.Appli
 	var sparkApplicationName string
 
 	// check if the `wave.spot.io/application-name` label has been set
-	if applicationNameAnnotation, ok := driverPod.Annotations[waveApplicationNameAnnotation]; ok {
+	if applicationNameAnnotation, ok := driverPod.Annotations[config.WaveConfigAnnotationApplicationName]; ok {
 		sparkApplicationName = applicationNameAnnotation
 		//sparkApp.Spec.ApplicationName = applicationNameAnnotation
 	} else if operatorAppNameLabel, ok := driverPod.Labels[sparkOperatorAppNameLabel]; ok {
@@ -724,7 +724,7 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 	sparkApplicationName := getSparkApplicationName(driverPod, nil)
 	cr.Spec.ApplicationName = sparkApplicationName
 	//set "wave.spot.io/application-name" annotation as an application name
-	cr.Annotations[waveApplicationNameAnnotation] = sparkApplicationName
+	cr.Annotations[config.WaveConfigAnnotationApplicationName] = sparkApplicationName
 
 	heritage, err := getHeritage(driverPod)
 	if err != nil {

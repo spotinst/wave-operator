@@ -13,6 +13,67 @@ import (
 	"github.com/spotinst/wave-operator/internal/util"
 )
 
+func getOnDemandAffinity() *corev1.Affinity {
+	return &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "spotinst.io/node-lifecycle",
+								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{"od"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func getOnDemandAntiAffinity() *corev1.Affinity {
+	return &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.PreferredSchedulingTerm{
+				{
+					Weight: 1,
+					Preference: corev1.NodeSelectorTerm{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "spotinst.io/node-lifecycle",
+								Operator: corev1.NodeSelectorOpNotIn,
+								Values:   []string{"od"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func getInstanceTypeAffinity() *corev1.Affinity {
+	return &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      "node.kubernetes.io/instance-type",
+								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{"t2.micro", "m5.xlarge"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func getSimplePod() *corev1.Pod {
 	return &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -45,6 +106,7 @@ func getSimplePod() *corev1.Pod {
 
 // the MutatingWebhook ObjectSelector does the initial filtering on the pod and should select only those
 // with the label SparkRoleLabel
+
 func TestMutateDriverPod(t *testing.T) {
 
 	type testCase struct {
@@ -104,7 +166,7 @@ func TestMutateDriverPod(t *testing.T) {
 		assert.NoError(t, err)
 		newPod, ok := obj.(*corev1.Pod)
 		assert.True(t, ok)
-		assert.Equal(t, onDemandAffinity, newPod.Spec.Affinity)
+		assert.Equal(t, getOnDemandAffinity(), newPod.Spec.Affinity)
 
 		if tc.shouldAddEventLogSync {
 			assert.Equal(t, len(driverPod.Spec.Containers)+1, len(newPod.Spec.Containers))
@@ -117,6 +179,605 @@ func TestMutateDriverPod(t *testing.T) {
 			assert.Equal(t, driverPod.Spec.Volumes, newPod.Spec.Volumes)
 		}
 	}
+}
+
+func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
+
+	type testCase struct {
+		pod      *corev1.Pod
+		expected *corev1.Affinity
+	}
+
+	getDriverPod := func() *corev1.Pod {
+		pod := getSimplePod()
+		pod.Labels = map[string]string{
+			SparkRoleLabel: SparkRoleDriverValue,
+		}
+		return pod
+	}
+
+	getExecutorPod := func() *corev1.Pod {
+		pod := getSimplePod()
+		pod.Labels = map[string]string{
+			SparkRoleLabel: SparkRoleExecutorValue,
+		}
+		return pod
+	}
+
+	testFunc := func(tt *testing.T, tc testCase) {
+
+		req := getAdmissionRequest(tt, tc.pod)
+		res, err := NewPodMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+		assert.NoError(tt, err)
+		assert.NotNil(tt, res)
+		assert.Equal(tt, tc.pod.UID, res.UID)
+		assert.Equal(tt, &jsonPatchType, res.PatchType)
+		assert.NotNil(tt, res.Patch)
+		assert.True(tt, res.Allowed)
+
+		obj, err := ApplyJsonPatch(res.Patch, tc.pod)
+		assert.NoError(tt, err)
+		newPod, ok := obj.(*corev1.Pod)
+		assert.True(tt, ok)
+		assert.Equal(tt, tc.expected, newPod.Spec.Affinity)
+
+	}
+
+	t.Run("whenDefaultInstanceLifecycle_driver", func(tt *testing.T) {
+		tc := testCase{
+			pod:      getDriverPod(),
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenDefaultInstanceLifecycle_executor", func(tt *testing.T) {
+		tc := testCase{
+			pod:      getExecutorPod(),
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenOD_driver", func(tt *testing.T) {
+		pod := getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "od"
+		tc := testCase{
+			pod:      pod,
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenOD_executor", func(tt *testing.T) {
+		pod := getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "od"
+		tc := testCase{
+			pod:      pod,
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenSpot_driver", func(tt *testing.T) {
+		pod := getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "spot"
+		tc := testCase{
+			pod:      pod,
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenSpot_executor", func(tt *testing.T) {
+		pod := getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "spot"
+		tc := testCase{
+			pod:      pod,
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenInstanceLifecycleAlreadyConfigured_shouldNotOverride", func(tt *testing.T) {
+
+		// Required affinity
+
+		requiredAffinity := getOnDemandAffinity()
+		requiredAffinity.NodeAffinity.
+			RequiredDuringSchedulingIgnoredDuringExecution.
+			NodeSelectorTerms[0].MatchExpressions[0].Values = []string{"whatever"}
+
+		pod := getDriverPod()
+		pod.Spec.Affinity = requiredAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: requiredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Spec.Affinity = requiredAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "spot"
+		tc = testCase{
+			pod:      pod,
+			expected: requiredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Spec.Affinity = requiredAffinity
+		tc = testCase{
+			pod:      pod,
+			expected: requiredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Spec.Affinity = requiredAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "od"
+		tc = testCase{
+			pod:      pod,
+			expected: requiredAffinity,
+		}
+		testFunc(tt, tc)
+
+		// Preferred affinity
+
+		preferredAffinity := getOnDemandAntiAffinity()
+		preferredAffinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution[0].
+			Preference.MatchExpressions[0].Values = []string{"huh?"}
+
+		pod = getDriverPod()
+		pod.Spec.Affinity = preferredAffinity
+		tc = testCase{
+			pod:      pod,
+			expected: preferredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Spec.Affinity = preferredAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "spot"
+		tc = testCase{
+			pod:      pod,
+			expected: preferredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Spec.Affinity = preferredAffinity
+		tc = testCase{
+			pod:      pod,
+			expected: preferredAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Spec.Affinity = preferredAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "od"
+		tc = testCase{
+			pod:      pod,
+			expected: preferredAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("whenInstanceLifecycleMisConfigured", func(tt *testing.T) {
+
+		pod := getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = ""
+		tc := testCase{
+			pod:      pod,
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "nonsense (driver)"
+		tc = testCase{
+			pod:      pod,
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = " SPOT " // Test input sanitation
+		tc = testCase{
+			pod:      pod,
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = ""
+		tc = testCase{
+			pod:      pod,
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = "nonsense (executor)"
+		tc = testCase{
+			pod:      pod,
+			expected: getOnDemandAntiAffinity(),
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceLifecycle] = " OD " // Test input sanitation
+		tc = testCase{
+			pod:      pod,
+			expected: getOnDemandAffinity(),
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("instanceLifecycleConfigurationIsAdditive_driver", func(tt *testing.T) {
+
+		// Should not override other node affinity configurations
+
+		existingAffinity := getInstanceTypeAffinity()
+
+		expectedAffinity := getInstanceTypeAffinity()
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions =
+			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "spotinst.io/node-lifecycle",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"od"},
+				})
+
+		pod := getDriverPod()
+		pod.Spec.Affinity = existingAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("instanceLifecycleConfigurationIsAdditive_driver_shouldAddNodeSelectorRequirementToAllNodeSelectorTerms", func(tt *testing.T) {
+
+		// Should add node selector requirement to all node selector terms
+
+		existingAffinity := getInstanceTypeAffinity()
+		existingAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = append(
+			existingAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms,
+			corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					{
+						Key:      "some-config-key",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"some-config-value"},
+					},
+				},
+			})
+
+		expectedAffinity := getInstanceTypeAffinity()
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions =
+			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "spotinst.io/node-lifecycle",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"od"},
+				})
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = append(
+			expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms,
+			corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					{
+						Key:      "some-config-key",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"some-config-value"},
+					},
+					{
+						Key:      "spotinst.io/node-lifecycle",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"od"},
+					},
+				},
+			})
+
+		pod := getDriverPod()
+		pod.Spec.Affinity = existingAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("instanceLifecycleConfigurationIsAdditive_executor", func(tt *testing.T) {
+
+		// Should not override other node affinity configurations
+
+		existingAffinity := getInstanceTypeAffinity()
+		existingAffinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm{
+			{
+				Weight: 10,
+				Preference: corev1.NodeSelectorTerm{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "whatever",
+							Operator: corev1.NodeSelectorOpNotIn,
+							Values:   []string{"some other configuration"},
+						},
+					},
+				},
+			},
+		}
+
+		expectedAffinity := getInstanceTypeAffinity()
+		expectedAffinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = []corev1.PreferredSchedulingTerm{
+			{
+				Weight: 10,
+				Preference: corev1.NodeSelectorTerm{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "whatever",
+							Operator: corev1.NodeSelectorOpNotIn,
+							Values:   []string{"some other configuration"},
+						},
+					},
+				},
+			},
+			{
+				Weight: 1,
+				Preference: corev1.NodeSelectorTerm{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "spotinst.io/node-lifecycle",
+							Operator: corev1.NodeSelectorOpNotIn,
+							Values:   []string{"od"},
+						},
+					},
+				},
+			},
+		}
+
+		pod := getExecutorPod()
+		pod.Spec.Affinity = existingAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("whenInstanceTypesConfigured_driver", func(tt *testing.T) {
+
+		expectedAffinity := getOnDemandAffinity()
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions =
+			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "node.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"t2.micro", "m5.xlarge"},
+				})
+
+		pod := getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "t2.micro, m5, m5.xlarge"
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("whenInstanceTypesConfigured_executor", func(tt *testing.T) {
+
+		expectedAffinity := getOnDemandAntiAffinity()
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{
+			NodeSelectorTerms: []corev1.NodeSelectorTerm{
+				{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "node.kubernetes.io/instance-type",
+							Operator: corev1.NodeSelectorOpIn,
+							Values:   []string{"t2.micro", "m5.xlarge"},
+						},
+					},
+				},
+			},
+		}
+
+		pod := getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "t2.micro, m5, m5.xlarge"
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("whenInstanceTypesNotConfigured", func(tt *testing.T) {
+
+		expectedAffinity := getOnDemandAffinity()
+
+		pod := getDriverPod()
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = ""
+		tc = testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+		expectedAffinity = getOnDemandAntiAffinity()
+
+		pod = getExecutorPod()
+		tc = testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = ""
+		tc = testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("whenInstanceTypesAlreadyConfigured_shouldNotOverride_driver", func(tt *testing.T) {
+
+		odAffinity := getOnDemandAffinity()
+		odAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions =
+			append(odAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "node.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"what", "ever"},
+				})
+
+		pod := getDriverPod()
+		pod.Spec.Affinity = odAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: odAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getDriverPod()
+		pod.Spec.Affinity = odAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "t2.micro"
+		tc = testCase{
+			pod:      pod,
+			expected: odAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("whenInstanceTypesAlreadyConfigured_shouldNotOverride_executor", func(tt *testing.T) {
+
+		odAntiAffinity := getOnDemandAntiAffinity()
+		odAntiAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &corev1.NodeSelector{
+			NodeSelectorTerms: []corev1.NodeSelectorTerm{
+				{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      "node.kubernetes.io/instance-type",
+							Operator: corev1.NodeSelectorOpIn,
+							Values:   []string{"what", "ever"},
+						},
+					},
+				},
+			},
+		}
+
+		pod := getExecutorPod()
+		pod.Spec.Affinity = odAntiAffinity
+		tc := testCase{
+			pod:      pod,
+			expected: odAntiAffinity,
+		}
+		testFunc(tt, tc)
+
+		pod = getExecutorPod()
+		pod.Spec.Affinity = odAntiAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "t2.micro"
+		tc = testCase{
+			pod:      pod,
+			expected: odAntiAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("instanceTypeConfigurationIsAdditive", func(tt *testing.T) {
+
+		existingAffinity := getOnDemandAffinity()
+		existingAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = append(
+			existingAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms,
+			corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					{
+						Key:      "some-config-key",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"some-config-value"},
+					},
+				},
+			})
+
+		expectedAffinity := getOnDemandAffinity()
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms = append(
+			expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms,
+			corev1.NodeSelectorTerm{
+				MatchExpressions: []corev1.NodeSelectorRequirement{
+					{
+						Key:      "some-config-key",
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{"some-config-value"},
+					},
+				},
+			})
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions =
+			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "node.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"t2.micro", "m5.xlarge"},
+				})
+		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[1].MatchExpressions =
+			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[1].MatchExpressions,
+				corev1.NodeSelectorRequirement{
+					Key:      "node.kubernetes.io/instance-type",
+					Operator: corev1.NodeSelectorOpIn,
+					Values:   []string{"t2.micro", "m5.xlarge"},
+				})
+
+		pod := getDriverPod()
+		pod.Spec.Affinity = existingAffinity
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "t2.micro, m5, m5.xlarge"
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
+	t.Run("whenInstanceTypesMisConfigured_shouldIgnore", func(tt *testing.T) {
+
+		expectedAffinity := getOnDemandAffinity()
+		pod := getDriverPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "this, is, nonsense"
+		tc := testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+		expectedAffinity = getOnDemandAntiAffinity()
+		pod = getExecutorPod()
+		pod.Annotations[config.WaveConfigAnnotationInstanceType] = "this, is, nonsense"
+		tc = testCase{
+			pod:      pod,
+			expected: expectedAffinity,
+		}
+		testFunc(tt, tc)
+
+	})
+
 }
 
 func TestMutateExecutorPod(t *testing.T) {
@@ -138,7 +799,7 @@ func TestMutateExecutorPod(t *testing.T) {
 	newPod, ok := obj.(*(corev1.Pod))
 	assert.True(t, ok)
 	assert.Equal(t, 1, len(newPod.Spec.Containers))
-	assert.Equal(t, onDemandAntiAffinity, newPod.Spec.Affinity)
+	assert.Equal(t, getOnDemandAntiAffinity(), newPod.Spec.Affinity)
 	assert.Equal(t, 0, len(newPod.Spec.Volumes))
 }
 
@@ -169,7 +830,7 @@ func TestIdempotency(t *testing.T) {
 	require.True(t, ok)
 
 	assert.Equal(t, 2, len(pod2.Spec.Containers))
-	assert.Equal(t, onDemandAffinity, pod2.Spec.Affinity)
+	assert.Equal(t, getOnDemandAffinity(), pod2.Spec.Affinity)
 	assert.Equal(t, 1, len(newPod.Spec.Volumes))
 	assert.Equal(t, "spark-logs", newPod.Spec.Volumes[0].Name)
 }
@@ -215,7 +876,7 @@ func TestMutatePodBadStorage(t *testing.T) {
 
 		// We still want to add node affinity even though we have a failed storage provider
 		assert.Nil(t, driverPod.Spec.Affinity)
-		assert.Equal(t, onDemandAffinity, newPod.Spec.Affinity)
+		assert.Equal(t, getOnDemandAffinity(), newPod.Spec.Affinity)
 	}
 
 	t.Run("whenFailedStorageProvider", func(tt *testing.T) {
