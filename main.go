@@ -18,19 +18,16 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 
-	"github.com/spotinst/spotinst-sdk-go/spotinst"
 	"github.com/spotinst/wave-operator/admission"
-	v1alpha1 "github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/controllers"
 	"github.com/spotinst/wave-operator/install"
 	"github.com/spotinst/wave-operator/internal/aws"
 	"github.com/spotinst/wave-operator/internal/logger"
 	"github.com/spotinst/wave-operator/internal/ocean"
 	"github.com/spotinst/wave-operator/internal/sparkapi"
-	"github.com/spotinst/wave-operator/internal/spot"
 	"github.com/spotinst/wave-operator/internal/version"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -90,8 +87,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	spotClient := spot.NewClient(spotinst.DefaultConfig().WithUserAgent(fmt.Sprintf("wave-operator/%s", version.BuildVersion)), clusterName, log)
-
 	storageProvider := aws.NewS3Provider(clusterName)
 	controller := controllers.NewWaveComponentReconciler(
 		mgr.GetClient(),
@@ -111,9 +106,7 @@ func main() {
 		clientSet,
 		sparkapi.GetManager,
 		ctrl.Log.WithName("controllers").WithName("SparkPod"),
-		mgr.GetScheme(),
-		spotClient,
-	)
+		mgr.GetScheme())
 
 	if err = sparkPodController.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SparkPod")
