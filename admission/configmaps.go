@@ -72,6 +72,7 @@ func (m ConfigMapMutator) Mutate(req *admissionv1.AdmissionRequest) (*admissionv
 
 	propOverride := map[string]string{
 		"spark.metrics.appStatusSource.enabled": "true",
+		"spark.eventLog.enabled":                "false", // ? enforce false by default
 	}
 
 	if config.IsEventLogSyncEnabled(ownerPod.Annotations) {
