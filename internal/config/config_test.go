@@ -8,6 +8,49 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
+func TestIsEventLogSyncEnabled(t *testing.T) {
+
+	res := IsEventLogSyncEnabled(nil)
+	assert.Equal(t, false, res)
+
+	annotations := make(map[string]string)
+	res = IsEventLogSyncEnabled(annotations)
+	assert.Equal(t, false, res)
+
+	annotations = make(map[string]string)
+	annotations[WaveConfigAnnotationSyncEventLogs] = "true"
+	res = IsEventLogSyncEnabled(annotations)
+	assert.Equal(t, true, res)
+
+	annotations = make(map[string]string)
+	annotations[WaveConfigAnnotationSyncEventLogsOld] = "true"
+	res = IsEventLogSyncEnabled(annotations)
+	assert.Equal(t, true, res)
+
+	annotations = make(map[string]string)
+	annotations[WaveConfigAnnotationSyncEventLogs] = "false"
+	res = IsEventLogSyncEnabled(annotations)
+	assert.Equal(t, false, res)
+
+	annotations = make(map[string]string)
+	annotations[WaveConfigAnnotationSyncEventLogsOld] = "false"
+	res = IsEventLogSyncEnabled(annotations)
+	assert.Equal(t, false, res)
+
+	annotations = make(map[string]string)
+	annotations[WaveConfigAnnotationSyncEventLogs] = "false"
+	annotations[WaveConfigAnnotationSyncEventLogsOld] = "true"
+	res = IsEventLogSyncEnabled(annotations)
+	assert.Equal(t, false, res)
+
+	annotations = make(map[string]string)
+	annotations[WaveConfigAnnotationSyncEventLogs] = "true"
+	annotations[WaveConfigAnnotationSyncEventLogsOld] = "false"
+	res = IsEventLogSyncEnabled(annotations)
+	assert.Equal(t, true, res)
+
+}
+
 func TestGetConfiguredInstanceTypes(t *testing.T) {
 
 	logger := getTestLogger()

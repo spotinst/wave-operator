@@ -10,6 +10,7 @@ import (
 
 const (
 	WaveConfigAnnotationSyncEventLogs     = "wave.spot.io/sync-event-logs"
+	WaveConfigAnnotationSyncEventLogsOld  = "wave.spot.io/synceventlogs"
 	WaveConfigAnnotationInstanceType      = "wave.spot.io/instance-type"
 	WaveConfigAnnotationInstanceLifecycle = "wave.spot.io/instance-lifecycle"
 	WaveConfigAnnotationApplicationName   = "wave.spot.io/application-name"
@@ -24,7 +25,14 @@ func IsEventLogSyncEnabled(annotations map[string]string) bool {
 	if annotations == nil {
 		return false
 	}
-	enabled, err := strconv.ParseBool(annotations[WaveConfigAnnotationSyncEventLogs])
+	conf := annotations[WaveConfigAnnotationSyncEventLogs]
+
+	// TODO(thorsteinn) Backwards compatibility, remove when documentation up to date
+	if conf == "" {
+		conf = annotations[WaveConfigAnnotationSyncEventLogsOld]
+	}
+
+	enabled, err := strconv.ParseBool(conf)
 	if err != nil {
 		return false
 	}
