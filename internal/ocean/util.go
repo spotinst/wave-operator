@@ -12,6 +12,7 @@ import (
 const (
 	SpotinstClusterIdentifier = "spotinst.cluster-identifier"
 	SpotinstOceanConfigmap    = "spotinst-kubernetes-cluster-controller-config"
+	kubeSystemNamespaceName   = "kube-system"
 )
 
 func GetClusterIdentifier() (string, error) {
@@ -34,5 +35,27 @@ func GetClusterIdentifier() (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("cluster identifier not found")
 	}
+	return id, nil
+}
+
+func GetClusterUniqueIdentifier() (string, error) {
+	conf, err := config.GetConfig()
+	if err != nil {
+		return "", fmt.Errorf("cannot get cluster configuration, %w", err)
+	}
+
+	ctx := context.TODO()
+	kc, err := kubernetes.NewForConfig(conf)
+	if err != nil {
+		return "", fmt.Errorf("cannot connect to cluster, %w", err)
+	}
+
+	ns, err := kc.CoreV1().Namespaces().Get(ctx, kubeSystemNamespaceName, v1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("could not get namespace, %w", err)
+	}
+
+	id := string(ns.GetUID())
+
 	return id, nil
 }

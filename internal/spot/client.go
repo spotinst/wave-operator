@@ -1,106 +1,45 @@
 package spot
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httputil"
 
 	"github.com/go-logr/logr"
-	"github.com/spotinst/spotinst-sdk-go/spotinst"
-	sparkpb "github.com/spotinst/wave-operator/api/proto/spark/v1"
-	"github.com/spotinst/wave-operator/api/v1alpha1"
-	"google.golang.org/protobuf/proto"
+
+	"github.com/spotinst/wave-operator/internal/ocean"
 )
-
-const (
-	contentTypeProtobuf = "application/x-protobuf"
-)
-
-var ErrUpdatingApplication = errors.New("spot: unable to update application")
-
-type ApplicationClient interface {
-	ApplicationGetter
-	ApplicationSaver
-}
-
-type ApplicationGetter interface {
-	GetSparkApplication(ctx context.Context, ID string) (string, error)
-}
-
-type ApplicationSaver interface {
-	SaveApplication(app *v1alpha1.SparkApplication) error
-}
 
 type Client struct {
 	logger     logr.Logger
-	cluster    string
 	httpClient *http.Client
 }
 
-func (c *Client) GetSparkApplication(ctx context.Context, ID string) (string, error) {
-	resp, err := c.httpClient.Get(fmt.Sprintf("/wave/spark/application/%s", ID))
+func NewClient(logger logr.Logger) (*Client, error) {
+
+	creds, err := getCredentials()
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("could not get credentials, %w", err)
 	}
 
-	body, _ := httputil.DumpResponse(resp, true)
-	return string(body), nil
-}
-
-func (c *Client) SaveApplication(app *v1alpha1.SparkApplication) error {
-	c.logger.Info("Persisting spark spark application",
-		"id", app.Spec.ApplicationID,
-		"name", app.Spec.ApplicationName,
-		"heritage", app.Spec.Heritage,
-		"revision", app.ResourceVersion)
-
-	appBody, err := json.Marshal(app)
+	baseURL, err := getBaseURL()
 	if err != nil {
-		return err
-	}
-	sparkAppBody := string(appBody)
-
-	topology := sparkpb.BigDataSparkApplicationsTopology{
-		SparkApplications: []*sparkpb.BigDataSparkApplication{
-			{
-				SparkApplication: &sparkAppBody,
-			},
-		},
+		return nil, fmt.Errorf("could not get base url, %w", err)
 	}
 
-	body, err := proto.Marshal(&topology)
+	clusterIdentifier, err := ocean.GetClusterIdentifier()
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("could not get cluster identifier, %w", err)
 	}
 
-	payload := bytes.NewBuffer(body)
-	req, err := http.NewRequest(http.MethodPost, "mcs/kubernetes/topology/bigdata/spark/application", payload)
+	clusterUniqueIdentifier, err := ocean.GetClusterUniqueIdentifier()
 	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", contentTypeProtobuf)
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
+		return nil, fmt.Errorf("could not get cluster unique identifier, %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return ErrUpdatingApplication
-	}
-
-	return nil
-}
-
-func NewClient(config *spotinst.Config, cluster string, logger logr.Logger) *Client {
 	return &Client{
-		logger:  logger,
-		cluster: cluster,
+		logger: logger,
 		httpClient: &http.Client{
-			Transport: ApiTransport(nil, config, "", cluster),
+			Transport: ApiTransport(nil, baseURL, creds, clusterIdentifier, clusterUniqueIdentifier),
 		},
-	}
+	}, nil
 }
