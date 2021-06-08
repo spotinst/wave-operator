@@ -3,10 +3,15 @@ package spot
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-logr/logr"
 
 	"github.com/spotinst/wave-operator/internal/ocean"
+)
+
+const (
+	requestTimeout = 10 * time.Second
 )
 
 type Client struct {
@@ -39,6 +44,7 @@ func NewClient(logger logr.Logger) (*Client, error) {
 	return &Client{
 		logger: logger,
 		httpClient: &http.Client{
+			Timeout:   requestTimeout,
 			Transport: ApiTransport(nil, baseURL, creds, clusterIdentifier, clusterUniqueIdentifier),
 		},
 	}, nil
