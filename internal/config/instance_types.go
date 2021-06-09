@@ -2,10 +2,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/go-logr/logr"
-	"github.com/spotinst/wave-operator/internal/ocean"
-	"github.com/spotinst/wave-operator/internal/spot/client"
 	"strings"
+
+	"github.com/go-logr/logr"
+
+	"github.com/spotinst/wave-operator/internal/spot/client"
 )
 
 // InstanceTypes is a map of instance type family -> instance types
@@ -13,7 +14,9 @@ type InstanceTypes map[string]map[string]bool
 
 type manager struct {
 	allowedInstanceTypes InstanceTypes
-	client               *client.Client
+	clusterIdentifier    string
+	oceanClient          client.OceanClient
+	awsClient            client.AWSClient
 	log                  logr.Logger
 }
 
@@ -21,10 +24,12 @@ type InstanceTypeManager interface {
 	GetAllowedInstanceTypes() (InstanceTypes, error)
 }
 
-func NewInstanceTypeManager(client *client.Client, log logr.Logger) InstanceTypeManager {
+func NewInstanceTypeManager(client *client.Client, clusterIdentifier string, log logr.Logger) InstanceTypeManager {
 	return &manager{
-		client: client,
-		log:    log,
+		clusterIdentifier: clusterIdentifier,
+		oceanClient:       client,
+		awsClient:         client,
+		log:               log,
 	}
 }
 
@@ -42,7 +47,7 @@ func (m *manager) loadAllowedInstanceTypes() error {
 
 	// TODO(thorsteinn) We should call a backend endpoint to get this information
 
-	oceanCluster, err := getOceanCluster(m.client)
+	oceanCluster, err := getOceanCluster(m.oceanClient, m.clusterIdentifier)
 	if err != nil {
 		return fmt.Errorf("could not get ocean cluster, %w", err)
 	}
@@ -51,7 +56,7 @@ func (m *manager) loadAllowedInstanceTypes() error {
 		return fmt.Errorf("ocean cluster is nil")
 	}
 
-	instanceTypesInRegion, err := getInstanceTypesInRegion(m.client, oceanCluster.Region)
+	instanceTypesInRegion, err := getInstanceTypesInRegion(m.awsClient, oceanCluster.Region)
 	if err != nil {
 		return fmt.Errorf("could not get instance types in region, %w", err)
 	}
@@ -110,12 +115,7 @@ func getFamily(instanceType string) (string, error) {
 	return split[0], nil
 }
 
-func getOceanCluster(clusterGetter client.OceanClusterGetter) (*client.OceanCluster, error) {
-	clusterIdentifier, err := ocean.GetClusterIdentifier()
-	if err != nil {
-		return nil, fmt.Errorf("could not get ocean cluster identifier, %w", err)
-	}
-
+func getOceanCluster(clusterGetter client.OceanClusterGetter, clusterIdentifier string) (*client.OceanCluster, error) {
 	oceanClusters, err := clusterGetter.GetAllOceanClusters()
 	if err != nil {
 		return nil, fmt.Errorf("could not get ocean clusters, %w", err)
