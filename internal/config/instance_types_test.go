@@ -2,26 +2,16 @@ package config
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spotinst/wave-operator/internal/logger"
 	"github.com/spotinst/wave-operator/internal/spot/client"
 	"github.com/spotinst/wave-operator/internal/spot/client/mock_client"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
-
-func ManualTestLoadInstanceTypes(t *testing.T) {
-
-	c, err := client.NewClient(logger.New())
-	require.NoError(t, err)
-
-	m := NewInstanceTypeManager(c, "thorsteinn-wave-19", logger.New())
-	res, err := m.GetAllowedInstanceTypes()
-	assert.NoError(t, err)
-	fmt.Println(res)
-
-}
 
 func TestGetAllowedInstanceTypes(t *testing.T) {
 
