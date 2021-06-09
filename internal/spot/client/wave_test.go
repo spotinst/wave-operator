@@ -63,7 +63,7 @@ func ManualTestClient(t *testing.T) {
 			},
 		}
 
-		err := c.SaveApplication(app)
+		err := c.SaveSparkApplication(app)
 		require.NoError(t, err)
 	})
 

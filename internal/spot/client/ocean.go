@@ -1,3 +1,5 @@
+//go:generate mockgen -destination=mock_client/ocean_mock.go . OceanClient
+
 package client
 
 import (

@@ -1,3 +1,5 @@
+//go:generate mockgen -destination=mock_client/wave_mock.go . WaveClient
+
 package client
 
 import (
@@ -20,7 +22,7 @@ const (
 
 var ErrUpdatingApplication = errors.New("spot: unable to update application")
 
-type ApplicationClient interface {
+type WaveClient interface {
 	ApplicationGetter
 	ApplicationSaver
 }
@@ -30,7 +32,7 @@ type ApplicationGetter interface {
 }
 
 type ApplicationSaver interface {
-	SaveApplication(app *v1alpha1.SparkApplication) error
+	SaveSparkApplication(app *v1alpha1.SparkApplication) error
 }
 
 func (c *Client) GetSparkApplication(ctx context.Context, ID string) (string, error) {
@@ -43,7 +45,7 @@ func (c *Client) GetSparkApplication(ctx context.Context, ID string) (string, er
 	return string(body), nil
 }
 
-func (c *Client) SaveApplication(app *v1alpha1.SparkApplication) error {
+func (c *Client) SaveSparkApplication(app *v1alpha1.SparkApplication) error {
 	c.logger.Info("Persisting spark application",
 		"id", app.Spec.ApplicationID,
 		"name", app.Spec.ApplicationName,
