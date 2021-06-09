@@ -9,19 +9,11 @@ import (
 	"github.com/spotinst/wave-operator/internal/spot/client/config"
 )
 
-const (
-	queryAccountId                  = "accountId"
-	queryClusterIdentifier          = "clusterIdentifier"
-	queryKubernetesUniqueIdentifier = "kubernetesUniqueIdentifier"
-)
-
 type apiTransport struct {
-	roundTripper            http.RoundTripper
-	baseURL                 *url.URL
-	credentials             config.Credentials
-	userAgent               string
-	clusterIdentifier       string
-	clusterUniqueIdentifier string
+	roundTripper http.RoundTripper
+	baseURL      *url.URL
+	credentials  config.Credentials
+	userAgent    string
 }
 
 func (a *apiTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -31,11 +23,6 @@ func (a *apiTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	query := req.URL.Query()
 	query.Set(queryAccountId, a.credentials.Account)
-	query.Set(queryClusterIdentifier, a.clusterIdentifier)
-
-	if a.clusterUniqueIdentifier != "" {
-		query.Set(queryKubernetesUniqueIdentifier, a.clusterUniqueIdentifier)
-	}
 
 	req.URL.RawQuery = query.Encode()
 
@@ -53,18 +40,16 @@ func (a *apiTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return a.roundTripper.RoundTrip(req)
 }
 
-func ApiTransport(roundTripper http.RoundTripper, baseURL *url.URL, creds config.Credentials, clusterIdentifier string, clusterUniqueIdentifier string) http.RoundTripper {
+func ApiTransport(roundTripper http.RoundTripper, baseURL *url.URL, creds config.Credentials) http.RoundTripper {
 	if roundTripper == nil {
 		roundTripper = http.DefaultTransport
 	}
 	ua := config.GetUserAgent()
 
 	return &apiTransport{
-		roundTripper:            roundTripper,
-		baseURL:                 baseURL,
-		credentials:             creds,
-		userAgent:               ua,
-		clusterIdentifier:       clusterIdentifier,
-		clusterUniqueIdentifier: clusterUniqueIdentifier,
+		roundTripper: roundTripper,
+		baseURL:      baseURL,
+		credentials:  creds,
+		userAgent:    ua,
 	}
 }

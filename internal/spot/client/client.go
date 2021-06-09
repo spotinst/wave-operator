@@ -12,12 +12,18 @@ import (
 )
 
 const (
+	queryAccountId                  = "accountId"
+	queryClusterIdentifier          = "clusterIdentifier"
+	queryKubernetesUniqueIdentifier = "kubernetesUniqueIdentifier"
+
 	requestTimeout = 15 * time.Second
 )
 
 type Client struct {
-	logger     logr.Logger
-	httpClient *http.Client
+	logger                  logr.Logger
+	httpClient              *http.Client
+	clusterIdentifier       string
+	clusterUniqueIdentifier string
 }
 
 func NewClient(logger logr.Logger) (*Client, error) {
@@ -43,10 +49,12 @@ func NewClient(logger logr.Logger) (*Client, error) {
 	}
 
 	return &Client{
-		logger: logger,
+		logger:                  logger,
+		clusterIdentifier:       clusterIdentifier,
+		clusterUniqueIdentifier: clusterUniqueIdentifier,
 		httpClient: &http.Client{
 			Timeout:   requestTimeout,
-			Transport: ApiTransport(nil, baseURL, creds, clusterIdentifier, clusterUniqueIdentifier),
+			Transport: ApiTransport(nil, baseURL, creds),
 		},
 	}, nil
 }
