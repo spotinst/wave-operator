@@ -19,7 +19,6 @@ require (
 	github.com/prometheus/client_golang v1.10.0
 	github.com/spf13/cobra v1.1.3
 	github.com/spf13/viper v1.7.1
-	github.com/spotinst/spotinst-sdk-go v1.86.0
 	github.com/stretchr/testify v1.7.0
 	google.golang.org/protobuf v1.26.0
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b

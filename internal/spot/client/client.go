@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	requestTimeout = 10 * time.Second
+	requestTimeout = 15 * time.Second
 )
 
 type Client struct {
