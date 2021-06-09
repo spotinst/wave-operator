@@ -1,4 +1,4 @@
-package spot
+package config
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ const (
 	envVarBaseURL  = "SPOTINST_BASE_URL"
 )
 
-func getBaseURL() (*url.URL, error) {
+func GetBaseURL() (*url.URL, error) {
 	rawURL := os.Getenv(envVarBaseURL)
 	if rawURL == "" {
 		rawURL = defaultBaseURL

@@ -1,4 +1,4 @@
-package spot
+package client
 
 import (
 	"context"

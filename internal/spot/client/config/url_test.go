@@ -1,4 +1,4 @@
-package spot
+package config
 
 import (
 	"os"
@@ -20,26 +20,26 @@ func TestGetBaseURL(t *testing.T) {
 
 	err := os.Setenv(envVarBaseURL, "")
 	require.NoError(t, err)
-	res, err := getBaseURL()
+	res, err := GetBaseURL()
 	require.NoError(t, err)
 	assert.Equal(t, "api.spotinst.io", res.Host)
 	assert.Equal(t, "https", res.Scheme)
 
 	err = os.Setenv(envVarBaseURL, "http://dev.api.url")
 	require.NoError(t, err)
-	res, err = getBaseURL()
+	res, err = GetBaseURL()
 	require.NoError(t, err)
 	assert.Equal(t, "dev.api.url", res.Host)
 	assert.Equal(t, "http", res.Scheme)
 
 	err = os.Setenv(envVarBaseURL, "https://nonsense!#$%$&")
 	require.NoError(t, err)
-	res, err = getBaseURL()
+	res, err = GetBaseURL()
 	require.Error(t, err)
 
 	err = os.Setenv(envVarBaseURL, "nonsense")
 	require.NoError(t, err)
-	res, err = getBaseURL()
+	res, err = GetBaseURL()
 	require.Error(t, err)
 
 }

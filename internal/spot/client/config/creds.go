@@ -1,4 +1,4 @@
-package spot
+package config
 
 import (
 	"fmt"
@@ -10,21 +10,21 @@ const (
 	envVarAccount = "SPOTINST_ACCOUNT"
 )
 
-type credentials struct {
+type Credentials struct {
 	Account string
 	Token   string
 }
 
-func getCredentials() (credentials, error) {
+func GetCredentials() (Credentials, error) {
 	token := os.Getenv(envVarToken)
 	if token == "" {
-		return credentials{}, fmt.Errorf("could not get token, env var %q not set", envVarToken)
+		return Credentials{}, fmt.Errorf("could not get token, env var %q not set", envVarToken)
 	}
 	account := os.Getenv(envVarAccount)
 	if account == "" {
-		return credentials{}, fmt.Errorf("could not get account, env var %q not set", envVarAccount)
+		return Credentials{}, fmt.Errorf("could not get account, env var %q not set", envVarAccount)
 	}
-	return credentials{
+	return Credentials{
 		Account: account,
 		Token:   token,
 	}, nil

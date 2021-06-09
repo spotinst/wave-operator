@@ -1,4 +1,4 @@
-package spot
+package config
 
 import (
 	"os"
@@ -29,20 +29,20 @@ func TestGetCredentials(t *testing.T) {
 	}()
 
 	os.Clearenv()
-	_, err := getCredentials()
+	_, err := GetCredentials()
 	require.Error(t, err)
 
 	os.Clearenv()
 	err = os.Setenv(envVarToken, "myToken")
 	require.NoError(t, err)
-	_, err = getCredentials()
+	_, err = GetCredentials()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "could not get account")
 
 	os.Clearenv()
 	err = os.Setenv(envVarAccount, "myAccount")
 	require.NoError(t, err)
-	_, err = getCredentials()
+	_, err = GetCredentials()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "could not get token")
 
@@ -51,7 +51,7 @@ func TestGetCredentials(t *testing.T) {
 	require.NoError(t, err)
 	err = os.Setenv(envVarAccount, "myAccount")
 	require.NoError(t, err)
-	res, err := getCredentials()
+	res, err := GetCredentials()
 	require.NoError(t, err)
 	assert.Equal(t, "myToken", res.Token)
 	assert.Equal(t, "myAccount", res.Account)

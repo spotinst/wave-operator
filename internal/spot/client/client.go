@@ -1,4 +1,4 @@
-package spot
+package client
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/spotinst/wave-operator/internal/ocean"
+	"github.com/spotinst/wave-operator/internal/spot/client/config"
 )
 
 const (
@@ -21,12 +22,12 @@ type Client struct {
 
 func NewClient(logger logr.Logger) (*Client, error) {
 
-	creds, err := getCredentials()
+	creds, err := config.GetCredentials()
 	if err != nil {
 		return nil, fmt.Errorf("could not get credentials, %w", err)
 	}
 
-	baseURL, err := getBaseURL()
+	baseURL, err := config.GetBaseURL()
 	if err != nil {
 		return nil, fmt.Errorf("could not get base url, %w", err)
 	}

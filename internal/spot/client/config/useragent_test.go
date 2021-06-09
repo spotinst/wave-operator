@@ -1,4 +1,4 @@
-package spot
+package config
 
 import (
 	"fmt"
@@ -8,6 +8,6 @@ import (
 )
 
 func TestGetUserAgent(t *testing.T) {
-	res := getUserAgent()
+	res := GetUserAgent()
 	assert.Contains(t, res, fmt.Sprintf("%s/", productName))
 }

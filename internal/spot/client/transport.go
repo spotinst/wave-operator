@@ -1,10 +1,12 @@
-package spot
+package client
 
 import (
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/spotinst/wave-operator/internal/spot/client/config"
 )
 
 const (
@@ -16,7 +18,7 @@ const (
 type apiTransport struct {
 	roundTripper            http.RoundTripper
 	baseURL                 *url.URL
-	credentials             credentials
+	credentials             config.Credentials
 	userAgent               string
 	clusterIdentifier       string
 	clusterUniqueIdentifier string
@@ -51,11 +53,11 @@ func (a *apiTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return a.roundTripper.RoundTrip(req)
 }
 
-func ApiTransport(roundTripper http.RoundTripper, baseURL *url.URL, creds credentials, clusterIdentifier string, clusterUniqueIdentifier string) http.RoundTripper {
+func ApiTransport(roundTripper http.RoundTripper, baseURL *url.URL, creds config.Credentials, clusterIdentifier string, clusterUniqueIdentifier string) http.RoundTripper {
 	if roundTripper == nil {
 		roundTripper = http.DefaultTransport
 	}
-	ua := getUserAgent()
+	ua := config.GetUserAgent()
 
 	return &apiTransport{
 		roundTripper:            roundTripper,

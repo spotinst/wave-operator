@@ -1,4 +1,4 @@
-package spot_test
+package client_test
 
 import (
 	"testing"
