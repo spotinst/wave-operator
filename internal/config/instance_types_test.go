@@ -23,13 +23,19 @@ func ManualTestLoadInstanceTypes(t *testing.T) {
 
 }
 
-func TestGetAllowedInstanceTypes_whenSuccessful(t *testing.T) {
+func TestGetAllowedInstanceTypes(t *testing.T) {
 
 	type testCase struct {
-		instanceTypesInRegion []*client.InstanceType
-		whitelist             []string
-		blacklist             []string
-		expected              InstanceTypes
+		instanceTypesInRegion          []*client.InstanceType
+		whitelist                      []string
+		blacklist                      []string
+		getOceanClustersError          error
+		getOceanClustersCallCount      int
+		getInstanceTypesError          error
+		getInstanceTypesCallCount      int
+		oceanClusterIdentifierOverride string
+		expected                       InstanceTypes
+		expectedError                  string
 	}
 
 	ctrl := gomock.NewController(t)
@@ -40,11 +46,16 @@ func TestGetAllowedInstanceTypes_whenSuccessful(t *testing.T) {
 		clusterIdentifier := "my-test-cluster"
 		region := "us-west-99"
 
+		responseOceanClusterID := clusterIdentifier
+		if tc.oceanClusterIdentifierOverride != "" {
+			responseOceanClusterID = tc.oceanClusterIdentifierOverride
+		}
+
 		oceanClustersResponse := []*client.OceanCluster{
 			{
 				ID:                  "o-something",
 				Name:                "whatever",
-				ControllerClusterId: clusterIdentifier,
+				ControllerClusterId: responseOceanClusterID,
 				Region:              region,
 				Compute: client.OceanClusterCompute{
 					InstanceTypes: client.OceanClusterInstanceTypes{
@@ -56,10 +67,10 @@ func TestGetAllowedInstanceTypes_whenSuccessful(t *testing.T) {
 		}
 
 		mockOceanClient := mock_client.NewMockOceanClient(ctrl)
-		mockOceanClient.EXPECT().GetAllOceanClusters().Return(oceanClustersResponse, nil).Times(1)
+		mockOceanClient.EXPECT().GetAllOceanClusters().Return(oceanClustersResponse, tc.getOceanClustersError).Times(tc.getOceanClustersCallCount)
 
 		mockAWSClient := mock_client.NewMockAWSClient(ctrl)
-		mockAWSClient.EXPECT().GetAvailableInstanceTypesInRegion(region).Return(tc.instanceTypesInRegion, nil).Times(1)
+		mockAWSClient.EXPECT().GetAvailableInstanceTypesInRegion(region).Return(tc.instanceTypesInRegion, tc.getInstanceTypesError).Times(tc.getInstanceTypesCallCount)
 
 		manager := &manager{
 			clusterIdentifier: clusterIdentifier,
@@ -69,13 +80,23 @@ func TestGetAllowedInstanceTypes_whenSuccessful(t *testing.T) {
 		}
 
 		res, err := manager.GetAllowedInstanceTypes()
-		require.NoError(tt, err)
-		assert.Equal(tt, tc.expected, res)
+		if tc.expectedError != "" {
+			require.Error(tt, err)
+			assert.Contains(tt, err.Error(), tc.expectedError)
+		} else {
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expected, res)
+		}
 
 		// Should not fetch ocean cluster and instance types in region again
 		res2, err := manager.GetAllowedInstanceTypes()
-		require.NoError(tt, err)
-		assert.Equal(tt, res, res2)
+		if tc.expectedError != "" {
+			require.Error(tt, err)
+			assert.Contains(tt, err.Error(), tc.expectedError)
+		} else {
+			require.NoError(tt, err)
+			assert.Equal(tt, tc.expected, res2)
+		}
 
 	}
 
@@ -92,8 +113,10 @@ func TestGetAllowedInstanceTypes_whenSuccessful(t *testing.T) {
 					InstanceType: "r5.small",
 				},
 			},
-			whitelist: nil,
-			blacklist: nil,
+			whitelist:                 nil,
+			blacklist:                 nil,
+			getOceanClustersCallCount: 1,
+			getInstanceTypesCallCount: 1,
 			expected: InstanceTypes{
 				"m5": {
 					"m5.xlarge": true,
@@ -124,7 +147,9 @@ func TestGetAllowedInstanceTypes_whenSuccessful(t *testing.T) {
 				"m5.xlarge",
 				"r5.small",
 			},
-			blacklist: nil,
+			blacklist:                 nil,
+			getOceanClustersCallCount: 1,
+			getInstanceTypesCallCount: 1,
 			expected: InstanceTypes{
 				"m5": {
 					"m5.xlarge": true,
@@ -154,6 +179,8 @@ func TestGetAllowedInstanceTypes_whenSuccessful(t *testing.T) {
 			blacklist: []string{
 				"r5.small",
 			},
+			getOceanClustersCallCount: 1,
+			getInstanceTypesCallCount: 1,
 			expected: InstanceTypes{
 				"m5": {
 					"m5.xlarge": true,
@@ -162,6 +189,74 @@ func TestGetAllowedInstanceTypes_whenSuccessful(t *testing.T) {
 					"r5.99xlarge": true,
 				},
 			},
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenMalformedInstanceTypes", func(tt *testing.T) {
+		tc := testCase{
+			instanceTypesInRegion: []*client.InstanceType{
+				{
+					InstanceType: "m5.xlarge",
+				},
+				{
+					InstanceType: "nonsense! should be ignored",
+				},
+				{
+					InstanceType: "r5.",
+				},
+			},
+			whitelist:                 nil,
+			blacklist:                 nil,
+			getOceanClustersCallCount: 1,
+			getInstanceTypesCallCount: 1,
+			expected: InstanceTypes{
+				"m5": {
+					"m5.xlarge": true,
+				},
+			},
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenGetOceanClusterError", func(tt *testing.T) {
+		tc := testCase{
+			instanceTypesInRegion:     []*client.InstanceType{},
+			whitelist:                 nil,
+			blacklist:                 nil,
+			getOceanClustersError:     fmt.Errorf("test error"),
+			getOceanClustersCallCount: 2,
+			getInstanceTypesCallCount: 0,
+			expected:                  InstanceTypes{},
+			expectedError:             "could not get ocean clusters",
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenOceanClusterNotFound", func(tt *testing.T) {
+		tc := testCase{
+			instanceTypesInRegion:          []*client.InstanceType{},
+			whitelist:                      nil,
+			blacklist:                      nil,
+			getOceanClustersCallCount:      2,
+			getInstanceTypesCallCount:      0,
+			oceanClusterIdentifierOverride: "name-override",
+			expected:                       InstanceTypes{},
+			expectedError:                  "could not get ocean cluster",
+		}
+		testFunc(tt, tc)
+	})
+
+	t.Run("whenGetInstanceTypesError", func(tt *testing.T) {
+		tc := testCase{
+			instanceTypesInRegion:     []*client.InstanceType{},
+			whitelist:                 nil,
+			blacklist:                 nil,
+			getInstanceTypesError:     fmt.Errorf("test error"),
+			getOceanClustersCallCount: 2,
+			getInstanceTypesCallCount: 2,
+			expected:                  InstanceTypes{},
+			expectedError:             "could not get instance types",
 		}
 		testFunc(tt, tc)
 	})
