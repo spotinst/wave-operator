@@ -2,7 +2,6 @@ package client
 
 import (
 	"net/http"
-	"testing"
 
 	"github.com/spotinst/wave-operator/internal/logger"
 )
@@ -23,8 +22,4 @@ var clientWithTestTransport = func(testTransport transportTestFunc) *Client {
 			Transport: testTransport,
 		},
 	}
-}
-
-func TestNewClient(t *testing.T) {
-	// TODO
 }
