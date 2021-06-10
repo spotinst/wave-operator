@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+
+	"github.com/spotinst/wave-operator/internal/config/instances"
 )
 
 const (
@@ -69,27 +71,12 @@ func GetConfiguredInstanceTypes(annotations map[string]string, log logr.Logger) 
 	split := strings.Split(conf, ",")
 	for _, s := range split {
 		trimmed := strings.TrimSpace(s)
-		if validateInstanceType(trimmed) {
-			instanceTypes = append(instanceTypes, trimmed)
+		expanded, err := instances.ValidateAndExpandFamily(trimmed)
+		if err != nil {
+			log.Info(fmt.Sprintf("Ignoring invalid instance type %q, error: %s", trimmed, err))
 		} else {
-			log.Info(fmt.Sprintf("Got invalid instance type %q, ignoring", trimmed))
+			instanceTypes = append(instanceTypes, expanded...)
 		}
 	}
 	return instanceTypes
-}
-
-// TODO(thorsteinn) Make sure that the instance type is valid in the cluster region,
-// and allowed in the cluster configuration
-func validateInstanceType(instanceType string) bool {
-	// Instance types should be of the form family.type (e.g. m5.xlarge)
-	split := strings.Split(instanceType, ".")
-	if len(split) != 2 {
-		return false
-	}
-	for _, s := range split {
-		if len(s) == 0 {
-			return false
-		}
-	}
-	return true
 }
