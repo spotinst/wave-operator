@@ -71,7 +71,7 @@ func GetConfiguredInstanceTypes(annotations map[string]string, instanceTypeManag
 	split := strings.Split(conf, ",")
 	for _, s := range split {
 		trimmed := strings.TrimSpace(s)
-		expanded, err := instances.ValidateAndExpandFamily(trimmed, instanceTypeManager.GetAllowedInstanceTypes())
+		expanded, err := instanceTypeManager.ValidateAndExpandFamily(trimmed)
 		if err != nil {
 			log.Info(fmt.Sprintf("Ignoring invalid instance type %q, error: %s", trimmed, err))
 		} else {
