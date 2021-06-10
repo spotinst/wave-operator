@@ -1,3 +1,5 @@
+//go:generate mockgen -destination=mock_instances/instances_mock.go . InstanceTypeManager
+
 package instances
 
 import (
@@ -9,29 +11,30 @@ import (
 	"github.com/spotinst/wave-operator/internal/spot/client"
 )
 
-// instanceTypes is a map of instance type family -> instance types
-type instanceTypes map[string]map[string]bool
-
-// allowedInstanceTypes is a cached map of allowed instance types
-var allowedInstanceTypes instanceTypes
+// InstanceTypes is a map of instance type family -> instance types
+type InstanceTypes map[string]map[string]bool
 
 type manager struct {
-	clusterIdentifier string
-	oceanClient       client.OceanClient
-	awsClient         client.AWSClient
-	log               logr.Logger
+	// allowedInstanceTypes is a cached map of allowed instance types
+	allowedInstanceTypes InstanceTypes
+	clusterIdentifier    string
+	oceanClient          client.OceanClient
+	awsClient            client.AWSClient
+	log                  logr.Logger
 }
 
 type InstanceTypeManager interface {
 	Start() error
+	GetAllowedInstanceTypes() InstanceTypes
 }
 
 func NewInstanceTypeManager(client *client.Client, clusterIdentifier string, log logr.Logger) InstanceTypeManager {
 	return &manager{
-		clusterIdentifier: clusterIdentifier,
-		oceanClient:       client,
-		awsClient:         client,
-		log:               log,
+		allowedInstanceTypes: nil,
+		clusterIdentifier:    clusterIdentifier,
+		oceanClient:          client,
+		awsClient:            client,
+		log:                  log,
 	}
 }
 
@@ -40,18 +43,22 @@ func (m *manager) Start() error {
 	return m.refreshAllowedInstanceTypes()
 }
 
+func (m *manager) GetAllowedInstanceTypes() InstanceTypes {
+	return m.allowedInstanceTypes
+}
+
 func (m *manager) refreshAllowedInstanceTypes() error {
 	m.log.Info("Refreshing allowed instance types ...")
 	allowed, err := m.fetchAllowedInstanceTypes()
 	if err != nil {
 		return err
 	}
-	allowedInstanceTypes = allowed
+	m.allowedInstanceTypes = allowed
 	m.log.Info("Successfully refreshed allowed instance types")
 	return nil
 }
 
-func (m *manager) fetchAllowedInstanceTypes() (instanceTypes, error) {
+func (m *manager) fetchAllowedInstanceTypes() (InstanceTypes, error) {
 
 	// TODO(thorsteinn) We should call a backend endpoint to get this information
 
@@ -158,7 +165,8 @@ func getInstanceTypesInRegion(instanceTypeGetter client.InstanceTypesGetter, reg
 // If the given string is a valid instance type (e.g. m5.large), it returns a list with only one element
 // If the given string is a valid instance family (e.g. m5), it returns a list of all allowed instance types within that family
 // If the given string is invalid, it throws an error
-func ValidateAndExpandFamily(input string) ([]string, error) {
+// If allowedInstanceTypes is nil or empty, only the input format will be validated
+func ValidateAndExpandFamily(input string, allowedInstanceTypes InstanceTypes) ([]string, error) {
 	// If we don't have a cached list of allowed instance types, just validate string format
 	if len(allowedInstanceTypes) == 0 {
 		if validateInstanceTypeFormat(input) {

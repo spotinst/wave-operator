@@ -59,7 +59,7 @@ func GetInstanceLifecycle(annotations map[string]string, log logr.Logger) Instan
 	}
 }
 
-func GetConfiguredInstanceTypes(annotations map[string]string, log logr.Logger) []string {
+func GetConfiguredInstanceTypes(annotations map[string]string, instanceTypeManager instances.InstanceTypeManager, log logr.Logger) []string {
 	instanceTypes := make([]string, 0)
 	if annotations == nil {
 		return instanceTypes
@@ -71,12 +71,25 @@ func GetConfiguredInstanceTypes(annotations map[string]string, log logr.Logger) 
 	split := strings.Split(conf, ",")
 	for _, s := range split {
 		trimmed := strings.TrimSpace(s)
-		expanded, err := instances.ValidateAndExpandFamily(trimmed)
+		expanded, err := instances.ValidateAndExpandFamily(trimmed, instanceTypeManager.GetAllowedInstanceTypes())
 		if err != nil {
 			log.Info(fmt.Sprintf("Ignoring invalid instance type %q, error: %s", trimmed, err))
 		} else {
-			instanceTypes = append(instanceTypes, expanded...)
+			for _, instanceType := range expanded {
+				if !containsString(instanceTypes, instanceType) {
+					instanceTypes = append(instanceTypes, instanceType)
+				}
+			}
 		}
 	}
 	return instanceTypes
+}
+
+func containsString(list []string, target string) bool {
+	for _, item := range list {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }

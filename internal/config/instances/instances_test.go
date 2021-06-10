@@ -24,7 +24,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 		getInstanceTypesError          error
 		getInstanceTypesCallCount      int
 		oceanClusterIdentifierOverride string
-		expected                       instanceTypes
+		expected                       InstanceTypes
 		expectedError                  string
 	}
 
@@ -75,7 +75,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			assert.Contains(tt, err.Error(), tc.expectedError)
 		} else {
 			require.NoError(tt, err)
-			assert.Equal(tt, tc.expected, allowedInstanceTypes)
+			assert.Equal(tt, tc.expected, manager.GetAllowedInstanceTypes())
 		}
 	}
 
@@ -96,7 +96,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			blacklist:                 nil,
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: instanceTypes{
+			expected: InstanceTypes{
 				"m5": {
 					"m5.xlarge": true,
 				},
@@ -129,7 +129,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			blacklist:                 nil,
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: instanceTypes{
+			expected: InstanceTypes{
 				"m5": {
 					"m5.xlarge": true,
 				},
@@ -160,7 +160,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			},
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: instanceTypes{
+			expected: InstanceTypes{
 				"m5": {
 					"m5.xlarge": true,
 				},
@@ -189,7 +189,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			blacklist:                 nil,
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: instanceTypes{
+			expected: InstanceTypes{
 				"m5": {
 					"m5.xlarge": true,
 				},
@@ -206,7 +206,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			getOceanClustersError:     fmt.Errorf("test error"),
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 0,
-			expected:                  instanceTypes{},
+			expected:                  InstanceTypes{},
 			expectedError:             "could not get ocean clusters",
 		}
 		testFunc(tt, tc)
@@ -220,7 +220,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			getOceanClustersCallCount:      1,
 			getInstanceTypesCallCount:      0,
 			oceanClusterIdentifierOverride: "name-override",
-			expected:                       instanceTypes{},
+			expected:                       InstanceTypes{},
 			expectedError:                  "could not get ocean cluster",
 		}
 		testFunc(tt, tc)
@@ -234,7 +234,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			getInstanceTypesError:     fmt.Errorf("test error"),
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected:                  instanceTypes{},
+			expected:                  InstanceTypes{},
 			expectedError:             "could not get instance types",
 		}
 		testFunc(tt, tc)

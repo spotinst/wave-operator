@@ -154,7 +154,7 @@ func TestMutateDriverPod(t *testing.T) {
 		}
 
 		req := getAdmissionRequest(t, driverPod)
-		r, err := NewPodMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+		r, err := NewPodMutator(log, &util.FakeStorageProvider{}, &util.FakeInstanceTypeManager{}).Mutate(req)
 		assert.NoError(t, err)
 		assert.NotNil(t, r)
 		assert.Equal(t, driverPod.UID, r.UID)
@@ -207,7 +207,7 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 	testFunc := func(tt *testing.T, tc testCase) {
 
 		req := getAdmissionRequest(tt, tc.pod)
-		res, err := NewPodMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+		res, err := NewPodMutator(log, &util.FakeStorageProvider{}, &util.FakeInstanceTypeManager{}).Mutate(req)
 		assert.NoError(tt, err)
 		assert.NotNil(tt, res)
 		assert.Equal(tt, tc.pod.UID, res.UID)
@@ -786,7 +786,7 @@ func TestMutateExecutorPod(t *testing.T) {
 		SparkRoleLabel: SparkRoleExecutorValue,
 	}
 	req := getAdmissionRequest(t, execPod)
-	r, err := NewPodMutator(log, &util.FakeStorageProvider{}).Mutate(req)
+	r, err := NewPodMutator(log, &util.FakeStorageProvider{}, &util.FakeInstanceTypeManager{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, execPod.UID, r.UID)
@@ -810,7 +810,7 @@ func TestIdempotency(t *testing.T) {
 	}
 	driverPod.Annotations[config.WaveConfigAnnotationSyncEventLogs] = "true"
 	req := getAdmissionRequest(t, driverPod)
-	m := NewPodMutator(log, &util.FakeStorageProvider{})
+	m := NewPodMutator(log, &util.FakeStorageProvider{}, &util.FakeInstanceTypeManager{})
 	r, err := m.Mutate(req)
 	require.NoError(t, err)
 
@@ -838,7 +838,7 @@ func TestIdempotency(t *testing.T) {
 func TestSkipNonSparkPod(t *testing.T) {
 	nonSparkPod := getSimplePod()
 	req := getAdmissionRequest(t, nonSparkPod)
-	r, err := NewPodMutator(log, &util.FailedStorageProvider{}).Mutate(req)
+	r, err := NewPodMutator(log, &util.FailedStorageProvider{}, &util.FakeInstanceTypeManager{}).Mutate(req)
 	assert.NoError(t, err)
 	assert.NotNil(t, r)
 	assert.Equal(t, nonSparkPod.UID, r.UID)
@@ -857,7 +857,7 @@ func TestMutatePodBadStorage(t *testing.T) {
 		driverPod.Annotations[config.WaveConfigAnnotationSyncEventLogs] = "true"
 
 		req := getAdmissionRequest(t, driverPod)
-		r, err := NewPodMutator(log, provider).Mutate(req)
+		r, err := NewPodMutator(log, provider, &util.FakeInstanceTypeManager{}).Mutate(req)
 		require.NoError(t, err)
 		assert.NotNil(t, r)
 		assert.Equal(t, driverPod.UID, r.UID)

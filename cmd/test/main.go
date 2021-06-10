@@ -212,6 +212,7 @@ serviceAccount:
 		ac := admission.NewAdmissionController(
 			k,
 			&util.FakeStorageProvider{},
+			&util.FakeInstanceTypeManager{},
 			logger,
 		)
 		ctx := ctrl.SetupSignalHandler()

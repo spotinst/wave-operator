@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/internal/config/instances"
 )
 
 var FakeStorage = &cloudstorage.StorageInfo{
@@ -39,4 +40,14 @@ func (f NilStorageProvider) ConfigureHistoryServerStorage() (*cloudstorage.Stora
 }
 func (f NilStorageProvider) GetStorageInfo() (*cloudstorage.StorageInfo, error) {
 	return nil, nil
+}
+
+type FakeInstanceTypeManager struct{}
+
+func (m FakeInstanceTypeManager) Start() error {
+	return nil
+}
+
+func (m FakeInstanceTypeManager) GetAllowedInstanceTypes() instances.InstanceTypes {
+	return nil
 }
