@@ -5,10 +5,16 @@ package instances
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/go-logr/logr"
+	"github.com/robfig/cron/v3"
 
 	"github.com/spotinst/wave-operator/internal/spot/client"
+)
+
+const (
+	refreshInstanceTypesCronExpression = "@every 3m"
 )
 
 // InstanceTypes is a map of instance type family -> instance types
@@ -17,6 +23,7 @@ type InstanceTypes map[string]map[string]bool
 type manager struct {
 	// allowedInstanceTypes is a cached map of allowed instance types
 	allowedInstanceTypes InstanceTypes
+	mutex                sync.Mutex
 	clusterIdentifier    string
 	oceanClient          client.OceanClient
 	awsClient            client.AWSClient
@@ -39,8 +46,26 @@ func NewInstanceTypeManager(client *client.Client, clusterIdentifier string, log
 }
 
 func (m *manager) Start() error {
-	// TODO cron
-	return m.refreshAllowedInstanceTypes()
+	// Initial refresh
+	if err := m.refreshAllowedInstanceTypes(); err != nil {
+		return fmt.Errorf("could not refresh instance types, %w", err)
+	}
+
+	// Schedule ongoing refreshes
+	refreshFunc := func() {
+		if err := m.refreshAllowedInstanceTypes(); err != nil {
+			m.log.Error(err, "could not refresh instance types")
+		}
+	}
+	c := cron.New(cron.WithChain(cron.Recover(m.log)))
+	_, err := c.AddFunc(refreshInstanceTypesCronExpression, refreshFunc)
+	if err != nil {
+		return fmt.Errorf("could not schedule instance types refresh, %w", err)
+	}
+	m.log.Info(fmt.Sprintf("Scheduling instance type refreshes %s", refreshInstanceTypesCronExpression))
+	c.Start()
+
+	return nil
 }
 
 func (m *manager) GetAllowedInstanceTypes() InstanceTypes {
@@ -48,6 +73,8 @@ func (m *manager) GetAllowedInstanceTypes() InstanceTypes {
 }
 
 func (m *manager) refreshAllowedInstanceTypes() error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	m.log.Info("Refreshing allowed instance types ...")
 	allowed, err := m.fetchAllowedInstanceTypes()
 	if err != nil {
