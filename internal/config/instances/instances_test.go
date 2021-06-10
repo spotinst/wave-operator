@@ -24,7 +24,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 		getInstanceTypesError          error
 		getInstanceTypesCallCount      int
 		oceanClusterIdentifierOverride string
-		expected                       InstanceTypes
+		expected                       map[string]map[string]bool
 		expectedError                  string
 	}
 
@@ -75,7 +75,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			assert.Contains(tt, err.Error(), tc.expectedError)
 		} else {
 			require.NoError(tt, err)
-			assert.Equal(tt, tc.expected, manager.GetAllowedInstanceTypes())
+			assert.Equal(tt, tc.expected, manager.allowedInstanceTypes.m)
 		}
 	}
 
@@ -96,7 +96,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			blacklist:                 nil,
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: InstanceTypes{
+			expected: map[string]map[string]bool{
 				"m5": {
 					"m5.xlarge": true,
 				},
@@ -129,7 +129,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			blacklist:                 nil,
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: InstanceTypes{
+			expected: map[string]map[string]bool{
 				"m5": {
 					"m5.xlarge": true,
 				},
@@ -160,7 +160,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			},
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: InstanceTypes{
+			expected: map[string]map[string]bool{
 				"m5": {
 					"m5.xlarge": true,
 				},
@@ -189,7 +189,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			blacklist:                 nil,
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: InstanceTypes{
+			expected: map[string]map[string]bool{
 				"m5": {
 					"m5.xlarge": true,
 				},
@@ -206,7 +206,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			getOceanClustersError:     fmt.Errorf("test error"),
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 0,
-			expected:                  InstanceTypes{},
+			expected:                  map[string]map[string]bool{},
 			expectedError:             "could not get ocean clusters",
 		}
 		testFunc(tt, tc)
@@ -220,7 +220,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			getOceanClustersCallCount:      1,
 			getInstanceTypesCallCount:      0,
 			oceanClusterIdentifierOverride: "name-override",
-			expected:                       InstanceTypes{},
+			expected:                       map[string]map[string]bool{},
 			expectedError:                  "could not get ocean cluster",
 		}
 		testFunc(tt, tc)
@@ -234,10 +234,105 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			getInstanceTypesError:     fmt.Errorf("test error"),
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected:                  InstanceTypes{},
+			expected:                  map[string]map[string]bool{},
 			expectedError:             "could not get instance types",
 		}
 		testFunc(tt, tc)
+	})
+
+}
+
+func TestValidateAndExpandFamily(t *testing.T) {
+
+	t.Run("whenAllowedInstanceTypesUnknown", func(tt *testing.T) {
+
+		m := manager{
+			allowedInstanceTypes: instanceTypes{},
+			log:                  logger.New(),
+		}
+
+		res, err := m.ValidateAndExpandFamily("family.type")
+		require.NoError(tt, err)
+		assert.Equal(tt, []string{"family.type"}, res)
+
+		res, err = m.ValidateAndExpandFamily("family.type.test")
+		require.Error(tt, err)
+
+		res, err = m.ValidateAndExpandFamily("family")
+		require.Error(tt, err)
+
+		res, err = m.ValidateAndExpandFamily("family.")
+		require.Error(tt, err)
+
+		res, err = m.ValidateAndExpandFamily(".type")
+		require.Error(tt, err)
+
+		res, err = m.ValidateAndExpandFamily(".")
+		require.Error(tt, err)
+
+	})
+
+	t.Run("whenAllowedInstanceTypesKnown", func(tt *testing.T) {
+
+		m := manager{
+			allowedInstanceTypes: instanceTypes{
+				m: map[string]map[string]bool{
+					"m5": {
+						"m5.large":  true,
+						"m5.xlarge": true,
+					},
+					"r3": {
+						"r3.small": true,
+						"r3.large": true,
+					},
+					"h1": {
+						"h1.small":  true,
+						"h1.medium": true,
+						"h1.large":  true,
+					},
+					"g5": {},
+				},
+			},
+			log: logger.New(),
+		}
+
+		// Allowed instance type
+		res, err := m.ValidateAndExpandFamily("r3.large")
+		require.NoError(tt, err)
+		assert.Equal(tt, []string{"r3.large"}, res)
+
+		// Allowed instance type family
+		res, err = m.ValidateAndExpandFamily("h1")
+		require.NoError(tt, err)
+		assert.Equal(tt, 3, len(res))
+		assert.Contains(tt, res, "h1.small")
+		assert.Contains(tt, res, "h1.medium")
+		assert.Contains(tt, res, "h1.large")
+
+		// Forbidden instance type
+		res, err = m.ValidateAndExpandFamily("r3.1024large")
+		require.Error(tt, err)
+		res, err = m.ValidateAndExpandFamily("c5.large")
+		require.Error(tt, err)
+
+		// Forbidden instance type family
+		res, err = m.ValidateAndExpandFamily("c5")
+		require.Error(tt, err)
+		res, err = m.ValidateAndExpandFamily("g5")
+		require.Error(tt, err)
+
+		// Malformed instance types
+		res, err = m.ValidateAndExpandFamily("c5.large.test")
+		require.Error(tt, err)
+		res, err = m.ValidateAndExpandFamily("g5.")
+		require.Error(tt, err)
+		res, err = m.ValidateAndExpandFamily(".large")
+		require.Error(tt, err)
+		res, err = m.ValidateAndExpandFamily(".")
+		require.Error(tt, err)
+		res, err = m.ValidateAndExpandFamily("nonsense")
+		require.Error(tt, err)
+
 	})
 
 }

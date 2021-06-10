@@ -18,12 +18,14 @@ const (
 )
 
 // InstanceTypes is a map of instance type family -> instance types
-type InstanceTypes map[string]map[string]bool
+type instanceTypes struct {
+	sync.RWMutex
+	m map[string]map[string]bool
+}
 
 type manager struct {
 	// allowedInstanceTypes is a cached map of allowed instance types
-	allowedInstanceTypes InstanceTypes
-	mutex                sync.Mutex
+	allowedInstanceTypes instanceTypes
 	clusterIdentifier    string
 	oceanClient          client.OceanClient
 	awsClient            client.AWSClient
@@ -32,12 +34,12 @@ type manager struct {
 
 type InstanceTypeManager interface {
 	Start() error
-	GetAllowedInstanceTypes() InstanceTypes
+	ValidateAndExpandFamily(input string) ([]string, error)
 }
 
 func NewInstanceTypeManager(client *client.Client, clusterIdentifier string, log logr.Logger) InstanceTypeManager {
 	return &manager{
-		allowedInstanceTypes: nil,
+		allowedInstanceTypes: instanceTypes{m: make(map[string]map[string]bool)},
 		clusterIdentifier:    clusterIdentifier,
 		oceanClient:          client,
 		awsClient:            client,
@@ -68,24 +70,20 @@ func (m *manager) Start() error {
 	return nil
 }
 
-func (m *manager) GetAllowedInstanceTypes() InstanceTypes {
-	return m.allowedInstanceTypes
-}
-
 func (m *manager) refreshAllowedInstanceTypes() error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
 	m.log.Info("Refreshing allowed instance types ...")
 	allowed, err := m.fetchAllowedInstanceTypes()
 	if err != nil {
 		return err
 	}
-	m.allowedInstanceTypes = allowed
+	m.allowedInstanceTypes.Lock()
+	defer m.allowedInstanceTypes.Unlock()
+	m.allowedInstanceTypes.m = allowed
 	m.log.Info("Successfully refreshed allowed instance types")
 	return nil
 }
 
-func (m *manager) fetchAllowedInstanceTypes() (InstanceTypes, error) {
+func (m *manager) fetchAllowedInstanceTypes() (map[string]map[string]bool, error) {
 
 	// TODO(thorsteinn) We should call a backend endpoint to get this information
 
@@ -193,9 +191,11 @@ func getInstanceTypesInRegion(instanceTypeGetter client.InstanceTypesGetter, reg
 // If the given string is a valid instance family (e.g. m5), it returns a list of all allowed instance types within that family
 // If the given string is invalid, it throws an error
 // If allowedInstanceTypes is nil or empty, only the input format will be validated
-func ValidateAndExpandFamily(input string, allowedInstanceTypes InstanceTypes) ([]string, error) {
+func (m *manager) ValidateAndExpandFamily(input string) ([]string, error) {
+	m.allowedInstanceTypes.RLock()
+	defer m.allowedInstanceTypes.RUnlock()
 	// If we don't have a cached list of allowed instance types, just validate string format
-	if len(allowedInstanceTypes) == 0 {
+	if len(m.allowedInstanceTypes.m) == 0 {
 		if validateInstanceTypeFormat(input) {
 			return []string{input}, nil
 		} else {
@@ -209,13 +209,13 @@ func ValidateAndExpandFamily(input string, allowedInstanceTypes InstanceTypes) (
 		if err != nil {
 			return nil, fmt.Errorf("could not get instance family from %q", input)
 		}
-		if allowedInstanceTypes[family][input] == true {
+		if m.allowedInstanceTypes.m[family][input] == true {
 			return []string{input}, nil
 		}
 		return nil, fmt.Errorf("instance type %q not allowed", input)
 	} else {
 		// Is this a valid instance type family?
-		instanceTypesInFamily := allowedInstanceTypes[input]
+		instanceTypesInFamily := m.allowedInstanceTypes.m[input]
 		if len(instanceTypesInFamily) == 0 {
 			return nil, fmt.Errorf("instance type family %q not allowed", input)
 		}

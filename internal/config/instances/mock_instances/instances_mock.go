@@ -6,7 +6,6 @@ package mock_instances
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	instances "github.com/spotinst/wave-operator/internal/config/instances"
 	reflect "reflect"
 )
 
@@ -33,20 +32,6 @@ func (m *MockInstanceTypeManager) EXPECT() *MockInstanceTypeManagerMockRecorder 
 	return m.recorder
 }
 
-// GetAllowedInstanceTypes mocks base method
-func (m *MockInstanceTypeManager) GetAllowedInstanceTypes() instances.InstanceTypes {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAllowedInstanceTypes")
-	ret0, _ := ret[0].(instances.InstanceTypes)
-	return ret0
-}
-
-// GetAllowedInstanceTypes indicates an expected call of GetAllowedInstanceTypes
-func (mr *MockInstanceTypeManagerMockRecorder) GetAllowedInstanceTypes() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllowedInstanceTypes", reflect.TypeOf((*MockInstanceTypeManager)(nil).GetAllowedInstanceTypes))
-}
-
 // Start mocks base method
 func (m *MockInstanceTypeManager) Start() error {
 	m.ctrl.T.Helper()
@@ -59,4 +44,19 @@ func (m *MockInstanceTypeManager) Start() error {
 func (mr *MockInstanceTypeManagerMockRecorder) Start() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockInstanceTypeManager)(nil).Start))
+}
+
+// ValidateAndExpandFamily mocks base method
+func (m *MockInstanceTypeManager) ValidateAndExpandFamily(arg0 string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidateAndExpandFamily", arg0)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ValidateAndExpandFamily indicates an expected call of ValidateAndExpandFamily
+func (mr *MockInstanceTypeManagerMockRecorder) ValidateAndExpandFamily(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndExpandFamily", reflect.TypeOf((*MockInstanceTypeManager)(nil).ValidateAndExpandFamily), arg0)
 }
