@@ -194,7 +194,7 @@ func ValidateAndExpandFamily(input string, allowedInstanceTypes InstanceTypes) (
 		}
 		allowedInstanceTypesInFamily := make([]string, len(instanceTypesInFamily))
 		i := 0
-		for k, _ := range instanceTypesInFamily {
+		for k := range instanceTypesInFamily {
 			allowedInstanceTypesInFamily[i] = k
 			i++
 		}
