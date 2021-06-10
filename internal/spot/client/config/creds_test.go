@@ -56,4 +56,15 @@ func TestGetCredentials(t *testing.T) {
 	assert.Equal(t, "myToken", res.Token)
 	assert.Equal(t, "myAccount", res.Account)
 
+	// Fallback to legacy
+	os.Clearenv()
+	err = os.Setenv(envVarTokenLegacy, "myLegacyToken")
+	require.NoError(t, err)
+	err = os.Setenv(envVarAccountLegacy, "myLegacyAccount")
+	require.NoError(t, err)
+	res, err = GetCredentials()
+	require.NoError(t, err)
+	assert.Equal(t, "myLegacyToken", res.Token)
+	assert.Equal(t, "myLegacyAccount", res.Account)
+
 }
