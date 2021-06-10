@@ -61,7 +61,6 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 
 	type testCase struct {
 		annotations                 map[string]string
-		validateAndExpandFunc       func(string) ([]string, error)
 		expectedValidationCallCount int
 		expected                    []string
 	}
@@ -83,7 +82,7 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 		defer ctrl.Finish()
 
 		mockManager := mock_instances.NewMockInstanceTypeManager(ctrl)
-		mockManager.EXPECT().ValidateAndExpandFamily(gomock.Any()).DoAndReturn(tc.validateAndExpandFunc).Times(tc.expectedValidationCallCount)
+		mockManager.EXPECT().ValidateAndExpandFamily(gomock.Any()).DoAndReturn(testValidationFunc).Times(tc.expectedValidationCallCount)
 
 		res := GetConfiguredInstanceTypes(tc.annotations, mockManager, logger)
 		assert.Equal(tt, tc.expected, res)
@@ -93,7 +92,6 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 	t.Run("whenNilAnnotations", func(tt *testing.T) {
 		tc := testCase{
 			annotations:                 nil,
-			validateAndExpandFunc:       testValidationFunc,
 			expectedValidationCallCount: 0,
 			expected:                    []string{},
 		}
@@ -103,7 +101,6 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 	t.Run("whenEmptyAnnotations", func(tt *testing.T) {
 		tc := testCase{
 			annotations:                 make(map[string]string),
-			validateAndExpandFunc:       testValidationFunc,
 			expectedValidationCallCount: 0,
 			expected:                    []string{},
 		}
@@ -116,7 +113,6 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 		annotations[WaveConfigAnnotationInstanceType] = "m5.xlarge, m5.2xlarge, t2.micro " // With spaces
 		tc := testCase{
 			annotations:                 annotations,
-			validateAndExpandFunc:       testValidationFunc,
 			expectedValidationCallCount: 3,
 			expected:                    []string{"m5.xlarge", "m5.2xlarge", "t2.micro"},
 		}
@@ -125,7 +121,6 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 		annotations[WaveConfigAnnotationInstanceType] = "m5.xlarge,m5.2xlarge,t2.micro" // Without spaces
 		tc = testCase{
 			annotations:                 annotations,
-			validateAndExpandFunc:       testValidationFunc,
 			expectedValidationCallCount: 3,
 			expected:                    []string{"m5.xlarge", "m5.2xlarge", "t2.micro"},
 		}
@@ -137,7 +132,6 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 		annotations[WaveConfigAnnotationInstanceType] = "m5.xlarge, m5.2xlarge, h1, t2.micro"
 		tc := testCase{
 			annotations:                 annotations,
-			validateAndExpandFunc:       testValidationFunc,
 			expectedValidationCallCount: 4,
 			expected:                    []string{"m5.xlarge", "m5.2xlarge", "h1.small", "h1.medium", "h1.large", "t2.micro"},
 		}
@@ -149,7 +143,6 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 		annotations[WaveConfigAnnotationInstanceType] = "m5.xlarge, nonsense, m5.2xlarge, t2.micro"
 		tc := testCase{
 			annotations:                 annotations,
-			validateAndExpandFunc:       testValidationFunc,
 			expectedValidationCallCount: 4,
 			expected:                    []string{"m5.xlarge", "m5.2xlarge", "t2.micro"},
 		}
@@ -162,7 +155,6 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 		annotations[WaveConfigAnnotationInstanceType] = "m5.xlarge,m5,2xlarge,t2.micro" // Malformed input with comma
 		tc := testCase{
 			annotations:                 annotations,
-			validateAndExpandFunc:       testValidationFunc,
 			expectedValidationCallCount: 4,
 			expected:                    []string{"m5.xlarge", "t2.micro"},
 		}
@@ -171,7 +163,6 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 		annotations[WaveConfigAnnotationInstanceType] = "m5.xlarge,m5.2xlarge,,t2.micro" // Malformed input with extra comma
 		tc = testCase{
 			annotations:                 annotations,
-			validateAndExpandFunc:       testValidationFunc,
 			expectedValidationCallCount: 4,
 			expected:                    []string{"m5.xlarge", "m5.2xlarge", "t2.micro"},
 		}
@@ -180,12 +171,10 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 		annotations[WaveConfigAnnotationInstanceType] = "m5.xlarge,m5.2xlarge,t2.micro," // Malformed input with extra comma
 		tc = testCase{
 			annotations:                 annotations,
-			validateAndExpandFunc:       testValidationFunc,
 			expectedValidationCallCount: 4,
 			expected:                    []string{"m5.xlarge", "m5.2xlarge", "t2.micro"},
 		}
 		testFunc(tt, tc)
-
 	})
 
 	t.Run("whenDuplicateInput", func(tt *testing.T) {
@@ -193,7 +182,6 @@ func TestGetConfiguredInstanceTypes(t *testing.T) {
 		annotations[WaveConfigAnnotationInstanceType] = "h1, m5.xlarge, m5.2xlarge, m5.2xlarge, t2.micro, h1"
 		tc := testCase{
 			annotations:                 annotations,
-			validateAndExpandFunc:       testValidationFunc,
 			expectedValidationCallCount: 6,
 			expected:                    []string{"h1.small", "h1.medium", "h1.large", "m5.xlarge", "m5.2xlarge", "t2.micro"},
 		}
