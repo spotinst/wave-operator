@@ -270,6 +270,9 @@ func TestValidateAndExpandFamily(t *testing.T) {
 		res, err = m.ValidateAndExpandFamily(".")
 		require.Error(tt, err)
 
+		res, err = m.ValidateAndExpandFamily("")
+		require.Error(tt, err)
+
 	})
 
 	t.Run("whenAllowedInstanceTypesKnown", func(tt *testing.T) {
@@ -331,6 +334,8 @@ func TestValidateAndExpandFamily(t *testing.T) {
 		res, err = m.ValidateAndExpandFamily(".")
 		require.Error(tt, err)
 		res, err = m.ValidateAndExpandFamily("nonsense")
+		require.Error(tt, err)
+		res, err = m.ValidateAndExpandFamily("")
 		require.Error(tt, err)
 
 	})
