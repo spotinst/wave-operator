@@ -122,13 +122,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	instanceTypeManager := instances.NewInstanceTypeManager(spotClient, clusterIdentifier, log)
+	instanceTypeManager := instances.NewInstanceTypeManager(spotClient, clusterIdentifier, log.WithName("instanceTypeManager"))
 	if err := instanceTypeManager.Start(); err != nil {
 		setupLog.Error(err, "could not start instance type manager")
 		os.Exit(1)
 	}
 
-	ac := admission.NewAdmissionController(clientSet, storageProvider, instanceTypeManager, log)
+	ac := admission.NewAdmissionController(clientSet, storageProvider, instanceTypeManager, log.WithName("admission"))
 	err = mgr.Add(ac)
 	if err != nil {
 		setupLog.Error(err, "unable to add admission controller")
