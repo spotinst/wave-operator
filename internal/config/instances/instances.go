@@ -34,7 +34,8 @@ type manager struct {
 
 type InstanceTypeManager interface {
 	Start() error
-	ValidateAndExpandFamily(input string) ([]string, error)
+	ValidateInstanceType(instanceType string) error
+	GetValidInstanceTypesInFamily(family string) ([]string, error)
 }
 
 func NewInstanceTypeManager(client *client.Client, clusterIdentifier string, log logr.Logger) InstanceTypeManager {
@@ -68,6 +69,43 @@ func (m *manager) Start() error {
 	c.Start()
 
 	return nil
+}
+
+func (m *manager) ValidateInstanceType(instanceType string) error {
+	m.allowedInstanceTypes.RLock()
+	defer m.allowedInstanceTypes.RUnlock()
+	if len(m.allowedInstanceTypes.m) > 0 {
+		// Validate instance type is allowed
+		family, err := getFamily(instanceType)
+		if err != nil {
+			return fmt.Errorf("could not get family for instance type %q, %w", instanceType, err)
+		}
+		if m.allowedInstanceTypes.m[family][instanceType] == false {
+			return fmt.Errorf("instance type %q not allowed", instanceType)
+		}
+	} else {
+		// Just validate string format
+		if !validateInstanceTypeFormat(instanceType) {
+			return fmt.Errorf("malformed instance type %q", instanceType)
+		}
+	}
+	return nil
+}
+
+func (m *manager) GetValidInstanceTypesInFamily(family string) ([]string, error) {
+	m.allowedInstanceTypes.RLock()
+	defer m.allowedInstanceTypes.RUnlock()
+	instanceTypesInFamily := m.allowedInstanceTypes.m[family]
+	if len(instanceTypesInFamily) == 0 {
+		return nil, fmt.Errorf("instance type family %q not allowed", family)
+	}
+	allowedInstanceTypesInFamily := make([]string, len(instanceTypesInFamily))
+	i := 0
+	for k := range instanceTypesInFamily {
+		allowedInstanceTypesInFamily[i] = k
+		i++
+	}
+	return allowedInstanceTypesInFamily, nil
 }
 
 func (m *manager) refreshAllowedInstanceTypes() error {
@@ -184,47 +222,4 @@ func getOceanCluster(clusterGetter client.OceanClusterGetter, clusterIdentifier 
 
 func getInstanceTypesInRegion(instanceTypeGetter client.InstanceTypesGetter, region string) ([]*client.InstanceType, error) {
 	return instanceTypeGetter.GetAvailableInstanceTypesInRegion(region)
-}
-
-// ValidateAndExpandFamily processes the given string and returns a list of strings
-// If the given string is a valid instance type (e.g. m5.large), it returns a list with only one element
-// If the given string is a valid instance family (e.g. m5), it returns a list of all allowed instance types within that family
-// If the given string is invalid, it throws an error
-// If allowedInstanceTypes is nil or empty, only the input format will be validated
-func (m *manager) ValidateAndExpandFamily(input string) ([]string, error) {
-	m.allowedInstanceTypes.RLock()
-	defer m.allowedInstanceTypes.RUnlock()
-	// If we don't have a cached list of allowed instance types, just validate string format
-	if len(m.allowedInstanceTypes.m) == 0 {
-		if validateInstanceTypeFormat(input) {
-			return []string{input}, nil
-		} else {
-			return nil, fmt.Errorf("invalid instance type %q", input)
-		}
-	}
-
-	if validateInstanceTypeFormat(input) {
-		// This is a valid instance type name (family.instancetype)
-		family, err := getFamily(input)
-		if err != nil {
-			return nil, fmt.Errorf("could not get instance family from %q", input)
-		}
-		if m.allowedInstanceTypes.m[family][input] == true {
-			return []string{input}, nil
-		}
-		return nil, fmt.Errorf("instance type %q not allowed", input)
-	} else {
-		// Is this a valid instance type family?
-		instanceTypesInFamily := m.allowedInstanceTypes.m[input]
-		if len(instanceTypesInFamily) == 0 {
-			return nil, fmt.Errorf("instance type family %q not allowed", input)
-		}
-		allowedInstanceTypesInFamily := make([]string, len(instanceTypesInFamily))
-		i := 0
-		for k := range instanceTypesInFamily {
-			allowedInstanceTypesInFamily[i] = k
-			i++
-		}
-		return allowedInstanceTypesInFamily, nil
-	}
 }

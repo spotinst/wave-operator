@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
-	"github.com/spotinst/wave-operator/internal/config/instances"
 )
 
 var FakeStorage = &cloudstorage.StorageInfo{
@@ -48,6 +47,20 @@ func (m FakeInstanceTypeManager) Start() error {
 	return nil
 }
 
-func (m FakeInstanceTypeManager) GetAllowedInstanceTypes() instances.InstanceTypes {
-	return nil
+func (m FakeInstanceTypeManager) ValidateInstanceType(instanceType string) error {
+	switch instanceType {
+	case "m5.xlarge", "m5.2xlarge", "t2.micro":
+		return nil
+	default:
+		return fmt.Errorf("invalid instance type %q", instanceType)
+	}
+}
+
+func (m FakeInstanceTypeManager) GetValidInstanceTypesInFamily(family string) ([]string, error) {
+	switch family {
+	case "h1":
+		return []string{"h1.small", "h1.medium", "h1.large"}, nil
+	default:
+		return nil, fmt.Errorf("invalid instance type family %q", family)
+	}
 }

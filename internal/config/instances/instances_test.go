@@ -242,7 +242,24 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 
 }
 
-func TestValidateAndExpandFamily(t *testing.T) {
+var testAllowedInstanceTypes = map[string]map[string]bool{
+	"m5": {
+		"m5.large":  true,
+		"m5.xlarge": true,
+	},
+	"r3": {
+		"r3.small": true,
+		"r3.large": true,
+	},
+	"h1": {
+		"h1.small":  true,
+		"h1.medium": true,
+		"h1.large":  true,
+	},
+	"g5": {},
+}
+
+func TestValidateInstanceType(t *testing.T) {
 
 	t.Run("whenAllowedInstanceTypesUnknown", func(tt *testing.T) {
 
@@ -251,26 +268,28 @@ func TestValidateAndExpandFamily(t *testing.T) {
 			log:                  logger.New(),
 		}
 
-		res, err := m.ValidateAndExpandFamily("family.type")
+		err := m.ValidateInstanceType("family.type")
 		require.NoError(tt, err)
-		assert.Equal(tt, []string{"family.type"}, res)
 
-		res, err = m.ValidateAndExpandFamily("family.type.test")
+		err = m.ValidateInstanceType("family,type")
 		require.Error(tt, err)
 
-		res, err = m.ValidateAndExpandFamily("family")
+		err = m.ValidateInstanceType("family.type.test")
 		require.Error(tt, err)
 
-		res, err = m.ValidateAndExpandFamily("family.")
+		err = m.ValidateInstanceType("family")
 		require.Error(tt, err)
 
-		res, err = m.ValidateAndExpandFamily(".type")
+		err = m.ValidateInstanceType("family.")
 		require.Error(tt, err)
 
-		res, err = m.ValidateAndExpandFamily(".")
+		err = m.ValidateInstanceType(".type")
 		require.Error(tt, err)
 
-		res, err = m.ValidateAndExpandFamily("")
+		err = m.ValidateInstanceType(".")
+		require.Error(tt, err)
+
+		err = m.ValidateInstanceType("")
 		require.Error(tt, err)
 
 	})
@@ -278,64 +297,82 @@ func TestValidateAndExpandFamily(t *testing.T) {
 	t.Run("whenAllowedInstanceTypesKnown", func(tt *testing.T) {
 
 		m := manager{
-			allowedInstanceTypes: instanceTypes{
-				m: map[string]map[string]bool{
-					"m5": {
-						"m5.large":  true,
-						"m5.xlarge": true,
-					},
-					"r3": {
-						"r3.small": true,
-						"r3.large": true,
-					},
-					"h1": {
-						"h1.small":  true,
-						"h1.medium": true,
-						"h1.large":  true,
-					},
-					"g5": {},
-				},
-			},
-			log: logger.New(),
+			allowedInstanceTypes: instanceTypes{m: testAllowedInstanceTypes},
+			log:                  logger.New(),
 		}
 
 		// Allowed instance type
-		res, err := m.ValidateAndExpandFamily("r3.large")
+		err := m.ValidateInstanceType("r3.large")
 		require.NoError(tt, err)
-		assert.Equal(tt, []string{"r3.large"}, res)
+
+		// Forbidden instance type
+		err = m.ValidateInstanceType("family.type")
+		require.Error(tt, err)
+		err = m.ValidateInstanceType("r3.1024large")
+		require.Error(tt, err)
+		err = m.ValidateInstanceType("c5.large")
+		require.Error(tt, err)
+
+		// Malformed instance types
+		err = m.ValidateInstanceType("c5.large.test")
+		require.Error(tt, err)
+		err = m.ValidateInstanceType("g5.")
+		require.Error(tt, err)
+		err = m.ValidateInstanceType(".large")
+		require.Error(tt, err)
+		err = m.ValidateInstanceType(".")
+		require.Error(tt, err)
+		err = m.ValidateInstanceType("nonsense")
+		require.Error(tt, err)
+		err = m.ValidateInstanceType("")
+		require.Error(tt, err)
+
+	})
+
+}
+
+func TestGetValidInstanceTypesInFamily(t *testing.T) {
+
+	t.Run("whenAllowedInstanceTypesUnknown", func(tt *testing.T) {
+
+		m := manager{
+			allowedInstanceTypes: instanceTypes{},
+			log:                  logger.New(),
+		}
+
+		res, err := m.GetValidInstanceTypesInFamily("h1")
+		require.Error(tt, err)
+		assert.Equal(tt, 0, len(res))
+
+	})
+
+	t.Run("whenAllowedInstanceTypesKnown", func(tt *testing.T) {
+
+		m := manager{
+			allowedInstanceTypes: instanceTypes{m: testAllowedInstanceTypes},
+			log:                  logger.New(),
+		}
 
 		// Allowed instance type family
-		res, err = m.ValidateAndExpandFamily("h1")
+		res, err := m.GetValidInstanceTypesInFamily("h1")
 		require.NoError(tt, err)
 		assert.Equal(tt, 3, len(res))
 		assert.Contains(tt, res, "h1.small")
 		assert.Contains(tt, res, "h1.medium")
 		assert.Contains(tt, res, "h1.large")
 
-		// Forbidden instance type
-		res, err = m.ValidateAndExpandFamily("r3.1024large")
+		// Forbidden instance type families
+		res, err = m.GetValidInstanceTypesInFamily("c5")
 		require.Error(tt, err)
-		res, err = m.ValidateAndExpandFamily("c5.large")
-		require.Error(tt, err)
-
-		// Forbidden instance type family
-		res, err = m.ValidateAndExpandFamily("c5")
-		require.Error(tt, err)
-		res, err = m.ValidateAndExpandFamily("g5")
+		res, err = m.GetValidInstanceTypesInFamily("g5")
 		require.Error(tt, err)
 
-		// Malformed instance types
-		res, err = m.ValidateAndExpandFamily("c5.large.test")
+		// Malformed instance type family
+		res, err = m.GetValidInstanceTypesInFamily("h1.")
 		require.Error(tt, err)
-		res, err = m.ValidateAndExpandFamily("g5.")
+		res, err = m.GetValidInstanceTypesInFamily(",")
 		require.Error(tt, err)
-		res, err = m.ValidateAndExpandFamily(".large")
-		require.Error(tt, err)
-		res, err = m.ValidateAndExpandFamily(".")
-		require.Error(tt, err)
-		res, err = m.ValidateAndExpandFamily("nonsense")
-		require.Error(tt, err)
-		res, err = m.ValidateAndExpandFamily("")
+		res, err = m.GetValidInstanceTypesInFamily(".")
 		require.Error(tt, err)
 
 	})

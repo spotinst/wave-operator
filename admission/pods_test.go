@@ -559,7 +559,7 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 				corev1.NodeSelectorRequirement{
 					Key:      "node.kubernetes.io/instance-type",
 					Operator: corev1.NodeSelectorOpIn,
-					Values:   []string{"t2.micro", "m5.xlarge"},
+					Values:   []string{"m5.xlarge", "t2.micro"},
 				})
 
 		pod := getDriverPod()
@@ -582,7 +582,7 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 						{
 							Key:      "node.kubernetes.io/instance-type",
 							Operator: corev1.NodeSelectorOpIn,
-							Values:   []string{"t2.micro", "m5.xlarge"},
+							Values:   []string{"m5.xlarge", "t2.micro"},
 						},
 					},
 				},
@@ -735,14 +735,14 @@ func TestMutateSparkPod_instanceConfiguration(t *testing.T) {
 				corev1.NodeSelectorRequirement{
 					Key:      "node.kubernetes.io/instance-type",
 					Operator: corev1.NodeSelectorOpIn,
-					Values:   []string{"t2.micro", "m5.xlarge"},
+					Values:   []string{"m5.xlarge", "t2.micro"},
 				})
 		expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[1].MatchExpressions =
 			append(expectedAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[1].MatchExpressions,
 				corev1.NodeSelectorRequirement{
 					Key:      "node.kubernetes.io/instance-type",
 					Operator: corev1.NodeSelectorOpIn,
-					Values:   []string{"t2.micro", "m5.xlarge"},
+					Values:   []string{"m5.xlarge", "t2.micro"},
 				})
 
 		pod := getDriverPod()

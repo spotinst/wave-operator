@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -60,36 +61,43 @@ func GetInstanceLifecycle(annotations map[string]string, log logr.Logger) Instan
 }
 
 func GetConfiguredInstanceTypes(annotations map[string]string, instanceTypeManager instances.InstanceTypeManager, log logr.Logger) []string {
-	instanceTypes := make([]string, 0)
 	if annotations == nil {
-		return instanceTypes
+		return []string{}
 	}
 	conf := annotations[WaveConfigAnnotationInstanceType]
 	if conf == "" {
-		return instanceTypes
+		return []string{}
 	}
+	instanceTypes := make(map[string]bool)
 	split := strings.Split(conf, ",")
 	for _, s := range split {
 		trimmed := strings.TrimSpace(s)
-		expanded, err := instanceTypeManager.ValidateAndExpandFamily(trimmed)
-		if err != nil {
-			log.Info(fmt.Sprintf("Ignoring invalid instance type %q, error: %s", trimmed, err))
+		// Is this a valid instance type?
+		err := instanceTypeManager.ValidateInstanceType(trimmed)
+		if err == nil {
+			instanceTypes[trimmed] = true
 		} else {
-			for _, instanceType := range expanded {
-				if !containsString(instanceTypes, instanceType) {
-					instanceTypes = append(instanceTypes, instanceType)
+			// Is this a valid instance type family?
+			instanceTypesInFamily, err := instanceTypeManager.GetValidInstanceTypesInFamily(trimmed)
+			if err == nil {
+				for _, it := range instanceTypesInFamily {
+					instanceTypes[it] = true
 				}
+			} else {
+				log.Info(fmt.Sprintf("Ignoring invalid instance type %q", trimmed))
 			}
 		}
 	}
-	return instanceTypes
+	return mapKeysToSlice(instanceTypes)
 }
 
-func containsString(list []string, target string) bool {
-	for _, item := range list {
-		if item == target {
-			return true
-		}
+func mapKeysToSlice(m map[string]bool) []string {
+	res := make([]string, len(m))
+	i := 0
+	for k := range m {
+		res[i] = k
+		i++
 	}
-	return false
+	sort.Strings(res) // Enforce stable order
+	return res
 }

@@ -32,6 +32,21 @@ func (m *MockInstanceTypeManager) EXPECT() *MockInstanceTypeManagerMockRecorder 
 	return m.recorder
 }
 
+// GetValidInstanceTypesInFamily mocks base method
+func (m *MockInstanceTypeManager) GetValidInstanceTypesInFamily(arg0 string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetValidInstanceTypesInFamily", arg0)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetValidInstanceTypesInFamily indicates an expected call of GetValidInstanceTypesInFamily
+func (mr *MockInstanceTypeManagerMockRecorder) GetValidInstanceTypesInFamily(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidInstanceTypesInFamily", reflect.TypeOf((*MockInstanceTypeManager)(nil).GetValidInstanceTypesInFamily), arg0)
+}
+
 // Start mocks base method
 func (m *MockInstanceTypeManager) Start() error {
 	m.ctrl.T.Helper()
@@ -46,17 +61,16 @@ func (mr *MockInstanceTypeManagerMockRecorder) Start() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockInstanceTypeManager)(nil).Start))
 }
 
-// ValidateAndExpandFamily mocks base method
-func (m *MockInstanceTypeManager) ValidateAndExpandFamily(arg0 string) ([]string, error) {
+// ValidateInstanceType mocks base method
+func (m *MockInstanceTypeManager) ValidateInstanceType(arg0 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAndExpandFamily", arg0)
-	ret0, _ := ret[0].([]string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "ValidateInstanceType", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// ValidateAndExpandFamily indicates an expected call of ValidateAndExpandFamily
-func (mr *MockInstanceTypeManagerMockRecorder) ValidateAndExpandFamily(arg0 interface{}) *gomock.Call {
+// ValidateInstanceType indicates an expected call of ValidateInstanceType
+func (mr *MockInstanceTypeManagerMockRecorder) ValidateInstanceType(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndExpandFamily", reflect.TypeOf((*MockInstanceTypeManager)(nil).ValidateAndExpandFamily), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateInstanceType", reflect.TypeOf((*MockInstanceTypeManager)(nil).ValidateInstanceType), arg0)
 }
