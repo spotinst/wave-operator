@@ -7,10 +7,6 @@ import (
 	"github.com/spotinst/wave-operator/internal/version"
 )
 
-const (
-	productName = "wave-operator"
-)
-
 // userAgent represents a User-Agent header.
 type userAgent struct {
 	Product string
@@ -26,7 +22,7 @@ func (ua userAgent) toString() string {
 	return s
 }
 
-func GetUserAgent() string {
+func getUserAgent() string {
 	return userAgent{
 		Product: productName,
 		Version: version.BuildVersion,

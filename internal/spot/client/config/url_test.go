@@ -6,10 +6,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spotinst/wave-operator/internal/logger"
+	"github.com/spotinst/wave-operator/internal/ocean"
 )
 
 func TestGetBaseURL(t *testing.T) {
 
+	log := logger.New()
 	originalEnvVar := os.Getenv(envVarBaseURL)
 
 	defer func() {
@@ -18,28 +22,44 @@ func TestGetBaseURL(t *testing.T) {
 		assert.Equal(t, originalEnvVar, os.Getenv(envVarBaseURL))
 	}()
 
-	err := os.Setenv(envVarBaseURL, "")
-	require.NoError(t, err)
-	res, err := GetBaseURL()
-	require.NoError(t, err)
-	assert.Equal(t, "api.spotinst.io", res.Host)
-	assert.Equal(t, "https", res.Scheme)
+	t.Run("whenAllMissing_shouldDefault", func(tt *testing.T) {
+		require.NoError(tt, os.Setenv(envVarBaseURL, ""))
+		res, err := getBaseURL(getTestCM(nil), log)
+		require.NoError(tt, err)
+		assert.Equal(t, "api.spotinst.io", res.Host)
+		assert.Equal(t, "https", res.Scheme)
+	})
 
-	err = os.Setenv(envVarBaseURL, "http://dev.api.url")
-	require.NoError(t, err)
-	res, err = GetBaseURL()
-	require.NoError(t, err)
-	assert.Equal(t, "dev.api.url", res.Host)
-	assert.Equal(t, "http", res.Scheme)
+	t.Run("whenEnvVar", func(tt *testing.T) {
+		require.NoError(tt, os.Setenv(envVarBaseURL, "https://my-test-url.io"))
+		res, err := getBaseURL(getTestCM(nil), log)
+		require.NoError(tt, err)
+		assert.Equal(t, "my-test-url.io", res.Host)
+		assert.Equal(t, "https", res.Scheme)
+	})
 
-	err = os.Setenv(envVarBaseURL, "https://nonsense!#$%$&")
-	require.NoError(t, err)
-	res, err = GetBaseURL()
-	require.Error(t, err)
+	t.Run("whenFallback", func(tt *testing.T) {
+		require.NoError(tt, os.Setenv(envVarBaseURL, ""))
+		cmData := map[string]string{
+			ocean.SpotinstBaseURL: "http://base-url-from-cm.io",
+		}
+		res, err := getBaseURL(getTestCM(cmData), log)
+		require.NoError(tt, err)
+		assert.Equal(t, "base-url-from-cm.io", res.Host)
+		assert.Equal(t, "http", res.Scheme)
+	})
 
-	err = os.Setenv(envVarBaseURL, "nonsense")
-	require.NoError(t, err)
-	res, err = GetBaseURL()
-	require.Error(t, err)
+	t.Run("whenMalformedURL", func(tt *testing.T) {
+		require.NoError(tt, os.Setenv(envVarBaseURL, "https://nonsense!#$%$&"))
+		_, err := getBaseURL(getTestCM(nil), log)
+		require.Error(tt, err)
+
+		require.NoError(tt, os.Setenv(envVarBaseURL, ""))
+		cmData := map[string]string{
+			ocean.SpotinstBaseURL: "nonsense",
+		}
+		_, err = getBaseURL(getTestCM(cmData), log)
+		require.Error(tt, err)
+	})
 
 }

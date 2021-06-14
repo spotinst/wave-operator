@@ -8,6 +8,6 @@ import (
 )
 
 func TestGetUserAgent(t *testing.T) {
-	res := GetUserAgent()
+	res := getUserAgent()
 	assert.Contains(t, res, fmt.Sprintf("%s/", productName))
 }

@@ -7,10 +7,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spotinst/wave-operator/internal/logger"
+	"github.com/spotinst/wave-operator/internal/ocean"
 )
 
 func TestGetCredentials(t *testing.T) {
 
+	log := logger.New()
 	originalEnv := os.Environ()
 
 	defer func() {
@@ -28,43 +32,99 @@ func TestGetCredentials(t *testing.T) {
 		assert.Equal(t, originalEnv, restoredEnv)
 	}()
 
-	os.Clearenv()
-	_, err := GetCredentials()
-	require.Error(t, err)
+	t.Run("whenAllMissing", func(tt *testing.T) {
+		os.Clearenv()
+		_, err := getCredentials(getTestCM(nil), getTestSecret(nil), log)
+		require.Error(tt, err)
+		assert.Contains(tt, err.Error(), "could not get required")
+	})
 
-	os.Clearenv()
-	err = os.Setenv(envVarToken, "myToken")
-	require.NoError(t, err)
-	_, err = GetCredentials()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "could not get account")
+	t.Run("whenTokenMissing", func(tt *testing.T) {
+		os.Clearenv()
+		require.NoError(tt, os.Setenv(envVarAccount, "my-account"))
+		_, err := getCredentials(getTestCM(nil), getTestSecret(nil), log)
+		require.Error(t, err)
+		assert.Contains(tt, err.Error(), "could not get token")
+	})
 
-	os.Clearenv()
-	err = os.Setenv(envVarAccount, "myAccount")
-	require.NoError(t, err)
-	_, err = GetCredentials()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "could not get token")
+	t.Run("whenAccountMissing", func(tt *testing.T) {
+		os.Clearenv()
+		require.NoError(tt, os.Setenv(envVarToken, "my-token"))
+		_, err := getCredentials(getTestCM(nil), getTestSecret(nil), log)
+		require.Error(t, err)
+		assert.Contains(tt, err.Error(), "could not get account")
+	})
 
-	os.Clearenv()
-	err = os.Setenv(envVarToken, "myToken")
-	require.NoError(t, err)
-	err = os.Setenv(envVarAccount, "myAccount")
-	require.NoError(t, err)
-	res, err := GetCredentials()
-	require.NoError(t, err)
-	assert.Equal(t, "myToken", res.Token)
-	assert.Equal(t, "myAccount", res.Account)
+	t.Run("whenEnvVars", func(tt *testing.T) {
+		os.Clearenv()
+		require.NoError(tt, os.Setenv(envVarToken, "my-token"))
+		require.NoError(tt, os.Setenv(envVarAccount, "my-account"))
+		res, err := getCredentials(getTestCM(nil), getTestSecret(nil), log)
+		require.NoError(t, err)
+		assert.Equal(tt, Credentials{
+			Account: "my-account",
+			Token:   "my-token",
+		}, res)
+	})
 
-	// Fallback to legacy
-	os.Clearenv()
-	err = os.Setenv(envVarTokenLegacy, "myLegacyToken")
-	require.NoError(t, err)
-	err = os.Setenv(envVarAccountLegacy, "myLegacyAccount")
-	require.NoError(t, err)
-	res, err = GetCredentials()
-	require.NoError(t, err)
-	assert.Equal(t, "myLegacyToken", res.Token)
-	assert.Equal(t, "myLegacyAccount", res.Account)
+	t.Run("whenFallbackEnvVars", func(tt *testing.T) {
+		os.Clearenv()
+		require.NoError(tt, os.Setenv(envVarTokenLegacy, "my-token-legacy"))
+		require.NoError(tt, os.Setenv(envVarAccountLegacy, "my-account-legacy"))
+		res, err := getCredentials(getTestCM(nil), getTestSecret(nil), log)
+		require.NoError(t, err)
+		assert.Equal(tt, Credentials{
+			Account: "my-account-legacy",
+			Token:   "my-token-legacy",
+		}, res)
+	})
+
+	t.Run("whenFallbackSecret", func(tt *testing.T) {
+		os.Clearenv()
+		secretData := map[string]string{
+			ocean.SpotinstToken:   "token-from-secret",
+			ocean.SpotinstAccount: "account-from-secret",
+		}
+		res, err := getCredentials(getTestCM(nil), getTestSecret(secretData), log)
+		require.NoError(t, err)
+		assert.Equal(tt, Credentials{
+			Account: "account-from-secret",
+			Token:   "token-from-secret",
+		}, res)
+	})
+
+	t.Run("whenFallbackConfigmap", func(tt *testing.T) {
+		os.Clearenv()
+		cmData := map[string]string{
+			ocean.SpotinstTokenLegacy:   "token-from-cm",
+			ocean.SpotinstAccountLegacy: "account-from-cm",
+		}
+		res, err := getCredentials(getTestCM(cmData), getTestSecret(nil), log)
+		require.NoError(t, err)
+		assert.Equal(tt, Credentials{
+			Account: "account-from-cm",
+			Token:   "token-from-cm",
+		}, res)
+	})
+
+	t.Run("prefersEnvVars", func(tt *testing.T) {
+		os.Clearenv()
+		require.NoError(tt, os.Setenv(envVarToken, "token-from-env-var"))
+		require.NoError(tt, os.Setenv(envVarAccount, "account-from-env-var"))
+		secretData := map[string]string{
+			ocean.SpotinstToken:   "token-from-secret",
+			ocean.SpotinstAccount: "account-from-secret",
+		}
+		cmData := map[string]string{
+			ocean.SpotinstTokenLegacy:   "token-from-cm",
+			ocean.SpotinstAccountLegacy: "account-from-cm",
+		}
+		res, err := getCredentials(getTestCM(cmData), getTestSecret(secretData), log)
+		require.NoError(t, err)
+		assert.Equal(tt, Credentials{
+			Account: "account-from-env-var",
+			Token:   "token-from-env-var",
+		}, res)
+	})
 
 }

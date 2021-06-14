@@ -2,14 +2,10 @@ package config
 
 import (
 	"fmt"
-	"os"
-)
+	corev1 "k8s.io/api/core/v1"
 
-const (
-	envVarToken         = "SPOTINST_TOKEN"
-	envVarTokenLegacy   = "SPOTINST_TOKEN_LEGACY"
-	envVarAccount       = "SPOTINST_ACCOUNT"
-	envVarAccountLegacy = "SPOTINST_ACCOUNT_LEGACY"
+	"github.com/go-logr/logr"
+	"github.com/spotinst/wave-operator/internal/ocean"
 )
 
 type Credentials struct {
@@ -17,21 +13,47 @@ type Credentials struct {
 	Token   string
 }
 
-func GetCredentials() (Credentials, error) {
-	token := os.Getenv(envVarToken)
-	if token == "" {
-		token = os.Getenv(envVarTokenLegacy)
+func getCredentials(cm *corev1.ConfigMap, secret *corev1.Secret, log logr.Logger) (Credentials, error) {
+	tokenGetter := configValGetter{
+		log:            log,
+		envVar:         envVarToken,
+		fallbackEnvVar: envVarTokenLegacy,
+		fallback: func() (string, error) {
+			token, err := ocean.GetToken(secret, cm)
+			if err != nil {
+				return "", err
+			}
+			return token, nil
+		},
+		required:     true,
+		defaultValue: "",
 	}
-	if token == "" {
-		return Credentials{}, fmt.Errorf("could not get token, env var %q not set", envVarToken)
+
+	accountGetter := configValGetter{
+		log:            log,
+		envVar:         envVarAccount,
+		fallbackEnvVar: envVarAccountLegacy,
+		fallback: func() (string, error) {
+			account, err := ocean.GetAccount(secret, cm)
+			if err != nil {
+				return "", err
+			}
+			return account, nil
+		},
+		required:     true,
+		defaultValue: "",
 	}
-	account := os.Getenv(envVarAccount)
-	if account == "" {
-		account = os.Getenv(envVarAccountLegacy)
+
+	token, err := tokenGetter.get()
+	if err != nil {
+		return Credentials{}, fmt.Errorf("could not get token, %w", err)
 	}
-	if account == "" {
-		return Credentials{}, fmt.Errorf("could not get account, env var %q not set", envVarAccount)
+
+	account, err := accountGetter.get()
+	if err != nil {
+		return Credentials{}, fmt.Errorf("could not get account, %w", err)
 	}
+
 	return Credentials{
 		Account: account,
 		Token:   token,
