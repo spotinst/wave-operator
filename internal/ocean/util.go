@@ -2,7 +2,6 @@ package ocean
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
 
@@ -37,26 +36,20 @@ func GetClusterUniqueIdentifier(kc kubernetes.Interface) (string, error) {
 	return id, nil
 }
 
-func GetToken(secret *corev1.Secret, cm *corev1.ConfigMap) (string, error) {
-	token, err := getKeyFromSecret(secret, SpotinstToken)
-	if err != nil {
-		return "", err
-	}
+func GetToken(secret *corev1.Secret, cm *corev1.ConfigMap) string {
+	token := getKeyFromSecret(secret, SpotinstToken)
 	if token == "" {
 		token = getKeyFromConfigMap(cm, SpotinstTokenLegacy)
 	}
-	return token, nil
+	return token
 }
 
-func GetAccount(secret *corev1.Secret, cm *corev1.ConfigMap) (string, error) {
-	account, err := getKeyFromSecret(secret, SpotinstAccount)
-	if err != nil {
-		return "", err
-	}
+func GetAccount(secret *corev1.Secret, cm *corev1.ConfigMap) string {
+	account := getKeyFromSecret(secret, SpotinstAccount)
 	if account == "" {
 		account = getKeyFromConfigMap(cm, SpotinstAccountLegacy)
 	}
-	return account, nil
+	return account
 }
 
 func GetBaseURL(cm *corev1.ConfigMap) string {
@@ -83,18 +76,12 @@ func GetOceanSecret(ctx context.Context, kc kubernetes.Interface) (*corev1.Secre
 	return secret, nil
 }
 
-func getKeyFromSecret(secret *corev1.Secret, key string) (string, error) {
-	valB64Bytes := secret.Data[key]
-	if len(valB64Bytes) == 0 {
-		return "", nil
+func getKeyFromSecret(secret *corev1.Secret, key string) string {
+	val := secret.Data[key]
+	if len(val) == 0 {
+		return ""
 	}
-
-	val, err := base64.StdEncoding.DecodeString(string(valB64Bytes))
-	if err != nil {
-		return "", fmt.Errorf("could not decode value, %w", err)
-	}
-
-	return string(val), nil
+	return string(val)
 }
 
 func getKeyFromConfigMap(cm *corev1.ConfigMap, key string) string {

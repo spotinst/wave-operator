@@ -38,7 +38,7 @@ type configValGetter struct {
 	log            logr.Logger
 	envVar         string
 	fallbackEnvVar string
-	fallback       func() (string, error)
+	fallback       func() string
 	required       bool
 	defaultValue   string
 }
@@ -61,11 +61,9 @@ func (g *configValGetter) get() (string, error) {
 
 	if g.fallback != nil {
 		log.Info("Trying fallback")
-		fallbackVal, err := g.fallback()
-		if err != nil {
-			log.Error(err, "could not get config value from fallback")
-		} else if fallbackVal != "" {
-			return fallbackVal, nil
+		val = g.fallback()
+		if val != "" {
+			return val, nil
 		}
 	}
 
@@ -111,7 +109,7 @@ func GetConfig(kc kubernetes.Interface, log logr.Logger) (Config, error) {
 		return Config{}, fmt.Errorf("could not get proxy configuration, %w", err)
 	}
 
-	clusterIdentifier, err := getClusterIdentifier(cm, log)
+	clusterIdentifier, err := GetClusterIdentifier(cm, log)
 	if err != nil {
 		return Config{}, fmt.Errorf("could not get cluster identifier, %w", err)
 	}
@@ -128,16 +126,15 @@ func GetConfig(kc kubernetes.Interface, log logr.Logger) (Config, error) {
 		ClusterIdentifier:       clusterIdentifier,
 		ClusterUniqueIdentifier: clusterUniqueIdentifier,
 	}, nil
-
 }
 
-func getClusterIdentifier(cm *corev1.ConfigMap, log logr.Logger) (string, error) {
+func GetClusterIdentifier(cm *corev1.ConfigMap, log logr.Logger) (string, error) {
 	clusterIdentifierGetter := configValGetter{
 		log:            log,
 		envVar:         envVarClusterIdentifier,
 		fallbackEnvVar: "",
-		fallback: func() (string, error) {
-			return ocean.GetClusterIdentifier(cm), nil
+		fallback: func() string {
+			return ocean.GetClusterIdentifier(cm)
 		},
 		required:     true,
 		defaultValue: "",

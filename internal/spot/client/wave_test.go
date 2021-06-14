@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/spotinst/wave-operator/api/v1alpha1"
 	"github.com/spotinst/wave-operator/internal/logger"
@@ -15,7 +17,11 @@ import (
 
 func ManualTestClient(t *testing.T) {
 
-	c, err := NewClient(logger.New())
+	config := ctrl.GetConfigOrDie()
+	clientSet, err := kubernetes.NewForConfig(config)
+	require.NoError(t, err)
+
+	c, err := NewClient(clientSet, logger.New())
 	require.NoError(t, err)
 
 	t.Run("GetsApplication", func(t *testing.T) {

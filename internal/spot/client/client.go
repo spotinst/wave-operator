@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/client-go/kubernetes"
 
-	"github.com/spotinst/wave-operator/internal/ocean"
 	"github.com/spotinst/wave-operator/internal/spot/client/config"
 )
 
@@ -26,35 +26,21 @@ type Client struct {
 	clusterUniqueIdentifier string
 }
 
-func NewClient(logger logr.Logger) (*Client, error) {
+func NewClient(kc kubernetes.Interface, logger logr.Logger) (*Client, error) {
 
-	creds, err := config.GetCredentials()
+	cfg, err := config.GetConfig(kc, logger)
 	if err != nil {
-		return nil, fmt.Errorf("could not get credentials, %w", err)
-	}
-
-	baseURL, err := config.GetBaseURL()
-	if err != nil {
-		return nil, fmt.Errorf("could not get base url, %w", err)
-	}
-
-	clusterIdentifier, err := ocean.GetClusterIdentifier()
-	if err != nil {
-		return nil, fmt.Errorf("could not get cluster identifier, %w", err)
-	}
-
-	clusterUniqueIdentifier, err := ocean.GetClusterUniqueIdentifier()
-	if err != nil {
-		return nil, fmt.Errorf("could not get cluster unique identifier, %w", err)
+		return nil, fmt.Errorf("could not get config, %w", err)
 	}
 
 	return &Client{
 		logger:                  logger,
-		clusterIdentifier:       clusterIdentifier,
-		clusterUniqueIdentifier: clusterUniqueIdentifier,
+		clusterIdentifier:       cfg.ClusterIdentifier,
+		clusterUniqueIdentifier: cfg.ClusterUniqueIdentifier,
 		httpClient: &http.Client{
+			// TODO(thorsteinn) Proxies
 			Timeout:   requestTimeout,
-			Transport: ApiTransport(nil, baseURL, creds),
+			Transport: ApiTransport(nil, cfg.BaseURL, cfg.Creds),
 		},
 	}, nil
 }

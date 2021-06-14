@@ -22,7 +22,7 @@ func (ua userAgent) toString() string {
 	return s
 }
 
-func getUserAgent() string {
+func GetUserAgent() string {
 	return userAgent{
 		Product: productName,
 		Version: version.BuildVersion,

@@ -17,7 +17,9 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
 
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
@@ -37,6 +39,7 @@ import (
 	"github.com/spotinst/wave-operator/internal/ocean"
 	"github.com/spotinst/wave-operator/internal/sparkapi"
 	"github.com/spotinst/wave-operator/internal/spot/client"
+	spotconfig "github.com/spotinst/wave-operator/internal/spot/client/config"
 	"github.com/spotinst/wave-operator/internal/version"
 	// +kubebuilder:scaffold:imports
 )
@@ -84,8 +87,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	clusterIdentifier, err := ocean.GetClusterIdentifier()
+	oceanConfigMap, err := ocean.GetOceanConfigMap(context.TODO(), clientSet)
 	if err != nil {
+		setupLog.Error(err, "unable to get ocean config map")
+		os.Exit(1)
+	}
+
+	clusterIdentifier, err := spotconfig.GetClusterIdentifier(oceanConfigMap, log)
+	if err != nil || clusterIdentifier == "" {
+		if err == nil {
+			err = fmt.Errorf("cluster identifier missing")
+		}
 		setupLog.Error(err, "unable to get cluster identifier")
 		os.Exit(1)
 	}
@@ -116,7 +128,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	spotClient, err := client.NewClient(log)
+	spotClient, err := client.NewClient(clientSet, log.WithName("spotClient"))
 	if err != nil {
 		setupLog.Error(err, "could not create spot client")
 		os.Exit(1)

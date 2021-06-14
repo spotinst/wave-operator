@@ -18,12 +18,8 @@ func getCredentials(cm *corev1.ConfigMap, secret *corev1.Secret, log logr.Logger
 		log:            log,
 		envVar:         envVarToken,
 		fallbackEnvVar: envVarTokenLegacy,
-		fallback: func() (string, error) {
-			token, err := ocean.GetToken(secret, cm)
-			if err != nil {
-				return "", err
-			}
-			return token, nil
+		fallback: func() string {
+			return ocean.GetToken(secret, cm)
 		},
 		required:     true,
 		defaultValue: "",
@@ -33,12 +29,8 @@ func getCredentials(cm *corev1.ConfigMap, secret *corev1.Secret, log logr.Logger
 		log:            log,
 		envVar:         envVarAccount,
 		fallbackEnvVar: envVarAccountLegacy,
-		fallback: func() (string, error) {
-			account, err := ocean.GetAccount(secret, cm)
-			if err != nil {
-				return "", err
-			}
-			return account, nil
+		fallback: func() string {
+			return ocean.GetAccount(secret, cm)
 		},
 		required:     true,
 		defaultValue: "",

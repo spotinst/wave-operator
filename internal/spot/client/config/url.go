@@ -20,8 +20,8 @@ func getBaseURL(cm *corev1.ConfigMap, log logr.Logger) (*url.URL, error) {
 		log:            log,
 		envVar:         envVarBaseURL,
 		fallbackEnvVar: "",
-		fallback: func() (string, error) {
-			return ocean.GetBaseURL(cm), nil
+		fallback: func() string {
+			return ocean.GetBaseURL(cm)
 		},
 		required:     true,
 		defaultValue: defaultBaseURL,
@@ -40,8 +40,8 @@ func getProxyConfiguration(cm *corev1.ConfigMap, log logr.Logger) (ProxyConfig, 
 		log:            log,
 		envVar:         envVarProxyURL,
 		fallbackEnvVar: "",
-		fallback: func() (string, error) {
-			return ocean.GetProxyURL(cm), nil
+		fallback: func() string {
+			return ocean.GetProxyURL(cm)
 		},
 		required:     false,
 		defaultValue: "",
