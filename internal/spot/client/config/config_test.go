@@ -43,6 +43,40 @@ func getEnvVar(key string) envVar {
 	return envVar{val: val, set: set}
 }
 
+func getSpotEnvVars() map[string]envVar {
+	return map[string]envVar{
+		envVarToken:             getEnvVar(envVarToken),
+		envVarTokenLegacy:       getEnvVar(envVarTokenLegacy),
+		envVarAccount:           getEnvVar(envVarAccount),
+		envVarAccountLegacy:     getEnvVar(envVarAccountLegacy),
+		envVarClusterIdentifier: getEnvVar(envVarClusterIdentifier),
+		envVarProxyURL:          getEnvVar(envVarProxyURL),
+		envVarBaseURL:           getEnvVar(envVarBaseURL),
+	}
+}
+
+func clearSpotEnvVars(t *testing.T) {
+	require.NoError(t, os.Unsetenv(envVarToken))
+	require.NoError(t, os.Unsetenv(envVarTokenLegacy))
+	require.NoError(t, os.Unsetenv(envVarAccount))
+	require.NoError(t, os.Unsetenv(envVarAccountLegacy))
+	require.NoError(t, os.Unsetenv(envVarClusterIdentifier))
+	require.NoError(t, os.Unsetenv(envVarProxyURL))
+	require.NoError(t, os.Unsetenv(envVarBaseURL))
+}
+
+func restoreEnvVars(t *testing.T, original map[string]envVar, originalEnv []string) {
+	for k, v := range original {
+		if v.set {
+			assert.NoError(t, os.Setenv(k, v.val))
+		} else {
+			assert.NoError(t, os.Unsetenv(k))
+		}
+	}
+	restoredEnv := os.Environ()
+	assert.True(t, envsEqual(originalEnv, restoredEnv))
+}
+
 func envsEqual(env1 []string, env2 []string) bool {
 	if len(env1) != len(env2) {
 		return false
@@ -64,43 +98,12 @@ func envsEqual(env1 []string, env2 []string) bool {
 
 func TestGetConfig(t *testing.T) {
 	log := logger.New()
-
 	originalEnv := os.Environ()
-	originalChangedVars := map[string]envVar{
-		envVarToken:             getEnvVar(envVarToken),
-		envVarTokenLegacy:       getEnvVar(envVarTokenLegacy),
-		envVarAccount:           getEnvVar(envVarAccount),
-		envVarAccountLegacy:     getEnvVar(envVarAccountLegacy),
-		envVarClusterIdentifier: getEnvVar(envVarClusterIdentifier),
-		envVarProxyURL:          getEnvVar(envVarProxyURL),
-		envVarBaseURL:           getEnvVar(envVarBaseURL),
-	}
-
-	clearEnv := func(tt *testing.T) {
-		require.NoError(tt, os.Unsetenv(envVarToken))
-		require.NoError(tt, os.Unsetenv(envVarTokenLegacy))
-		require.NoError(tt, os.Unsetenv(envVarAccount))
-		require.NoError(tt, os.Unsetenv(envVarAccountLegacy))
-		require.NoError(tt, os.Unsetenv(envVarClusterIdentifier))
-		require.NoError(tt, os.Unsetenv(envVarProxyURL))
-		require.NoError(tt, os.Unsetenv(envVarBaseURL))
-	}
-
-	defer func() {
-		// Restore env
-		for k, v := range originalChangedVars {
-			if v.set {
-				assert.NoError(t, os.Setenv(k, v.val))
-			} else {
-				assert.NoError(t, os.Unsetenv(k))
-			}
-		}
-		restoredEnv := os.Environ()
-		assert.True(t, envsEqual(originalEnv, restoredEnv))
-	}()
+	originalSpotEnvVars := getSpotEnvVars()
+	defer restoreEnvVars(t, originalSpotEnvVars, originalEnv)
 
 	t.Run("whenError", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 
 		clientSet := k8sfake.NewSimpleClientset()
 		_, err := GetConfig(clientSet, log)
@@ -115,7 +118,7 @@ func TestGetConfig(t *testing.T) {
 	})
 
 	t.Run("whenSuccessful", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 
 		ns := &corev1.Namespace{
 			ObjectMeta: v1.ObjectMeta{
@@ -144,38 +147,22 @@ func TestGetConfig(t *testing.T) {
 		assert.Equal(tt, "1234-5678", res.ClusterUniqueIdentifier)
 
 	})
-
 }
 
 func TestGetClusterIdentifier(t *testing.T) {
-
 	log := logger.New()
 	originalEnv := os.Environ()
-	originalClusterIdentifier := getEnvVar(envVarClusterIdentifier)
-
-	defer func() {
-		// Restore env var
-		if originalClusterIdentifier.set {
-			assert.NoError(t, os.Setenv(envVarClusterIdentifier, originalClusterIdentifier.val))
-		} else {
-			assert.NoError(t, os.Unsetenv(envVarClusterIdentifier))
-		}
-		restoredEnv := os.Environ()
-		assert.True(t, envsEqual(originalEnv, restoredEnv))
-	}()
-
-	clearEnv := func(tt *testing.T) {
-		require.NoError(tt, os.Unsetenv(envVarClusterIdentifier))
-	}
+	originalSpotEnvVars := getSpotEnvVars()
+	defer restoreEnvVars(t, originalSpotEnvVars, originalEnv)
 
 	t.Run("whenAllMissing", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		_, err := GetClusterIdentifier(getTestCM(nil), log)
 		require.Error(tt, err)
 	})
 
 	t.Run("whenEnvVar", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		require.NoError(tt, os.Setenv(envVarClusterIdentifier, "my-cluster-id-from-env"))
 		res, err := GetClusterIdentifier(getTestCM(nil), log)
 		require.NoError(tt, err)
@@ -183,7 +170,7 @@ func TestGetClusterIdentifier(t *testing.T) {
 	})
 
 	t.Run("whenFallback", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		cmData := map[string]string{
 			ocean.SpotinstClusterIdentifier: "my-cluster-id-from-cm",
 		}

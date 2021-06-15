@@ -12,28 +12,13 @@ import (
 )
 
 func TestGetBaseURL(t *testing.T) {
-
 	log := logger.New()
 	originalEnv := os.Environ()
-	originalBaseURL := getEnvVar(envVarBaseURL)
-
-	defer func() {
-		// Restore env var
-		if originalBaseURL.set {
-			assert.NoError(t, os.Setenv(envVarBaseURL, originalBaseURL.val))
-		} else {
-			assert.NoError(t, os.Unsetenv(envVarBaseURL))
-		}
-		restoredEnv := os.Environ()
-		assert.True(t, envsEqual(originalEnv, restoredEnv))
-	}()
-
-	clearEnv := func(tt *testing.T) {
-		require.NoError(tt, os.Unsetenv(envVarBaseURL))
-	}
+	originalSpotEnvVars := getSpotEnvVars()
+	defer restoreEnvVars(t, originalSpotEnvVars, originalEnv)
 
 	t.Run("whenAllMissing_shouldDefault", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		res, err := getBaseURL(getTestCM(nil), log)
 		require.NoError(tt, err)
 		assert.Equal(t, "api.spotinst.io", res.Host)
@@ -41,7 +26,7 @@ func TestGetBaseURL(t *testing.T) {
 	})
 
 	t.Run("whenEnvVar", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		require.NoError(tt, os.Setenv(envVarBaseURL, "https://my-test-url.io"))
 		res, err := getBaseURL(getTestCM(nil), log)
 		require.NoError(tt, err)
@@ -50,7 +35,7 @@ func TestGetBaseURL(t *testing.T) {
 	})
 
 	t.Run("whenFallback", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		cmData := map[string]string{
 			ocean.SpotinstBaseURL: "http://base-url-from-cm.io",
 		}
@@ -61,12 +46,12 @@ func TestGetBaseURL(t *testing.T) {
 	})
 
 	t.Run("whenMalformedURL", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		require.NoError(tt, os.Setenv(envVarBaseURL, "https://nonsense!#$%$&"))
 		_, err := getBaseURL(getTestCM(nil), log)
 		require.Error(tt, err)
 
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		cmData := map[string]string{
 			ocean.SpotinstBaseURL: "nonsense",
 		}
@@ -77,35 +62,20 @@ func TestGetBaseURL(t *testing.T) {
 }
 
 func TestGetProxyConfiguration(t *testing.T) {
-
 	log := logger.New()
 	originalEnv := os.Environ()
-	originalProxyURL := getEnvVar(envVarProxyURL)
-
-	defer func() {
-		// Restore env var
-		if originalProxyURL.set {
-			assert.NoError(t, os.Setenv(envVarProxyURL, originalProxyURL.val))
-		} else {
-			assert.NoError(t, os.Unsetenv(envVarProxyURL))
-		}
-		restoredEnv := os.Environ()
-		assert.True(t, envsEqual(originalEnv, restoredEnv))
-	}()
-
-	clearEnv := func(tt *testing.T) {
-		require.NoError(tt, os.Unsetenv(envVarProxyURL))
-	}
+	originalSpotEnvVars := getSpotEnvVars()
+	defer restoreEnvVars(t, originalSpotEnvVars, originalEnv)
 
 	t.Run("whenAllMissing", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		res, err := getProxyConfiguration(getTestCM(nil), log)
 		require.NoError(tt, err)
 		assert.Nil(tt, res)
 	})
 
 	t.Run("whenEnvVar", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		require.NoError(tt, os.Setenv(envVarProxyURL, "https://my-test-url.io"))
 		res, err := getProxyConfiguration(getTestCM(nil), log)
 		require.NoError(tt, err)
@@ -113,7 +83,7 @@ func TestGetProxyConfiguration(t *testing.T) {
 	})
 
 	t.Run("whenFallback", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		cmData := map[string]string{
 			ocean.SpotinstProxyURL: "https://proxy-url-from-cm.io",
 		}
@@ -123,7 +93,7 @@ func TestGetProxyConfiguration(t *testing.T) {
 	})
 
 	t.Run("whenHTTP", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		require.NoError(tt, os.Setenv(envVarProxyURL, "http://my-http-test-url.io"))
 		res, err := getProxyConfiguration(getTestCM(nil), log)
 		require.NoError(tt, err)
@@ -132,7 +102,7 @@ func TestGetProxyConfiguration(t *testing.T) {
 	})
 
 	t.Run("whenHTTPS", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		require.NoError(tt, os.Setenv(envVarProxyURL, "https://my-https-test-url.io"))
 		res, err := getProxyConfiguration(getTestCM(nil), log)
 		require.NoError(tt, err)
@@ -141,19 +111,19 @@ func TestGetProxyConfiguration(t *testing.T) {
 	})
 
 	t.Run("whenMalformedURL", func(tt *testing.T) {
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		require.NoError(tt, os.Setenv(envVarProxyURL, "https://nonsense!#$%$&"))
 		res, err := getProxyConfiguration(getTestCM(nil), log)
 		require.Error(tt, err)
 		assert.Nil(tt, res)
 
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		require.NoError(tt, os.Setenv(envVarProxyURL, "nonsense"))
 		res, err = getProxyConfiguration(getTestCM(nil), log)
 		require.Error(tt, err)
 		assert.Nil(tt, res)
 
-		clearEnv(tt)
+		clearSpotEnvVars(tt)
 		require.NoError(tt, os.Setenv(envVarProxyURL, "smtp://nonsense.io"))
 		res, err = getProxyConfiguration(getTestCM(nil), log)
 		require.Error(tt, err)
