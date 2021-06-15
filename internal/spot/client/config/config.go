@@ -3,11 +3,11 @@ package config
 import (
 	"context"
 	"fmt"
-	corev1 "k8s.io/api/core/v1"
 	"net/url"
 	"os"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/spotinst/wave-operator/internal/ocean"

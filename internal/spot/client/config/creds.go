@@ -2,9 +2,10 @@ package config
 
 import (
 	"fmt"
-	corev1 "k8s.io/api/core/v1"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/spotinst/wave-operator/internal/ocean"
 )
 
