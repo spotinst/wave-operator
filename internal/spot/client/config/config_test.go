@@ -2,8 +2,14 @@ package config
 
 import (
 	"os"
+	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/spotinst/wave-operator/internal/logger"
+	"github.com/spotinst/wave-operator/internal/ocean"
 )
 
 func getTestCM(data map[string]string) *corev1.ConfigMap {
@@ -48,4 +54,50 @@ func envsEqual(env1 []string, env2 []string) bool {
 		}
 	}
 	return true
+}
+
+func TestGetClusterIdentifier(t *testing.T) {
+
+	log := logger.New()
+	originalEnv := os.Environ()
+	originalClusterIdentifier := getEnvVar(envVarClusterIdentifier)
+
+	defer func() {
+		// Restore env var
+		if originalClusterIdentifier.set {
+			assert.NoError(t, os.Setenv(envVarClusterIdentifier, originalClusterIdentifier.val))
+		} else {
+			assert.NoError(t, os.Unsetenv(envVarClusterIdentifier))
+		}
+		restoredEnv := os.Environ()
+		assert.True(t, envsEqual(originalEnv, restoredEnv))
+	}()
+
+	clearEnv := func(tt *testing.T) {
+		require.NoError(tt, os.Unsetenv(envVarClusterIdentifier))
+	}
+
+	t.Run("whenAllMissing", func(tt *testing.T) {
+		clearEnv(tt)
+		_, err := GetClusterIdentifier(getTestCM(nil), log)
+		require.Error(tt, err)
+	})
+
+	t.Run("whenEnvVar", func(tt *testing.T) {
+		clearEnv(tt)
+		require.NoError(tt, os.Setenv(envVarClusterIdentifier, "my-cluster-id-from-env"))
+		res, err := GetClusterIdentifier(getTestCM(nil), log)
+		require.NoError(tt, err)
+		assert.Equal(tt, "my-cluster-id-from-env", res)
+	})
+
+	t.Run("whenFallback", func(tt *testing.T) {
+		clearEnv(tt)
+		cmData := map[string]string{
+			ocean.SpotinstClusterIdentifier: "my-cluster-id-from-cm",
+		}
+		res, err := GetClusterIdentifier(getTestCM(cmData), log)
+		require.NoError(tt, err)
+		assert.Equal(tt, "my-cluster-id-from-cm", res)
+	})
 }
