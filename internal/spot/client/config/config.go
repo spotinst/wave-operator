@@ -44,7 +44,7 @@ type configValGetter struct {
 }
 
 func (g *configValGetter) get() (string, error) {
-	log := g.log.WithValues("configVal", g.envVar)
+	log := g.log.WithValues("envVar", g.envVar)
 
 	val := os.Getenv(g.envVar)
 	if val != "" {
