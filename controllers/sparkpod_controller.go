@@ -678,6 +678,17 @@ func getSparkApplicationName(driverPod *corev1.Pod, sparkApiInfo *sparkapi.Appli
 	return sparkApplicationName
 }
 
+func getWaveApplicationId(driverPod *corev1.Pod) string {
+	var waveApplicationId string
+
+	// check if the `wave.spot.io/wave-application-id` label has been set
+	if waveApplicationIdLabel, ok := driverPod.Labels[config.WaveConfigLabelWaveApplicationId]; ok {
+		waveApplicationId = waveApplicationIdLabel
+	}
+
+	return waveApplicationId
+}
+
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
 	if pod.Labels[AppLabel] == AppEnterpriseGatewayLabelValue {
 		return v1alpha1.SparkHeritageJupyter, nil
@@ -725,6 +736,13 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 	cr.Spec.ApplicationName = sparkApplicationName
 	//set "wave.spot.io/application-name" annotation as an application name
 	cr.Annotations[config.WaveConfigAnnotationApplicationName] = sparkApplicationName
+
+	//set "wave.spot.io/wave-application-id" label
+	waveApplicationId := getWaveApplicationId(driverPod)
+
+	if waveApplicationId != "" {
+		cr.Labels[config.WaveConfigLabelWaveApplicationId] = waveApplicationId
+	}
 
 	heritage, err := getHeritage(driverPod)
 	if err != nil {
