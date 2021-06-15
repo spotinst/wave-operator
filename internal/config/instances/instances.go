@@ -144,6 +144,9 @@ func (m *manager) fetchAllowedInstanceTypes() (map[string]map[string]bool, error
 	whitelist := listToMap(oceanCluster.Compute.InstanceTypes.Whitelist)
 	blacklist := listToMap(oceanCluster.Compute.InstanceTypes.Blacklist)
 
+	var whitelistIgnoredInstanceTypes []string
+	var blacklistIgnoredInstanceTypes []string
+
 	for _, it := range instanceTypesInRegion {
 		family, err := getFamily(it.InstanceType)
 		if err != nil {
@@ -151,10 +154,10 @@ func (m *manager) fetchAllowedInstanceTypes() (map[string]map[string]bool, error
 		} else {
 			if whitelist != nil && whitelist[it.InstanceType] == false {
 				// If instance type not present in whitelist, we don't want it
-				m.log.Info(fmt.Sprintf("Instance type %q not present in whitelist, ignoring", it.InstanceType))
+				whitelistIgnoredInstanceTypes = append(whitelistIgnoredInstanceTypes, it.InstanceType)
 			} else if blacklist != nil && blacklist[it.InstanceType] == true {
 				// If instance type present in blacklist, we don't want it
-				m.log.Info(fmt.Sprintf("Instance type %q present in blacklist, ignoring", it.InstanceType))
+				blacklistIgnoredInstanceTypes = append(blacklistIgnoredInstanceTypes, it.InstanceType)
 			} else {
 				// This is an allowed instance type
 				if allowed[family] == nil {
@@ -163,6 +166,13 @@ func (m *manager) fetchAllowedInstanceTypes() (map[string]map[string]bool, error
 				allowed[family][it.InstanceType] = true
 			}
 		}
+	}
+
+	if len(whitelistIgnoredInstanceTypes) > 0 {
+		m.log.Info(fmt.Sprintf("Ignored %d instance types not in whitelist", len(whitelistIgnoredInstanceTypes)))
+	}
+	if len(blacklistIgnoredInstanceTypes) > 0 {
+		m.log.Info(fmt.Sprintf("Ignored %d instance types in blacklist", len(blacklistIgnoredInstanceTypes)))
 	}
 
 	return allowed, nil
