@@ -35,7 +35,7 @@ func getBaseURL(cm *corev1.ConfigMap, log logr.Logger) (*url.URL, error) {
 	return parseUrl(rawURL)
 }
 
-func getProxyConfiguration(cm *corev1.ConfigMap, log logr.Logger) (ProxyConfig, error) {
+func getProxyConfiguration(cm *corev1.ConfigMap, log logr.Logger) (*ProxyConfig, error) {
 	urlGetter := configValGetter{
 		log:            log,
 		envVar:         envVarProxyURL,
@@ -49,30 +49,30 @@ func getProxyConfiguration(cm *corev1.ConfigMap, log logr.Logger) (ProxyConfig, 
 
 	rawURL, err := urlGetter.get()
 	if err != nil {
-		return ProxyConfig{}, fmt.Errorf("could not get raw url, %w", err)
+		return nil, fmt.Errorf("could not get raw url, %w", err)
 	}
 
 	if rawURL == "" {
-		return ProxyConfig{}, nil
+		return nil, nil
 	}
 
 	parsed, err := parseUrl(rawURL)
 	if err != nil {
-		return ProxyConfig{}, fmt.Errorf("could not parse url, %w", err)
+		return nil, fmt.Errorf("could not parse url, %w", err)
 	}
 
 	// TODO(thorsteinn) validate
 	switch parsed.Scheme {
 	case "https":
-		return ProxyConfig{
+		return &ProxyConfig{
 			HTTPSProxy: parsed,
 		}, nil
 	case "http":
-		return ProxyConfig{
+		return &ProxyConfig{
 			HTTPProxy: parsed,
 		}, nil
 	default:
-		return ProxyConfig{}, fmt.Errorf("unknown scheme %q", parsed.Scheme)
+		return nil, fmt.Errorf("unknown scheme %q", parsed.Scheme)
 	}
 }
 

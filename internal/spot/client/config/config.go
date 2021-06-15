@@ -29,7 +29,7 @@ const (
 type Config struct {
 	Creds                   Credentials
 	BaseURL                 *url.URL
-	ProxyConfig             ProxyConfig
+	ProxyConfig             *ProxyConfig
 	ClusterIdentifier       string
 	ClusterUniqueIdentifier string
 }
