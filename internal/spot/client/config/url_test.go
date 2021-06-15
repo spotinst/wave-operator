@@ -14,16 +14,26 @@ import (
 func TestGetBaseURL(t *testing.T) {
 
 	log := logger.New()
-	originalEnvVar := os.Getenv(envVarBaseURL)
+	originalEnv := os.Environ()
+	originalBaseURL := getEnvVar(envVarBaseURL)
 
 	defer func() {
 		// Restore env var
-		_ = os.Setenv(envVarBaseURL, originalEnvVar)
-		assert.Equal(t, originalEnvVar, os.Getenv(envVarBaseURL))
+		if originalBaseURL.set {
+			assert.NoError(t, os.Setenv(envVarBaseURL, originalBaseURL.val))
+		} else {
+			assert.NoError(t, os.Unsetenv(envVarBaseURL))
+		}
+		restoredEnv := os.Environ()
+		assert.True(t, envsEqual(originalEnv, restoredEnv))
 	}()
 
+	clearEnv := func(tt *testing.T) {
+		require.NoError(tt, os.Unsetenv(envVarBaseURL))
+	}
+
 	t.Run("whenAllMissing_shouldDefault", func(tt *testing.T) {
-		require.NoError(tt, os.Setenv(envVarBaseURL, ""))
+		clearEnv(tt)
 		res, err := getBaseURL(getTestCM(nil), log)
 		require.NoError(tt, err)
 		assert.Equal(t, "api.spotinst.io", res.Host)
@@ -31,6 +41,7 @@ func TestGetBaseURL(t *testing.T) {
 	})
 
 	t.Run("whenEnvVar", func(tt *testing.T) {
+		clearEnv(tt)
 		require.NoError(tt, os.Setenv(envVarBaseURL, "https://my-test-url.io"))
 		res, err := getBaseURL(getTestCM(nil), log)
 		require.NoError(tt, err)
@@ -39,7 +50,7 @@ func TestGetBaseURL(t *testing.T) {
 	})
 
 	t.Run("whenFallback", func(tt *testing.T) {
-		require.NoError(tt, os.Setenv(envVarBaseURL, ""))
+		clearEnv(tt)
 		cmData := map[string]string{
 			ocean.SpotinstBaseURL: "http://base-url-from-cm.io",
 		}
@@ -50,11 +61,12 @@ func TestGetBaseURL(t *testing.T) {
 	})
 
 	t.Run("whenMalformedURL", func(tt *testing.T) {
+		clearEnv(tt)
 		require.NoError(tt, os.Setenv(envVarBaseURL, "https://nonsense!#$%$&"))
 		_, err := getBaseURL(getTestCM(nil), log)
 		require.Error(tt, err)
 
-		require.NoError(tt, os.Setenv(envVarBaseURL, ""))
+		clearEnv(tt)
 		cmData := map[string]string{
 			ocean.SpotinstBaseURL: "nonsense",
 		}
