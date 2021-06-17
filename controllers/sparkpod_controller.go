@@ -679,12 +679,7 @@ func getSparkApplicationName(driverPod *corev1.Pod, sparkApiInfo *sparkapi.Appli
 }
 
 func getWaveApplicationId(driverPod *corev1.Pod) string {
-	var waveApplicationId string
-
-	// check if the `wave.spot.io/wave-application-id` label has been set
-	if waveApplicationIdLabel, ok := driverPod.Labels[config.WaveConfigLabelWaveApplicationId]; ok {
-		waveApplicationId = waveApplicationIdLabel
-	}
+	var waveApplicationId = driverPod.Labels[config.WaveConfigLabelWaveApplicationId]
 
 	return waveApplicationId
 }
