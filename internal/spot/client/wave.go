@@ -8,9 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"google.golang.org/protobuf/proto"
 	"net/http"
 	"net/http/httputil"
+
+	"google.golang.org/protobuf/proto"
 
 	sparkpb "github.com/spotinst/wave-operator/api/proto/spark/v1"
 	"github.com/spotinst/wave-operator/api/v1alpha1"
