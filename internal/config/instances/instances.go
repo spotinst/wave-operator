@@ -98,7 +98,7 @@ func (m *manager) ValidateInstanceType(instanceType string) error {
 		}
 	} else {
 		// Just validate string format
-		if !validateInstanceTypeFormat(instanceType) {
+		if !isValidInstanceTypeFormat(instanceType) {
 			return fmt.Errorf("malformed instance type %q", instanceType)
 		}
 	}
@@ -203,14 +203,14 @@ func listToMap(list []string) map[string]bool {
 }
 
 func getFamily(instanceType string) (string, error) {
-	if !validateInstanceTypeFormat(instanceType) {
+	if !isValidInstanceTypeFormat(instanceType) {
 		return "", fmt.Errorf("malformed instance type %q", instanceType)
 	}
 	return strings.Split(instanceType, ".")[0], nil
 }
 
-// validateInstanceType validates that the given string is of the form family.type (e.g. m5.large)
-func validateInstanceTypeFormat(instanceType string) bool {
+// isValidInstanceTypeFormat validates that the given string is of the form family.type (e.g. m5.large)
+func isValidInstanceTypeFormat(instanceType string) bool {
 	split := strings.Split(instanceType, ".")
 	if len(split) != 2 {
 		return false
