@@ -47,6 +47,10 @@ func (m FakeInstanceTypeManager) Start() error {
 	return nil
 }
 
+func (m FakeInstanceTypeManager) Stop() {
+	return
+}
+
 func (m FakeInstanceTypeManager) ValidateInstanceType(instanceType string) error {
 	switch instanceType {
 	case "m5.xlarge", "m5.2xlarge", "t2.micro":

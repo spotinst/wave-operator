@@ -61,6 +61,18 @@ func (mr *MockInstanceTypeManagerMockRecorder) Start() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockInstanceTypeManager)(nil).Start))
 }
 
+// Stop mocks base method
+func (m *MockInstanceTypeManager) Stop() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Stop")
+}
+
+// Stop indicates an expected call of Stop
+func (mr *MockInstanceTypeManagerMockRecorder) Stop() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockInstanceTypeManager)(nil).Stop))
+}
+
 // ValidateInstanceType mocks base method
 func (m *MockInstanceTypeManager) ValidateInstanceType(arg0 string) error {
 	m.ctrl.T.Helper()

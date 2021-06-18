@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/robfig/cron/v3"
-
 	"github.com/spotinst/wave-operator/internal/spot/client"
 )
 
 const (
-	refreshInstanceTypesCronExpression = "@every 3m"
+	refreshInstanceTypesInterval = 3 * time.Minute
 )
 
 // InstanceTypes is a map of instance type family -> instance types
@@ -26,6 +25,7 @@ type instanceTypes struct {
 type manager struct {
 	// allowedInstanceTypes is a cached map of allowed instance types
 	allowedInstanceTypes instanceTypes
+	stopRefreshChan      chan bool
 	clusterIdentifier    string
 	oceanClient          client.OceanClient
 	awsClient            client.AWSClient
@@ -34,6 +34,7 @@ type manager struct {
 
 type InstanceTypeManager interface {
 	Start() error
+	Stop()
 	ValidateInstanceType(instanceType string) error
 	GetValidInstanceTypesInFamily(family string) ([]string, error)
 }
@@ -55,20 +56,32 @@ func (m *manager) Start() error {
 	}
 
 	// Schedule ongoing refreshes
-	refreshFunc := func() {
-		if err := m.refreshAllowedInstanceTypes(); err != nil {
-			m.log.Error(err, "could not refresh instance types")
+	m.log.Info(fmt.Sprintf("Scheduling instance type refreshes every %s", refreshInstanceTypesInterval))
+	ticker := time.NewTicker(refreshInstanceTypesInterval)
+	quit := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				if err := m.refreshAllowedInstanceTypes(); err != nil {
+					m.log.Error(err, "could not refresh instance types")
+				}
+			case <-quit:
+				m.log.Info("Stopping instance type refreshes")
+				ticker.Stop()
+				return
+			}
 		}
-	}
-	c := cron.New(cron.WithChain(cron.Recover(m.log)))
-	_, err := c.AddFunc(refreshInstanceTypesCronExpression, refreshFunc)
-	if err != nil {
-		return fmt.Errorf("could not schedule instance types refresh, %w", err)
-	}
-	m.log.Info(fmt.Sprintf("Scheduling instance type refreshes %s", refreshInstanceTypesCronExpression))
-	c.Start()
+	}()
+	m.stopRefreshChan = quit
 
 	return nil
+}
+
+func (m *manager) Stop() {
+	if m.stopRefreshChan != nil {
+		close(m.stopRefreshChan)
+	}
 }
 
 func (m *manager) ValidateInstanceType(instanceType string) error {
@@ -123,7 +136,7 @@ func (m *manager) refreshAllowedInstanceTypes() error {
 
 func (m *manager) fetchAllowedInstanceTypes() (map[string]map[string]bool, error) {
 
-	// TODO(thorsteinn) We should call a backend endpoint to get this information
+	// TODO(thorsteinn) We should call a backend endpoint to get this information pre-baked
 
 	allowed := make(map[string]map[string]bool)
 
