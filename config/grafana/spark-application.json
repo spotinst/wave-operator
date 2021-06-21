@@ -16,11 +16,12 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 5,
-  "iteration": 1619534879658,
+  "id": 2,
+  "iteration": 1624287336953,
   "links": [],
   "panels": [
     {
+      "collapsed": false,
       "datasource": null,
       "gridPos": {
         "h": 1,
@@ -28,8 +29,380 @@
         "x": 0,
         "y": 0
       },
+      "id": 546,
+      "panels": [],
+      "title": "Total Application Overview",
+      "type": "row"
+    },
+    {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "Prometheus",
+      "format": "none",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 2,
+        "x": 0,
+        "y": 1
+      },
+      "id": 588,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "$$hashKey": "object:2370",
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "$$hashKey": "object:2371",
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false,
+        "ymax": null,
+        "ymin": null
+      },
+      "tableColumn": "",
+      "targets": [
+        {
+          "expr": "sum(spark_app_info{application_name=\"$Name\"}) or on() vector(0)",
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "thresholds": "",
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Jobs",
+      "transparent": true,
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "$$hashKey": "object:2373",
+          "op": "=",
+          "text": "N/A",
+          "value": "null"
+        }
+      ],
+      "valueName": "current"
+    },
+    {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "Prometheus",
+      "decimals": 2,
+      "format": "s",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 2,
+        "y": 1
+      },
+      "id": 590,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "$$hashKey": "object:2571",
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "$$hashKey": "object:2572",
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false,
+        "ymax": null,
+        "ymin": null
+      },
+      "tableColumn": "",
+      "targets": [
+        {
+          "expr": "avg(spark_app_duration_seconds{application_name=\"$Name\"})",
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "thresholds": "",
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Average Job Duration",
+      "transparent": true,
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "$$hashKey": "object:2574",
+          "op": "=",
+          "text": "N/A",
+          "value": "null"
+        }
+      ],
+      "valueName": "current"
+    },
+    {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "Prometheus",
+      "decimals": 2,
+      "format": "s",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 5,
+        "y": 1
+      },
+      "id": 559,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "$$hashKey": "object:1177",
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "$$hashKey": "object:1178",
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false,
+        "ymax": null,
+        "ymin": null
+      },
+      "tableColumn": "",
+      "targets": [
+        {
+          "expr": "sum(spark_app_duration_seconds{application_name=\"$Name\"})",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "thresholds": "",
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Running time",
+      "transparent": true,
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "$$hashKey": "object:1180",
+          "op": "=",
+          "text": "N/A",
+          "value": "null"
+        }
+      ],
+      "valueName": "current"
+    },
+    {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "Prometheus",
+      "decimals": 2,
+      "format": "ns",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 8,
+        "y": 1
+      },
+      "id": 574,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "$$hashKey": "object:1475",
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "$$hashKey": "object:1476",
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "pluginVersion": "6.7.0",
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false,
+        "ymax": null,
+        "ymin": null
+      },
+      "tableColumn": "",
+      "targets": [
+        {
+          "expr": "sum(spark_JVMCPU_jvmCpuTime{application_name=\"$Name\"})",
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "thresholds": "",
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "JVM Cpu Time",
+      "transparent": true,
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "$$hashKey": "object:1478",
+          "op": "=",
+          "text": "N/A",
+          "value": "null"
+        }
+      ],
+      "valueName": "current"
+    },
+    {
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
       "id": 4,
-      "title": "Overview",
+      "panels": [],
+      "title": "Job: $id",
       "type": "row"
     },
     {
@@ -54,7 +427,7 @@
         "h": 3,
         "w": 4,
         "x": 0,
-        "y": 1
+        "y": 5
       },
       "id": 6,
       "interval": null,
@@ -97,7 +470,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "spark_app_info{application_name=\"$Name\"}",
+          "expr": "spark_app_info{application_id=\"$id\"}",
           "instant": true,
           "interval": "",
           "legendFormat": "{{version}}",
@@ -143,7 +516,7 @@
         "h": 3,
         "w": 3,
         "x": 4,
-        "y": 1
+        "y": 5
       },
       "id": 2,
       "interval": null,
@@ -186,7 +559,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "spark_app_duration_seconds{application_name=\"$Name\"}",
+          "expr": "spark_app_duration_seconds{application_id=\"$id\"}",
           "instant": true,
           "interval": "",
           "legendFormat": "",
@@ -232,7 +605,7 @@
         "h": 3,
         "w": 3,
         "x": 7,
-        "y": 1
+        "y": 5
       },
       "id": 13,
       "interval": null,
@@ -275,7 +648,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "spark_executor_count{application_name=\"$Name\"} - 1",
+          "expr": "spark_executor_count{application_id=\"$id\"} - 1",
           "instant": true,
           "interval": "",
           "legendFormat": "",
@@ -321,7 +694,7 @@
         "h": 3,
         "w": 3,
         "x": 10,
-        "y": 1
+        "y": 5
       },
       "id": 160,
       "interval": null,
@@ -364,7 +737,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "sum(spark_executor_cores_total{application_name=\"$Name\", executor_id!=\"driver\"})",
+          "expr": "sum(spark_executor_cores_total{application_id=\"$id\", executor_id!=\"driver\"})",
           "instant": true,
           "interval": "",
           "legendFormat": "",
@@ -389,13 +762,102 @@
       "valueName": "current"
     },
     {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "Prometheus",
+      "format": "ns",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 2,
+        "x": 13,
+        "y": 5
+      },
+      "id": 573,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "$$hashKey": "object:1475",
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "$$hashKey": "object:1476",
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "pluginVersion": "6.7.0",
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false,
+        "ymax": null,
+        "ymin": null
+      },
+      "tableColumn": "",
+      "targets": [
+        {
+          "expr": "spark_JVMCPU_jvmCpuTime{application_id=\"$id\"}",
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "thresholds": "",
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "JVM Cpu Time",
+      "transparent": true,
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "$$hashKey": "object:1478",
+          "op": "=",
+          "text": "N/A",
+          "value": "null"
+        }
+      ],
+      "valueName": "current"
+    },
+    {
       "collapsed": false,
       "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 4
+        "y": 9
       },
       "id": 48,
       "panels": [],
@@ -414,7 +876,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 5
+        "y": 10
       },
       "hiddenSeries": false,
       "id": 426,
@@ -445,19 +907,19 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum(spark_executor_info{application_name=\"$Name\", active=\"true\", blacklisted=\"false\", executor_id!=\"driver\"})",
+          "expr": "sum(spark_executor_info{application_id=\"$id\", active=\"true\", blacklisted=\"false\", executor_id!=\"driver\"})",
           "interval": "",
           "legendFormat": "Active",
           "refId": "A"
         },
         {
-          "expr": "sum(spark_executor_info{application_name=\"$Name\", active=\"false\", blacklisted=\"false\", executor_id!=\"driver\"})",
+          "expr": "sum(spark_executor_info{application_id=\"$id\", active=\"false\", blacklisted=\"false\", executor_id!=\"driver\"})",
           "interval": "",
           "legendFormat": "Removed",
           "refId": "C"
         },
         {
-          "expr": "sum(spark_executor_info{application_name=\"$Name\", blacklisted=\"true\", executor_id!=\"driver\"})",
+          "expr": "sum(spark_executor_info{application_id=\"$id\", blacklisted=\"true\", executor_id!=\"driver\"})",
           "interval": "",
           "legendFormat": "Blacklisted",
           "refId": "B"
@@ -519,7 +981,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 5
+        "y": 10
       },
       "hiddenSeries": false,
       "id": 233,
@@ -629,7 +1091,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 13
+        "y": 18
       },
       "hiddenSeries": false,
       "id": 59,
@@ -738,7 +1200,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 13
+        "y": 18
       },
       "hiddenSeries": false,
       "id": 58,
@@ -832,7 +1294,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 21
+        "y": 26
       },
       "hiddenSeries": false,
       "id": 234,
@@ -937,11 +1399,18 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 29
+        "y": 34
       },
       "id": 8,
       "panels": [],
       "repeat": "executor",
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "title": "Executor: $executor",
       "type": "row"
     },
@@ -967,7 +1436,7 @@
         "h": 3,
         "w": 3,
         "x": 0,
-        "y": 30
+        "y": 35
       },
       "id": 532,
       "interval": null,
@@ -1000,6 +1469,13 @@
           "to": "null"
         }
       ],
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "sparkline": {
         "fillColor": "rgba(31, 118, 189, 0.18)",
         "full": false,
@@ -1011,7 +1487,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "spark_executor_info{application_name=\"$Name\", executor_id=\"$executor\", active=\"true\"} or on() vector(0)",
+          "expr": "spark_executor_info{application_id=\"$id\", executor_id=\"$executor\", active=\"true\"} or on() vector(0)",
           "instant": true,
           "interval": "",
           "intervalFactor": 1,
@@ -1064,7 +1540,7 @@
         "h": 5,
         "w": 3,
         "x": 3,
-        "y": 30
+        "y": 35
       },
       "id": 37,
       "interval": null,
@@ -1096,6 +1572,13 @@
           "to": "null"
         }
       ],
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "sparkline": {
         "fillColor": "rgba(31, 118, 189, 0.18)",
         "full": false,
@@ -1107,7 +1590,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "spark_executor_cores_total{application_name=\"$Name\", executor_id=\"$executor\"}",
+          "expr": "spark_executor_cores_total{application_id=\"$id\", executor_id=\"$executor\"}",
           "instant": true,
           "interval": "",
           "legendFormat": "",
@@ -1137,7 +1620,7 @@
         "h": 5,
         "w": 4,
         "x": 6,
-        "y": 30
+        "y": 35
       },
       "id": 528,
       "options": {
@@ -1170,9 +1653,16 @@
         "showThresholdMarkers": true
       },
       "pluginVersion": "6.7.0",
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "targets": [
         {
-          "expr": "spark_executor_memory_used_bytes{application_name=\"$Name\", executor_id=\"$executor\"} / spark_executor_memory_bytes_max{application_name=\"$Name\", executor_id=\"$executor\"}",
+          "expr": "spark_executor_memory_used_bytes{application_id=\"$id\", executor_id=\"$executor\"} / spark_executor_memory_bytes_max{application_id=\"$id\", executor_id=\"$executor\"}",
           "instant": false,
           "interval": "",
           "legendFormat": "",
@@ -1192,10 +1682,17 @@
         "h": 5,
         "w": 12,
         "x": 12,
-        "y": 30
+        "y": 35
       },
       "id": 530,
       "mode": "markdown",
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "timeFrom": null,
       "timeShift": null,
       "title": "",
@@ -1214,7 +1711,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 40
       },
       "hiddenSeries": false,
       "id": 11,
@@ -1239,6 +1736,13 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
@@ -1308,7 +1812,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 40
       },
       "hiddenSeries": false,
       "id": 10,
@@ -1333,6 +1837,13 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": true,
@@ -1414,7 +1925,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 43
+        "y": 48
       },
       "hiddenSeries": false,
       "id": 15,
@@ -1437,6 +1948,13 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
@@ -1504,7 +2022,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 43
+        "y": 48
       },
       "hiddenSeries": false,
       "id": 237,
@@ -1527,6 +2045,13 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": true,
@@ -1600,7 +2125,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 51
+        "y": 56
       },
       "hiddenSeries": false,
       "id": 236,
@@ -1625,6 +2150,13 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": true,
@@ -1692,7 +2224,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 51
+        "y": 56
       },
       "hiddenSeries": false,
       "id": 18,
@@ -1715,6 +2247,13 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
@@ -1789,7 +2328,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 64
       },
       "hiddenSeries": false,
       "id": 16,
@@ -1812,6 +2351,1069 @@
       "pointradius": 2,
       "points": false,
       "renderer": "flot",
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "1",
+          "value": "1"
+        }
+      },
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "spark_executor_disk_used_bytes{application_name=\"$Name\", executor_id=\"$executor\"}",
+          "interval": "",
+          "legendFormat": "{{executor_id}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Disk Used",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:3926",
+          "format": "bytes",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:3927",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "collapsed": false,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 72
+      },
+      "id": 591,
+      "panels": [],
+      "repeat": null,
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 8,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "title": "Executor: $executor",
+      "type": "row"
+    },
+    {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": true,
+      "colors": [
+        "#8AB8FF",
+        "rgba(237, 129, 40, 0.89)",
+        "#FF7383"
+      ],
+      "datasource": "Prometheus",
+      "format": "none",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 3,
+        "x": 0,
+        "y": 73
+      },
+      "id": 592,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "$$hashKey": "object:491",
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "$$hashKey": "object:492",
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "pluginVersion": "6.7.0",
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 532,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false,
+        "ymax": null,
+        "ymin": null
+      },
+      "tableColumn": "",
+      "targets": [
+        {
+          "expr": "spark_executor_info{application_id=\"$id\", executor_id=\"$executor\", active=\"true\"} or on() vector(0)",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "thresholds": "1,0",
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Status",
+      "transparent": true,
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "$$hashKey": "object:494",
+          "op": "=",
+          "text": "Removed",
+          "value": "0"
+        },
+        {
+          "$$hashKey": "object:516",
+          "op": "=",
+          "text": "Active",
+          "value": "1"
+        }
+      ],
+      "valueName": "avg"
+    },
+    {
+      "cacheTimeout": null,
+      "colorBackground": false,
+      "colorValue": false,
+      "colors": [
+        "#299c46",
+        "rgba(237, 129, 40, 0.89)",
+        "#d44a3a"
+      ],
+      "datasource": "Prometheus",
+      "format": "none",
+      "gauge": {
+        "maxValue": 100,
+        "minValue": 0,
+        "show": false,
+        "thresholdLabels": false,
+        "thresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 3,
+        "x": 3,
+        "y": 73
+      },
+      "id": 593,
+      "interval": null,
+      "links": [],
+      "mappingType": 1,
+      "mappingTypes": [
+        {
+          "$$hashKey": "object:370",
+          "name": "value to text",
+          "value": 1
+        },
+        {
+          "$$hashKey": "object:371",
+          "name": "range to text",
+          "value": 2
+        }
+      ],
+      "maxDataPoints": 100,
+      "nullPointMode": "connected",
+      "nullText": null,
+      "postfix": "",
+      "postfixFontSize": "50%",
+      "prefix": "",
+      "prefixFontSize": "50%",
+      "rangeMaps": [
+        {
+          "from": "null",
+          "text": "N/A",
+          "to": "null"
+        }
+      ],
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 37,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "sparkline": {
+        "fillColor": "rgba(31, 118, 189, 0.18)",
+        "full": false,
+        "lineColor": "rgb(31, 120, 193)",
+        "show": false,
+        "ymax": null,
+        "ymin": null
+      },
+      "tableColumn": "",
+      "targets": [
+        {
+          "expr": "spark_executor_cores_total{application_id=\"$id\", executor_id=\"$executor\"}",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "thresholds": "",
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Cores Available",
+      "transparent": true,
+      "type": "singlestat",
+      "valueFontSize": "80%",
+      "valueMaps": [
+        {
+          "$$hashKey": "object:373",
+          "op": "=",
+          "text": "N/A",
+          "value": "null"
+        }
+      ],
+      "valueName": "current"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 6,
+        "y": 73
+      },
+      "id": 594,
+      "options": {
+        "fieldOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "defaults": {
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            },
+            "unit": "percent"
+          },
+          "overrides": [],
+          "values": false
+        },
+        "orientation": "auto",
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "pluginVersion": "6.7.0",
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 528,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "targets": [
+        {
+          "expr": "spark_executor_memory_used_bytes{application_id=\"$id\", executor_id=\"$executor\"} / spark_executor_memory_bytes_max{application_id=\"$id\", executor_id=\"$executor\"}",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Memory Usage",
+      "transparent": true,
+      "type": "gauge"
+    },
+    {
+      "content": "\n\n",
+      "datasource": null,
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 73
+      },
+      "id": 595,
+      "mode": "markdown",
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 530,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Prometheus",
+      "fill": 10,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 78
+      },
+      "hiddenSeries": false,
+      "id": 596,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": true,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 0,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 11,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "spark_executor_tasks_active_count{application_name=\"$Name\", executor_id=\"$executor\"} ",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Active",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Active Tasks",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:3294",
+          "decimals": 0,
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:3295",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Prometheus",
+      "fill": 10,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 78
+      },
+      "hiddenSeries": false,
+      "id": 597,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": true,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 0,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 10,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": true,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "irate(spark_executor_tasks_total{application_name=\"$Name\", executor_id=\"$executor\"}[5m])",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Tasks",
+          "refId": "A"
+        },
+        {
+          "expr": "irate(spark_executor_tasks_completed_total{application_name=\"$Name\", executor_id=\"$executor\"}[5m])",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Completed",
+          "refId": "B"
+        },
+        {
+          "expr": "irate(spark_executor_tasks_failed_total{application_name=\"$Name\", executor_id=\"$executor\"}[5m])",
+          "interval": "",
+          "legendFormat": "Failed",
+          "refId": "C"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Tasks Last 5m",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:3294",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:3295",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Prometheus",
+      "fill": 10,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 86
+      },
+      "hiddenSeries": false,
+      "id": 598,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 15,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "spark_executor_input_bytes_total{application_name=\"$Name\", executor_id=\"$executor\"}",
+          "interval": "",
+          "legendFormat": "{{executor_id}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Total input bytes",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:3926",
+          "format": "bytes",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:3927",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Prometheus",
+      "fill": 10,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 86
+      },
+      "hiddenSeries": false,
+      "id": 599,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 237,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": true,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "rate(spark_executor_shuffle_read_bytes_total{application_name=\"$Name\", executor_id=\"$executor\"}[5m])",
+          "interval": "",
+          "legendFormat": "Read",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(spark_executor_shuffle_write_bytes_total{application_name=\"$Name\", executor_id=\"$executor\"}[5m])",
+          "interval": "",
+          "legendFormat": "Write",
+          "refId": "B"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Shuffle read / write total",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:450",
+          "format": "bytes",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:451",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Prometheus",
+      "fill": 10,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 94
+      },
+      "hiddenSeries": false,
+      "id": 600,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": false,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 236,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": true,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "irate(spark_executor_gc_time_total_milliseconds{application_name=\"$Name\", executor_id=\"$executor\"}[5m])",
+          "interval": "",
+          "legendFormat": "{{executor_id}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "GC Time 5m",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:450",
+          "format": "ms",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:451",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Prometheus",
+      "fill": 10,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 94
+      },
+      "hiddenSeries": false,
+      "id": 601,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 18,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "expr": "spark_executor_memory_bytes_max{application_name=\"$Name\", executor_id=\"$executor\"}",
+          "hide": true,
+          "interval": "",
+          "legendFormat": "Max",
+          "refId": "B"
+        },
+        {
+          "expr": "spark_executor_memory_used_bytes{application_name=\"$Name\", executor_id=\"$executor\"}",
+          "interval": "",
+          "legendFormat": "Used",
+          "refId": "A"
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeRegions": [],
+      "timeShift": null,
+      "title": "Memory Used",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "$$hashKey": "object:3926",
+          "format": "bytes",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "$$hashKey": "object:3927",
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": true,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "Prometheus",
+      "fill": 1,
+      "fillGradient": 0,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 102
+      },
+      "hiddenSeries": false,
+      "id": 602,
+      "legend": {
+        "avg": false,
+        "current": false,
+        "max": false,
+        "min": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": false,
+      "linewidth": 1,
+      "nullPointMode": "null",
+      "options": {
+        "dataLinks": []
+      },
+      "percentage": false,
+      "pointradius": 2,
+      "points": false,
+      "renderer": "flot",
+      "repeatIteration": 1624287336953,
+      "repeatPanelId": 16,
+      "repeatedByRow": true,
+      "scopedVars": {
+        "executor": {
+          "selected": false,
+          "text": "2",
+          "value": "2"
+        }
+      },
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
@@ -1879,10 +3481,9 @@
       {
         "allValue": null,
         "current": {
-          "isNone": true,
-          "selected": false,
-          "text": "None",
-          "value": ""
+          "selected": true,
+          "text": "Spark Pi",
+          "value": "Spark Pi"
         },
         "datasource": "Prometheus",
         "definition": "label_values(spark_app_info,application_name)",
@@ -1894,6 +3495,33 @@
         "name": "Name",
         "options": [],
         "query": "label_values(spark_app_info,application_name)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "allValue": null,
+        "current": {
+          "selected": false,
+          "text": "spark-1732184e5236402b8191462db1f4bf3f",
+          "value": "spark-1732184e5236402b8191462db1f4bf3f"
+        },
+        "datasource": "Prometheus",
+        "definition": "label_values(spark_app_info,application_id)",
+        "hide": 0,
+        "includeAll": false,
+        "index": -1,
+        "label": null,
+        "multi": false,
+        "name": "id",
+        "options": [],
+        "query": "label_values(spark_app_info,application_id)",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -1958,5 +3586,5 @@
   "variables": {
     "list": []
   },
-  "version": 5
+  "version": 10
 }
