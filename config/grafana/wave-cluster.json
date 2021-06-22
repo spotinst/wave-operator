@@ -16,7 +16,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 1,
+  "id": 2,
   "links": [],
   "panels": [
     {
@@ -520,7 +520,7 @@
         },
         {
           "$$hashKey": "object:4010",
-          "alias": "",
+          "alias": "Jobs",
           "align": "auto",
           "colorMode": null,
           "colors": [
@@ -529,36 +529,17 @@
             "rgba(50, 172, 45, 0.97)"
           ],
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "decimals": 2,
+          "decimals": 0,
           "mappingType": 1,
-          "pattern": "",
+          "pattern": "Value",
           "thresholds": [],
           "type": "number",
-          "unit": "short"
-        },
-        {
-          "$$hashKey": "object:1117",
-          "alias": "",
-          "align": "auto",
-          "colorMode": null,
-          "colors": [
-            "rgba(245, 54, 54, 0.9)",
-            "rgba(237, 129, 40, 0.89)",
-            "rgba(50, 172, 45, 0.97)"
-          ],
-          "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "decimals": 2,
-          "link": false,
-          "mappingType": 1,
-          "pattern": "/.*/",
-          "thresholds": [],
-          "type": "hidden",
           "unit": "short"
         }
       ],
       "targets": [
         {
-          "expr": "group(spark_app_info) by (application_name)",
+          "expr": "sum(spark_app_info) by (application_name)",
           "instant": true,
           "interval": "",
           "legendFormat": "{{application_name}}",
@@ -1474,5 +1455,5 @@
   "variables": {
     "list": []
   },
-  "version": 5
+  "version": 3
 }
