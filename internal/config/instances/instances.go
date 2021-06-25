@@ -94,7 +94,7 @@ func (m *manager) Stop() {
 func (m *manager) ValidateInstanceType(instanceType string) error {
 	parsed, err := instanceTypeFromString(instanceType)
 	if err != nil {
-		return fmt.Errorf("malformed instance type %q", instanceType)
+		return fmt.Errorf("could not parse instance type %q, %w", instanceType, err)
 	}
 	m.allowedInstanceTypes.RLock()
 	defer m.allowedInstanceTypes.RUnlock()
