@@ -34,11 +34,12 @@ const (
 
 	sparkApplicationFinalizerName = OperatorFinalizerName + "/sparkapplication"
 
-	apiVersion                = "wave.spot.io/v1alpha1"
-	sparkApplicationKind      = "SparkApplication"
-	waveKindLabel             = "wave.spot.io/kind"
-	waveApplicationIDLabel    = "wave.spot.io/application-id"
-	sparkOperatorAppNameLabel = "sparkoperator.k8s.io/app-name"
+	apiVersion                  = "wave.spot.io/v1alpha1"
+	sparkApplicationKind        = "SparkApplication"
+	waveKindLabel               = "wave.spot.io/kind"
+	waveSparkApplicationIDLabel = "wave.spot.io/application-id"
+	waveApplicationIDLabel      = "wave.spot.io/wave-application-id"
+	sparkOperatorAppNameLabel   = "sparkoperator.k8s.io/app-name"
 
 	stageMetricsAggregationAnnotation = "wave.spot.io/stageMetricsAggregation"
 	workloadTypeAnnotation            = "wave.spot.io/workloadType"
@@ -679,9 +680,7 @@ func getSparkApplicationName(driverPod *corev1.Pod, sparkApiInfo *sparkapi.Appli
 }
 
 func getWaveApplicationId(driverPod *corev1.Pod) string {
-	var waveApplicationId = driverPod.Labels[config.WaveConfigLabelWaveApplicationId]
-
-	return waveApplicationId
+	return driverPod.Labels[waveApplicationIDLabel]
 }
 
 func getHeritage(pod *corev1.Pod) (v1alpha1.SparkHeritage, error) {
@@ -716,8 +715,8 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 	cr := &v1alpha1.SparkApplication{}
 
 	cr.Labels = map[string]string{
-		waveKindLabel:          sparkApplicationKind, // Facilitates cost calculations
-		waveApplicationIDLabel: applicationID,        // Facilitates cost calculations
+		waveKindLabel:               sparkApplicationKind, // Facilitates cost calculations
+		waveSparkApplicationIDLabel: applicationID,        // Facilitates cost calculations
 	}
 
 	cr.Annotations = make(map[string]string)
@@ -736,7 +735,7 @@ func (r *SparkPodReconciler) createNewSparkApplicationCR(ctx context.Context, dr
 	waveApplicationId := getWaveApplicationId(driverPod)
 
 	if waveApplicationId != "" {
-		cr.Labels[config.WaveConfigLabelWaveApplicationId] = waveApplicationId
+		cr.Labels[waveApplicationIDLabel] = waveApplicationId
 	}
 
 	heritage, err := getHeritage(driverPod)
