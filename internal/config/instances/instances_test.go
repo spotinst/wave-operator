@@ -24,7 +24,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 		getInstanceTypesError          error
 		getInstanceTypesCallCount      int
 		oceanClusterIdentifierOverride string
-		expected                       map[string]map[string]bool
+		expected                       map[InstanceTypeFamily]map[InstanceType]bool
 		expectedError                  string
 	}
 
@@ -96,13 +96,22 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			blacklist:                 nil,
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: map[string]map[string]bool{
+			expected: map[InstanceTypeFamily]map[InstanceType]bool{
 				"m5": {
-					"m5.xlarge": true,
+					InstanceType{
+						Family: "m5",
+						Type:   "xlarge",
+					}: true,
 				},
 				"r5": {
-					"r5.99xlarge": true,
-					"r5.small":    true,
+					InstanceType{
+						Family: "r5",
+						Type:   "99xlarge",
+					}: true,
+					InstanceType{
+						Family: "r5",
+						Type:   "small",
+					}: true,
 				},
 			},
 		}
@@ -129,12 +138,18 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			blacklist:                 nil,
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: map[string]map[string]bool{
+			expected: map[InstanceTypeFamily]map[InstanceType]bool{
 				"m5": {
-					"m5.xlarge": true,
+					InstanceType{
+						Family: "m5",
+						Type:   "xlarge",
+					}: true,
 				},
 				"r5": {
-					"r5.small": true,
+					InstanceType{
+						Family: "r5",
+						Type:   "small",
+					}: true,
 				},
 			},
 		}
@@ -160,12 +175,18 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			},
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: map[string]map[string]bool{
+			expected: map[InstanceTypeFamily]map[InstanceType]bool{
 				"m5": {
-					"m5.xlarge": true,
+					InstanceType{
+						Family: "m5",
+						Type:   "xlarge",
+					}: true,
 				},
 				"r5": {
-					"r5.99xlarge": true,
+					InstanceType{
+						Family: "r5",
+						Type:   "99xlarge",
+					}: true,
 				},
 			},
 		}
@@ -189,9 +210,12 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			blacklist:                 nil,
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected: map[string]map[string]bool{
+			expected: map[InstanceTypeFamily]map[InstanceType]bool{
 				"m5": {
-					"m5.xlarge": true,
+					InstanceType{
+						Family: "m5",
+						Type:   "xlarge",
+					}: true,
 				},
 			},
 		}
@@ -206,7 +230,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			getOceanClustersError:     fmt.Errorf("test error"),
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 0,
-			expected:                  map[string]map[string]bool{},
+			expected:                  map[InstanceTypeFamily]map[InstanceType]bool{},
 			expectedError:             "could not get ocean clusters",
 		}
 		testFunc(tt, tc)
@@ -220,7 +244,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			getOceanClustersCallCount:      1,
 			getInstanceTypesCallCount:      0,
 			oceanClusterIdentifierOverride: "name-override",
-			expected:                       map[string]map[string]bool{},
+			expected:                       map[InstanceTypeFamily]map[InstanceType]bool{},
 			expectedError:                  "could not get ocean cluster",
 		}
 		testFunc(tt, tc)
@@ -234,7 +258,7 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 			getInstanceTypesError:     fmt.Errorf("test error"),
 			getOceanClustersCallCount: 1,
 			getInstanceTypesCallCount: 1,
-			expected:                  map[string]map[string]bool{},
+			expected:                  map[InstanceTypeFamily]map[InstanceType]bool{},
 			expectedError:             "could not get instance types",
 		}
 		testFunc(tt, tc)
@@ -242,19 +266,40 @@ func TestRefreshAllowedInstanceTypes(t *testing.T) {
 
 }
 
-var testAllowedInstanceTypes = map[string]map[string]bool{
+var testAllowedInstanceTypes = map[InstanceTypeFamily]map[InstanceType]bool{
 	"m5": {
-		"m5.large":  true,
-		"m5.xlarge": true,
+		InstanceType{
+			Family: "m5",
+			Type:   "large",
+		}: true,
+		InstanceType{
+			Family: "m5",
+			Type:   "xlarge",
+		}: true,
 	},
 	"r3": {
-		"r3.small": true,
-		"r3.large": true,
+		InstanceType{
+			Family: "r3",
+			Type:   "small",
+		}: true,
+		InstanceType{
+			Family: "r3",
+			Type:   "large",
+		}: true,
 	},
 	"h1": {
-		"h1.small":  true,
-		"h1.medium": true,
-		"h1.large":  true,
+		InstanceType{
+			Family: "h1",
+			Type:   "small",
+		}: true,
+		InstanceType{
+			Family: "h1",
+			Type:   "medium",
+		}: true,
+		InstanceType{
+			Family: "h1",
+			Type:   "large",
+		}: true,
 	},
 	"g5": {},
 }

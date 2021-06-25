@@ -16,10 +16,17 @@ const (
 	refreshInstanceTypesInterval = 3 * time.Minute
 )
 
+type InstanceType struct {
+	Family InstanceTypeFamily
+	Type   string
+}
+
+type InstanceTypeFamily string
+
 // InstanceTypes is a map of instance type family -> instance types
 type instanceTypes struct {
 	sync.RWMutex
-	m map[string]map[string]bool
+	m map[InstanceTypeFamily]map[InstanceType]bool
 }
 
 type manager struct {
@@ -41,7 +48,7 @@ type InstanceTypeManager interface {
 
 func NewInstanceTypeManager(client *client.Client, clusterIdentifier string, log logr.Logger) InstanceTypeManager {
 	return &manager{
-		allowedInstanceTypes: instanceTypes{m: make(map[string]map[string]bool)},
+		allowedInstanceTypes: instanceTypes{m: make(map[InstanceTypeFamily]map[InstanceType]bool)},
 		clusterIdentifier:    clusterIdentifier,
 		oceanClient:          client,
 		awsClient:            client,
@@ -85,21 +92,16 @@ func (m *manager) Stop() {
 }
 
 func (m *manager) ValidateInstanceType(instanceType string) error {
+	parsed, err := instanceTypeFromString(instanceType)
+	if err != nil {
+		return fmt.Errorf("malformed instance type %q", instanceType)
+	}
 	m.allowedInstanceTypes.RLock()
 	defer m.allowedInstanceTypes.RUnlock()
 	if len(m.allowedInstanceTypes.m) > 0 {
 		// Validate instance type is allowed
-		family, err := getFamily(instanceType)
-		if err != nil {
-			return fmt.Errorf("could not get family for instance type %q, %w", instanceType, err)
-		}
-		if m.allowedInstanceTypes.m[family][instanceType] == false {
+		if m.allowedInstanceTypes.m[parsed.Family][parsed] == false {
 			return fmt.Errorf("instance type %q not allowed", instanceType)
-		}
-	} else {
-		// Just validate string format
-		if !isValidInstanceTypeFormat(instanceType) {
-			return fmt.Errorf("malformed instance type %q", instanceType)
 		}
 	}
 	return nil
@@ -108,14 +110,14 @@ func (m *manager) ValidateInstanceType(instanceType string) error {
 func (m *manager) GetValidInstanceTypesInFamily(family string) ([]string, error) {
 	m.allowedInstanceTypes.RLock()
 	defer m.allowedInstanceTypes.RUnlock()
-	instanceTypesInFamily := m.allowedInstanceTypes.m[family]
+	instanceTypesInFamily := m.allowedInstanceTypes.m[InstanceTypeFamily(family)]
 	if len(instanceTypesInFamily) == 0 {
 		return nil, fmt.Errorf("instance type family %q not allowed", family)
 	}
 	allowedInstanceTypesInFamily := make([]string, len(instanceTypesInFamily))
 	i := 0
 	for k := range instanceTypesInFamily {
-		allowedInstanceTypesInFamily[i] = k
+		allowedInstanceTypesInFamily[i] = k.String()
 		i++
 	}
 	return allowedInstanceTypesInFamily, nil
@@ -134,11 +136,11 @@ func (m *manager) refreshAllowedInstanceTypes() error {
 	return nil
 }
 
-func (m *manager) fetchAllowedInstanceTypes() (map[string]map[string]bool, error) {
+func (m *manager) fetchAllowedInstanceTypes() (map[InstanceTypeFamily]map[InstanceType]bool, error) {
 
 	// TODO(thorsteinn) We should call a backend endpoint to get this information pre-baked
 
-	allowed := make(map[string]map[string]bool)
+	allowed := make(map[InstanceTypeFamily]map[InstanceType]bool)
 
 	oceanCluster, err := getOceanCluster(m.oceanClient, m.clusterIdentifier)
 	if err != nil {
@@ -149,7 +151,7 @@ func (m *manager) fetchAllowedInstanceTypes() (map[string]map[string]bool, error
 		return nil, fmt.Errorf("ocean cluster is nil")
 	}
 
-	instanceTypesInRegion, err := getInstanceTypesInRegion(m.awsClient, oceanCluster.Region)
+	instanceTypesInRegion, err := getInstanceTypesInRegion(m.awsClient, oceanCluster.Region, m.log)
 	if err != nil {
 		return nil, fmt.Errorf("could not get instance types in region, %w", err)
 	}
@@ -161,23 +163,18 @@ func (m *manager) fetchAllowedInstanceTypes() (map[string]map[string]bool, error
 	var blacklistIgnoredInstanceTypes []string
 
 	for _, it := range instanceTypesInRegion {
-		family, err := getFamily(it.InstanceType)
-		if err != nil {
-			m.log.Info(fmt.Sprintf("Could not get family for instance type %q, ignoring", it.InstanceType))
+		if whitelist != nil && whitelist[it.String()] == false {
+			// If instance type not present in whitelist, we don't want it
+			whitelistIgnoredInstanceTypes = append(whitelistIgnoredInstanceTypes, it.String())
+		} else if blacklist != nil && blacklist[it.String()] == true {
+			// If instance type present in blacklist, we don't want it
+			blacklistIgnoredInstanceTypes = append(blacklistIgnoredInstanceTypes, it.String())
 		} else {
-			if whitelist != nil && whitelist[it.InstanceType] == false {
-				// If instance type not present in whitelist, we don't want it
-				whitelistIgnoredInstanceTypes = append(whitelistIgnoredInstanceTypes, it.InstanceType)
-			} else if blacklist != nil && blacklist[it.InstanceType] == true {
-				// If instance type present in blacklist, we don't want it
-				blacklistIgnoredInstanceTypes = append(blacklistIgnoredInstanceTypes, it.InstanceType)
-			} else {
-				// This is an allowed instance type
-				if allowed[family] == nil {
-					allowed[family] = make(map[string]bool)
-				}
-				allowed[family][it.InstanceType] = true
+			// This is an allowed instance type
+			if allowed[it.Family] == nil {
+				allowed[it.Family] = make(map[InstanceType]bool)
 			}
+			allowed[it.Family][it] = true
 		}
 	}
 
@@ -202,27 +199,6 @@ func listToMap(list []string) map[string]bool {
 	return m
 }
 
-func getFamily(instanceType string) (string, error) {
-	if !isValidInstanceTypeFormat(instanceType) {
-		return "", fmt.Errorf("malformed instance type %q", instanceType)
-	}
-	return strings.Split(instanceType, ".")[0], nil
-}
-
-// isValidInstanceTypeFormat validates that the given string is of the form family.type (e.g. m5.large)
-func isValidInstanceTypeFormat(instanceType string) bool {
-	split := strings.Split(instanceType, ".")
-	if len(split) != 2 {
-		return false
-	}
-	for _, s := range split {
-		if len(s) == 0 {
-			return false
-		}
-	}
-	return true
-}
-
 func getOceanCluster(clusterGetter client.OceanClusterGetter, clusterIdentifier string) (*client.OceanCluster, error) {
 	oceanClusters, err := clusterGetter.GetAllOceanClusters()
 	if err != nil {
@@ -243,6 +219,39 @@ func getOceanCluster(clusterGetter client.OceanClusterGetter, clusterIdentifier 
 	return foundOceanClusters[0], nil
 }
 
-func getInstanceTypesInRegion(instanceTypeGetter client.InstanceTypesGetter, region string) ([]*client.InstanceType, error) {
-	return instanceTypeGetter.GetAvailableInstanceTypesInRegion(region)
+func getInstanceTypesInRegion(instanceTypeGetter client.InstanceTypesGetter, region string, log logr.Logger) ([]InstanceType, error) {
+	its, err := instanceTypeGetter.GetAvailableInstanceTypesInRegion(region)
+	if err != nil {
+		return nil, fmt.Errorf("could not get available instance types in region, %w", err)
+	}
+
+	var instanceTypes []InstanceType
+	for _, it := range its {
+		instanceType, err := instanceTypeFromString(it.InstanceType)
+		if err != nil {
+			log.Info(fmt.Sprintf("Could not parse instance type %q, ignoring", it.InstanceType))
+		} else {
+			instanceTypes = append(instanceTypes, instanceType)
+		}
+	}
+
+	return instanceTypes, nil
+}
+
+func (it InstanceType) String() string {
+	return fmt.Sprintf("%s.%s", it.Family, it.Type)
+}
+
+func instanceTypeFromString(it string) (InstanceType, error) {
+	split := strings.Split(it, ".")
+	if len(split) != 2 {
+		return InstanceType{}, fmt.Errorf("malformed instance type %q", it)
+	}
+	if len(split[0]) == 0 || len(split[1]) == 0 {
+		return InstanceType{}, fmt.Errorf("malformed instance type %q", it)
+	}
+	return InstanceType{
+		Family: InstanceTypeFamily(split[0]),
+		Type:   split[1],
+	}, nil
 }
