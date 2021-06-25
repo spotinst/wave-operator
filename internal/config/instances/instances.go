@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+
 	"github.com/spotinst/wave-operator/internal/spot/client"
 )
 
