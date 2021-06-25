@@ -17,17 +17,17 @@ const (
 	refreshInstanceTypesInterval = 3 * time.Minute
 )
 
-type InstanceType struct {
-	Family InstanceTypeFamily
+type instanceType struct {
+	Family instanceTypeFamily
 	Type   string
 }
 
-type InstanceTypeFamily string
+type instanceTypeFamily string
 
 // InstanceTypes is a map of instance type family -> instance types
 type instanceTypes struct {
 	sync.RWMutex
-	m map[InstanceTypeFamily]map[InstanceType]bool
+	m map[instanceTypeFamily]map[instanceType]bool
 }
 
 type manager struct {
@@ -49,7 +49,7 @@ type InstanceTypeManager interface {
 
 func NewInstanceTypeManager(client *client.Client, clusterIdentifier string, log logr.Logger) InstanceTypeManager {
 	return &manager{
-		allowedInstanceTypes: instanceTypes{m: make(map[InstanceTypeFamily]map[InstanceType]bool)},
+		allowedInstanceTypes: instanceTypes{m: make(map[instanceTypeFamily]map[instanceType]bool)},
 		clusterIdentifier:    clusterIdentifier,
 		oceanClient:          client,
 		awsClient:            client,
@@ -111,7 +111,7 @@ func (m *manager) ValidateInstanceType(instanceType string) error {
 func (m *manager) GetValidInstanceTypesInFamily(family string) ([]string, error) {
 	m.allowedInstanceTypes.RLock()
 	defer m.allowedInstanceTypes.RUnlock()
-	instanceTypesInFamily := m.allowedInstanceTypes.m[InstanceTypeFamily(family)]
+	instanceTypesInFamily := m.allowedInstanceTypes.m[instanceTypeFamily(family)]
 	if len(instanceTypesInFamily) == 0 {
 		return nil, fmt.Errorf("instance type family %q not allowed", family)
 	}
@@ -137,11 +137,11 @@ func (m *manager) refreshAllowedInstanceTypes() error {
 	return nil
 }
 
-func (m *manager) fetchAllowedInstanceTypes() (map[InstanceTypeFamily]map[InstanceType]bool, error) {
+func (m *manager) fetchAllowedInstanceTypes() (map[instanceTypeFamily]map[instanceType]bool, error) {
 
 	// TODO(thorsteinn) We should call a backend endpoint to get this information pre-baked
 
-	allowed := make(map[InstanceTypeFamily]map[InstanceType]bool)
+	allowed := make(map[instanceTypeFamily]map[instanceType]bool)
 
 	oceanCluster, err := getOceanCluster(m.oceanClient, m.clusterIdentifier)
 	if err != nil {
@@ -173,7 +173,7 @@ func (m *manager) fetchAllowedInstanceTypes() (map[InstanceTypeFamily]map[Instan
 		} else {
 			// This is an allowed instance type
 			if allowed[it.Family] == nil {
-				allowed[it.Family] = make(map[InstanceType]bool)
+				allowed[it.Family] = make(map[instanceType]bool)
 			}
 			allowed[it.Family][it] = true
 		}
@@ -220,13 +220,13 @@ func getOceanCluster(clusterGetter client.OceanClusterGetter, clusterIdentifier 
 	return foundOceanClusters[0], nil
 }
 
-func getInstanceTypesInRegion(instanceTypeGetter client.InstanceTypesGetter, region string, log logr.Logger) ([]InstanceType, error) {
+func getInstanceTypesInRegion(instanceTypeGetter client.InstanceTypesGetter, region string, log logr.Logger) ([]instanceType, error) {
 	its, err := instanceTypeGetter.GetAvailableInstanceTypesInRegion(region)
 	if err != nil {
 		return nil, fmt.Errorf("could not get available instance types in region, %w", err)
 	}
 
-	var instanceTypes []InstanceType
+	var instanceTypes []instanceType
 	for _, it := range its {
 		instanceType, err := instanceTypeFromString(it.InstanceType)
 		if err != nil {
@@ -239,20 +239,20 @@ func getInstanceTypesInRegion(instanceTypeGetter client.InstanceTypesGetter, reg
 	return instanceTypes, nil
 }
 
-func (it InstanceType) String() string {
+func (it instanceType) String() string {
 	return fmt.Sprintf("%s.%s", it.Family, it.Type)
 }
 
-func instanceTypeFromString(it string) (InstanceType, error) {
+func instanceTypeFromString(it string) (instanceType, error) {
 	split := strings.Split(it, ".")
 	if len(split) != 2 {
-		return InstanceType{}, fmt.Errorf("malformed instance type %q", it)
+		return instanceType{}, fmt.Errorf("malformed instance type %q", it)
 	}
 	if len(split[0]) == 0 || len(split[1]) == 0 {
-		return InstanceType{}, fmt.Errorf("malformed instance type %q", it)
+		return instanceType{}, fmt.Errorf("malformed instance type %q", it)
 	}
-	return InstanceType{
-		Family: InstanceTypeFamily(split[0]),
+	return instanceType{
+		Family: instanceTypeFamily(split[0]),
 		Type:   split[1],
 	}, nil
 }
