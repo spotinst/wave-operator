@@ -75,8 +75,8 @@ func TestHttpClientGet(t *testing.T) {
 		assert.ErrorAs(tt, err, &ServiceUnavailableError{})
 	})
 	t.Run("ReturnsServiceUnavailableOnTimeout", func(tt *testing.T) {
-		t := NewHTTPClientTransport(host, port, WithTimeout(1*time.Microsecond), WithTransport(transportTestFunc(func(req *http.Request) (*http.Response, error) {
-			time.Sleep(5 * time.Microsecond)
+		t := NewHTTPClientTransport(host, port, WithTimeout(50*time.Millisecond), WithTransport(transportTestFunc(func(req *http.Request) (*http.Response, error) {
+			time.Sleep(100 * time.Millisecond)
 			return nil, nil
 		})))
 
