@@ -408,7 +408,7 @@ func TestReconcile_driver_whenSuccessful(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(createdCR.Labels))
 	assert.Equal(t, sparkApplicationKind, createdCR.Labels[waveKindLabel])
-	assert.Equal(t, sparkAppID, createdCR.Labels[waveApplicationIDLabel])
+	assert.Equal(t, sparkAppID, createdCR.Labels[waveSparkApplicationIDLabel])
 	assert.Equal(t, sparkAppID, createdCR.Name)
 	assert.Equal(t, pod.Namespace, createdCR.Namespace)
 	// Application name == driver name until we learn otherwise from Spark API

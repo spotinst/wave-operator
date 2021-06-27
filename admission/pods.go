@@ -197,7 +197,10 @@ func (m PodMutator) mutateDriverPod(sourceObj *corev1.Pod, log logr.Logger) *cor
 	if !exists {
 		modObj.Spec.Volumes = append(modObj.Spec.Volumes, volume)
 	}
-
+	if config.IsEventLogSyncEnabled(modObj.Annotations) {
+		var eventLogTerminationSeconds int64 = 300
+		modObj.Spec.TerminationGracePeriodSeconds = &eventLogTerminationSeconds
+	}
 	return modObj
 }
 

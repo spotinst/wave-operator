@@ -16,7 +16,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 1,
+  "id": 2,
   "links": [],
   "panels": [
     {
@@ -519,8 +519,8 @@
           "unit": "short"
         },
         {
-          "$$hashKey": "object:1117",
-          "alias": "",
+          "$$hashKey": "object:4010",
+          "alias": "Jobs",
           "align": "auto",
           "colorMode": null,
           "colors": [
@@ -529,17 +529,17 @@
             "rgba(50, 172, 45, 0.97)"
           ],
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "decimals": 2,
+          "decimals": 0,
           "mappingType": 1,
-          "pattern": "/.*/",
+          "pattern": "Value",
           "thresholds": [],
-          "type": "hidden",
+          "type": "number",
           "unit": "short"
         }
       ],
       "targets": [
         {
-          "expr": "spark_app_info",
+          "expr": "sum(spark_app_info) by (application_name)",
           "instant": true,
           "interval": "",
           "legendFormat": "{{application_name}}",
@@ -650,7 +650,7 @@
     {
       "datasource": "Prometheus",
       "gridPos": {
-        "h": 8,
+        "h": 5,
         "w": 17,
         "x": 0,
         "y": 12
@@ -690,7 +690,7 @@
       "pluginVersion": "6.7.0",
       "targets": [
         {
-          "expr": "spark_app_duration_seconds",
+          "expr": "sum(spark_app_duration_seconds) by (application_name)",
           "instant": false,
           "interval": "",
           "legendFormat": "{{application_name}}",
@@ -699,7 +699,7 @@
       ],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Running time",
+      "title": "Job Running time",
       "type": "bargauge"
     },
     {
@@ -709,7 +709,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 20
+        "y": 17
       },
       "id": 18,
       "panels": [],
@@ -728,7 +728,7 @@
         "h": 8,
         "w": 7,
         "x": 0,
-        "y": 21
+        "y": 18
       },
       "hiddenSeries": false,
       "id": 12,
@@ -826,7 +826,7 @@
         "h": 8,
         "w": 5,
         "x": 7,
-        "y": 21
+        "y": 18
       },
       "hiddenSeries": false,
       "id": 29,
@@ -916,7 +916,7 @@
         "h": 8,
         "w": 5,
         "x": 12,
-        "y": 21
+        "y": 18
       },
       "hiddenSeries": false,
       "id": 16,
@@ -1006,7 +1006,7 @@
         "h": 10,
         "w": 7,
         "x": 0,
-        "y": 29
+        "y": 26
       },
       "hiddenSeries": false,
       "id": 34,
@@ -1113,7 +1113,7 @@
         "h": 10,
         "w": 10,
         "x": 7,
-        "y": 29
+        "y": 26
       },
       "hiddenSeries": false,
       "id": 20,
@@ -1229,7 +1229,7 @@
         "h": 11,
         "w": 5,
         "x": 0,
-        "y": 39
+        "y": 36
       },
       "hideTimeOverride": false,
       "id": 24,
@@ -1325,7 +1325,7 @@
         "h": 11,
         "w": 12,
         "x": 5,
-        "y": 39
+        "y": 36
       },
       "hiddenSeries": false,
       "id": 22,
@@ -1455,5 +1455,5 @@
   "variables": {
     "list": []
   },
-  "version": 22
+  "version": 3
 }
