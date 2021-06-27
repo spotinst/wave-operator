@@ -93,7 +93,7 @@ func (m *manager) Stop() {
 }
 
 func (m *manager) ValidateInstanceType(instanceType string) error {
-	parsed, err := instanceTypeFromString(instanceType)
+	instance, err := instanceTypeFromString(instanceType)
 	if err != nil {
 		return fmt.Errorf("could not parse instance type %q, %w", instanceType, err)
 	}
@@ -101,7 +101,7 @@ func (m *manager) ValidateInstanceType(instanceType string) error {
 	defer m.allowedInstanceTypes.RUnlock()
 	if len(m.allowedInstanceTypes.m) > 0 {
 		// Validate instance type is allowed
-		if m.allowedInstanceTypes.m[parsed.Family][parsed] == false {
+		if m.allowedInstanceTypes.m[instance.Family][instance] == false {
 			return fmt.Errorf("instance type %q not allowed", instanceType)
 		}
 	}
