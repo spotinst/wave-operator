@@ -494,7 +494,7 @@ func TestReconcile_driver_setApplicationName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	m := mock_sparkapi.NewMockManager(ctrl)
-	m.EXPECT().GetApplicationInfo(sparkAppID, sparkapi.NewStageMetricsAggregatorState(), gomock.Any()).Return(getTestApplicationInfo(), nil).AnyTimes()
+	m.EXPECT().GetApplicationInfo(sparkAppID).Return(getTestApplicationInfo(), nil).AnyTimes()
 	var getMockSparkApiManager SparkApiManagerGetter = func(clientSet kubernetes.Interface, driverPod *corev1.Pod, logger logr.Logger) (sparkapi.Manager, error) {
 		return m, nil
 	}
