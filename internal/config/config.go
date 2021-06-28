@@ -2,10 +2,13 @@ package config
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/go-logr/logr"
+
+	"github.com/spotinst/wave-operator/internal/config/instances"
 )
 
 const (
@@ -57,39 +60,44 @@ func GetInstanceLifecycle(annotations map[string]string, log logr.Logger) Instan
 	}
 }
 
-func GetConfiguredInstanceTypes(annotations map[string]string, log logr.Logger) []string {
-	instanceTypes := make([]string, 0)
+func GetConfiguredInstanceTypes(annotations map[string]string, instanceTypeManager instances.InstanceTypeManager, log logr.Logger) []string {
 	if annotations == nil {
-		return instanceTypes
+		return []string{}
 	}
 	conf := annotations[WaveConfigAnnotationInstanceType]
 	if conf == "" {
-		return instanceTypes
+		return []string{}
 	}
+	instanceTypes := make(map[string]bool)
 	split := strings.Split(conf, ",")
 	for _, s := range split {
 		trimmed := strings.TrimSpace(s)
-		if validateInstanceType(trimmed) {
-			instanceTypes = append(instanceTypes, trimmed)
+		// Is this a valid instance type?
+		err := instanceTypeManager.ValidateInstanceType(trimmed)
+		if err == nil {
+			instanceTypes[trimmed] = true
 		} else {
-			log.Info(fmt.Sprintf("Got invalid instance type %q, ignoring", trimmed))
+			// Is this a valid instance type family?
+			instanceTypesInFamily, err := instanceTypeManager.GetValidInstanceTypesInFamily(trimmed)
+			if err == nil {
+				for _, it := range instanceTypesInFamily {
+					instanceTypes[it] = true
+				}
+			} else {
+				log.Info(fmt.Sprintf("Ignoring invalid instance type %q", trimmed))
+			}
 		}
 	}
-	return instanceTypes
+	return mapKeysToSlice(instanceTypes)
 }
 
-// TODO(thorsteinn) Make sure that the instance type is valid in the cluster region,
-// and allowed in the cluster configuration
-func validateInstanceType(instanceType string) bool {
-	// Instance types should be of the form family.type (e.g. m5.xlarge)
-	split := strings.Split(instanceType, ".")
-	if len(split) != 2 {
-		return false
+func mapKeysToSlice(m map[string]bool) []string {
+	res := make([]string, len(m))
+	i := 0
+	for k := range m {
+		res[i] = k
+		i++
 	}
-	for _, s := range split {
-		if len(s) == 0 {
-			return false
-		}
-	}
-	return true
+	sort.Strings(res) // Enforce stable order
+	return res
 }

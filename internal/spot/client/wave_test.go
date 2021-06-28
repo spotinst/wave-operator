@@ -1,4 +1,4 @@
-package spot_test
+package client
 
 import (
 	"context"
@@ -6,18 +6,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spotinst/spotinst-sdk-go/spotinst"
-	"github.com/spotinst/wave-operator/api/v1alpha1"
-	"github.com/spotinst/wave-operator/internal/logger"
-	"github.com/spotinst/wave-operator/internal/spot"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/internal/logger"
 )
 
 func ManualTestClient(t *testing.T) {
-	conf := spotinst.DefaultConfig()
 
-	c := spot.NewClient(conf, "arnar-test-ekctl", logger.New())
+	config := ctrl.GetConfigOrDie()
+	clientSet, err := kubernetes.NewForConfig(config)
+	require.NoError(t, err)
+
+	c, err := NewClient(clientSet, logger.New())
+	require.NoError(t, err)
 
 	t.Run("GetsApplication", func(t *testing.T) {
 		app, err := c.GetSparkApplication(context.TODO(), "wsa-0439934b2ca5460e")
@@ -64,7 +69,7 @@ func ManualTestClient(t *testing.T) {
 			},
 		}
 
-		err := c.SaveApplication(app)
+		err := c.SaveSparkApplication(app)
 		require.NoError(t, err)
 	})
 

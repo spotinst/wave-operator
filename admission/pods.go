@@ -10,6 +10,7 @@ import (
 
 	"github.com/spotinst/wave-operator/cloudstorage"
 	"github.com/spotinst/wave-operator/internal/config"
+	"github.com/spotinst/wave-operator/internal/config/instances"
 	"github.com/spotinst/wave-operator/internal/storagesync"
 )
 
@@ -38,14 +39,16 @@ var (
 )
 
 type PodMutator struct {
-	storageProvider cloudstorage.CloudStorageProvider
-	baseLogger      logr.Logger
+	storageProvider     cloudstorage.CloudStorageProvider
+	instanceTypeManager instances.InstanceTypeManager
+	baseLogger          logr.Logger
 }
 
-func NewPodMutator(log logr.Logger, storageProvider cloudstorage.CloudStorageProvider) PodMutator {
+func NewPodMutator(log logr.Logger, storageProvider cloudstorage.CloudStorageProvider, instanceTypeManager instances.InstanceTypeManager) PodMutator {
 	return PodMutator{
-		storageProvider: storageProvider,
-		baseLogger:      log,
+		storageProvider:     storageProvider,
+		instanceTypeManager: instanceTypeManager,
+		baseLogger:          log,
 	}
 }
 
@@ -222,7 +225,7 @@ func (m PodMutator) getNodeAffinityConfig(annotations map[string]string, default
 		lifecycle = defaultLifecycle
 	}
 
-	instanceTypes := config.GetConfiguredInstanceTypes(annotations, log)
+	instanceTypes := config.GetConfiguredInstanceTypes(annotations, m.instanceTypeManager, log)
 
 	return nodeAffinityConfig{
 		instanceLifecycle: lifecycle,

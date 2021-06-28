@@ -16,12 +16,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/spotinst/wave-operator/cloudstorage"
+	"github.com/spotinst/wave-operator/internal/config/instances"
 )
 
 type AdmissionController struct {
-	client   kubernetes.Interface
-	provider cloudstorage.CloudStorageProvider
-	log      logr.Logger
+	client              kubernetes.Interface
+	provider            cloudstorage.CloudStorageProvider
+	instanceTypeManager instances.InstanceTypeManager
+	log                 logr.Logger
 }
 
 type Mutator interface {
@@ -32,11 +34,12 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Wave Mutating Admission Webhook")
 }
 
-func NewAdmissionController(client kubernetes.Interface, provider cloudstorage.CloudStorageProvider, log logr.Logger) *AdmissionController {
+func NewAdmissionController(client kubernetes.Interface, provider cloudstorage.CloudStorageProvider, instanceTypeManager instances.InstanceTypeManager, log logr.Logger) *AdmissionController {
 	return &AdmissionController{
-		client:   client,
-		provider: provider,
-		log:      log,
+		client:              client,
+		provider:            provider,
+		instanceTypeManager: instanceTypeManager,
+		log:                 log,
 	}
 }
 
@@ -94,7 +97,7 @@ func (ac *AdmissionController) Start(ctx context.Context) error {
 		}
 	}
 
-	pm := NewPodMutator(ac.log, ac.provider)
+	pm := NewPodMutator(ac.log, ac.provider, ac.instanceTypeManager)
 	cm := NewConfigMapMutator(ac.log, ac.client, ac.provider)
 
 	mux := http.NewServeMux()

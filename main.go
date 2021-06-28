@@ -17,24 +17,30 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
 
-	"github.com/spotinst/wave-operator/admission"
-	"github.com/spotinst/wave-operator/api/v1alpha1"
-	"github.com/spotinst/wave-operator/controllers"
-	"github.com/spotinst/wave-operator/install"
-	"github.com/spotinst/wave-operator/internal/aws"
-	"github.com/spotinst/wave-operator/internal/logger"
-	"github.com/spotinst/wave-operator/internal/ocean"
-	"github.com/spotinst/wave-operator/internal/sparkapi"
-	"github.com/spotinst/wave-operator/internal/version"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/spotinst/wave-operator/admission"
+	"github.com/spotinst/wave-operator/api/v1alpha1"
+	"github.com/spotinst/wave-operator/controllers"
+	"github.com/spotinst/wave-operator/install"
+	"github.com/spotinst/wave-operator/internal/aws"
+	"github.com/spotinst/wave-operator/internal/config/instances"
+	"github.com/spotinst/wave-operator/internal/logger"
+	"github.com/spotinst/wave-operator/internal/ocean"
+	"github.com/spotinst/wave-operator/internal/sparkapi"
+	"github.com/spotinst/wave-operator/internal/spot/client"
+	spotconfig "github.com/spotinst/wave-operator/internal/spot/client/config"
+	"github.com/spotinst/wave-operator/internal/version"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -81,13 +87,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	clusterName, err := ocean.GetClusterIdentifier()
+	oceanConfigMap, err := ocean.GetOceanConfigMap(context.TODO(), clientSet)
 	if err != nil {
+		setupLog.Error(err, "unable to get ocean config map")
+		os.Exit(1)
+	}
+
+	clusterIdentifier, err := spotconfig.GetClusterIdentifier(oceanConfigMap, log)
+	if err != nil || clusterIdentifier == "" {
+		if err == nil {
+			err = fmt.Errorf("cluster identifier missing")
+		}
 		setupLog.Error(err, "unable to get cluster identifier")
 		os.Exit(1)
 	}
 
-	storageProvider := aws.NewS3Provider(clusterName)
+	storageProvider := aws.NewS3Provider(clusterIdentifier)
 	controller := controllers.NewWaveComponentReconciler(
 		mgr.GetClient(),
 		mgr.GetConfig(),
@@ -113,7 +128,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	ac := admission.NewAdmissionController(clientSet, storageProvider, log)
+	spotClient, err := client.NewClient(clientSet, log.WithName("spotClient"))
+	if err != nil {
+		setupLog.Error(err, "could not create spot client")
+		os.Exit(1)
+	}
+
+	instanceTypeManager := instances.NewInstanceTypeManager(spotClient, clusterIdentifier, log.WithName("instanceTypeManager"))
+	if err := instanceTypeManager.Start(); err != nil {
+		setupLog.Error(err, "could not start instance type manager")
+		os.Exit(1)
+	}
+
+	ac := admission.NewAdmissionController(clientSet, storageProvider, instanceTypeManager, log.WithName("admission"))
 	err = mgr.Add(ac)
 	if err != nil {
 		setupLog.Error(err, "unable to add admission controller")
