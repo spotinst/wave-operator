@@ -29,7 +29,7 @@ var ErrApiNotAvailable = errors.New("spark api not available")
 type WorkloadType string
 
 type Manager interface {
-	GetApplicationInfo(applicationID string, metricsAggregatorState StageMetricsAggregatorState, log logr.Logger) (*ApplicationInfo, error)
+	GetApplicationInfo(applicationID string) (*ApplicationInfo, error)
 }
 
 type manager struct {
@@ -39,7 +39,6 @@ type manager struct {
 
 type ApplicationInfo struct {
 	ID                      string
-	MetricsAggregatorState  StageMetricsAggregatorState
 	ApplicationName         string
 	SparkProperties         map[string]string
 	TotalNewInputBytes      int64
@@ -88,7 +87,7 @@ func getSparkApiClient(clientSet kubernetes.Interface, driverPod *corev1.Pod, lo
 	return sparkapiclient.NewHistoryServerClient(historyServerService, clientSet), nil
 }
 
-func (m manager) GetApplicationInfo(applicationID string, metricsAggregatorState StageMetricsAggregatorState, log logr.Logger) (*ApplicationInfo, error) {
+func (m manager) GetApplicationInfo(applicationID string) (*ApplicationInfo, error) {
 
 	applicationInfo := &ApplicationInfo{}
 
@@ -116,22 +115,6 @@ func (m manager) GetApplicationInfo(applicationID string, metricsAggregatorState
 	}
 
 	applicationInfo.SparkProperties = sparkProperties
-
-	stages, err := m.client.GetStages(applicationID)
-	if err != nil {
-		return nil, fmt.Errorf("could not get stages, %w", err)
-	}
-
-	if stages == nil {
-		return nil, fmt.Errorf("stages are nil")
-	}
-
-	stageMetricsAggregator := newStageMetricsAggregator(log, metricsAggregatorState)
-	stageAggregationResult := stageMetricsAggregator.processWindow(stages)
-	applicationInfo.TotalNewOutputBytes = stageAggregationResult.totalNewOutputBytes
-	applicationInfo.TotalNewInputBytes = stageAggregationResult.totalNewInputBytes
-	applicationInfo.TotalNewExecutorCpuTime = stageAggregationResult.totalNewExecutorCpuTime
-	applicationInfo.MetricsAggregatorState = stageAggregationResult.newState
 
 	executors, err := m.client.GetAllExecutors(applicationID)
 	if err != nil {
