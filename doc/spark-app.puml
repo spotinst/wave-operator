@@ -1,0 +1,72 @@
+@startuml
+'https://plantuml.com/component-diagram
+
+
+actor User
+node ELB
+cloud Spot [Spot
+Wave UI]
+
+collections S3
+
+
+component SparkSubmit
+
+rectangle "Wave Cluster" {
+
+  interface K8S_API
+
+  node WaveOperator
+
+  node SparkDriverPod {
+    component Driver
+    component StorageSync
+    storage local_fs
+  }
+
+  node SparkExecutorPod {
+    component Executor
+  }
+
+  storage WaveSparkApplication
+
+  node SparkHistoryServer
+  interface SparkHistoryIngress
+
+  node IngressController
+
+  storage spark_config
+}
+
+storage data [spark data may be internal
+or external to the cluster]
+
+User => SparkSubmit: submits app
+SparkSubmit -> K8S_API: submits app
+K8S_API -> SparkDriverPod: creates
+
+WaveOperator <-- SparkDriverPod: watches
+WaveOperator ...> StorageSync: creates with web-hook
+WaveOperator ....> spark_config: modifies with web-hook
+Driver -> spark_config: reads
+Driver -> local_fs
+StorageSync <- local_fs
+WaveOperator -> WaveSparkApplication
+
+Driver <==> Executor
+Driver --- data
+Executor --- data
+
+IngressController <..> SparkHistoryIngress: manages
+IngressController <..> ELB : manages
+
+StorageSync --> S3: writes events
+SparkHistoryServer <-- S3 : reads events
+
+SparkHistoryServer == ELB
+
+User === ELB: views spark history
+User == Spot: analyzes performance
+
+WaveSparkApplication --> Spot
+@enduml

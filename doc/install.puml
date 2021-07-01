@@ -1,0 +1,54 @@
+@startuml
+
+left to right direction
+top to bottom direction
+
+actor admin
+rectangle local_machine {
+    rectangle spotctl
+    interface manager
+}
+
+rectangle kubernetes_cluster {
+    control kubernetes_controller
+    control wave_operator
+    storage wave_component
+    storage wave_environment
+
+    entity cert_manager
+    entity spark_component
+
+    collections admin_role
+    collections deletion_role
+    collections operator_role
+}
+
+cloud spot {
+    interface spot_api
+}
+
+cloud aws  {
+    interface eks
+}
+
+admin -> spotctl
+
+spotctl --> eks
+spotctl --> spot_api
+spotctl -> manager
+
+eks --> kubernetes_cluster
+spotctl -> kubernetes_controller
+
+manager -- admin_role : use
+manager --> cert_manager: helm|install
+manager -> wave_operator : helm|install
+manager --> wave_environment : create
+manager --> wave_component : create
+manager --> deletion_role : create
+
+wave_operator -- operator_role : use
+wave_operator --o wave_component : watch
+wave_operator -> spark_component: helm|install
+
+@enduml
